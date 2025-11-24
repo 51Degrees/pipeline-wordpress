@@ -1,19 +1,16 @@
-name: Nightly PRs to Main
+name: Publish
 
 on:
   workflow_dispatch:
     inputs:
       dryrun:
-        default: false
         type: boolean
-        description: Dry Run
-  workflow_run:
-    workflows: [Nightly Submodule Update]
-    types: [completed]
+        default: false
 
 jobs:
-  Nightly_PRs_to_Main:
-    uses: 51Degrees/common-ci/.github/workflows/nightly-prs-to-main.yml@main
+  Publish:
+    name: Publish
+    uses: 51Degrees/common-ci/.github/workflows/nightly-publish.yml@main
     with:
       repo-name: ${{ github.event.repository.name }}
       org-name: ${{ github.event.repository.owner.login }}
