@@ -76,6 +76,8 @@ class Pipeline
 
         try {
             $cloud = new CloudRequestEngine(['resourceKey' => $resourceKey]);
+            // Get engines available with the Resource Key
+            $engines = array_keys($cloud->getEngineProperties());
         } catch (Exception $e) {
             $error = $e->getMessage();
 
@@ -85,9 +87,6 @@ class Pipeline
                 'error' => $error
             ];
         }
-
-        // Get engines available with the Resource Key
-        $engines = array_keys($cloud->flowElementProperties);
 
         // Add CloudRequestEngine to the pipeline.
         $builder->add($cloud);

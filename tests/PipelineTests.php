@@ -88,7 +88,7 @@ class PipelineTests extends TestCase {
 
     /**
      * Test that an invalid Resource Key results in an error being added to the
-     * pipeline.
+     * pipeline result and process() handling it gracefully.
      */
     public function testMakePipeline_InValidResourceKey() {
 
@@ -98,19 +98,20 @@ class PipelineTests extends TestCase {
         $resourceKey = "XXXXXXXXXXXXXX";
         $result = Pipeline::make_pipeline($resourceKey);
 
+        // make_pipeline should catch the error and return it in the result
+        $this->assertNull($result['pipeline']);
+        $this->assertNull($result['available_engines']);
+        $this->assertNotNull($result['error']);
+        $this->assertStringContainsString('XXXXXXXXXXXXXX', $result['error']);
+
         Functions\expect('get_option')
             ->once()
             ->with(Options::PIPELINE)
             ->andReturn($result);
 
-        $errorMessage = "Error returned from 51Degrees cloud service: ''XXXXXXXXXXXXXX' " .
-            "is not a valid Resource Key. See " .
-            "http://51degrees.com/documentation/_info__error_messages.html#Resource_key_not_valid " .
-            "for more information.'";
-
-        $this->expectException(Exception::class);
-        $this->expectExceptionMessage($errorMessage);
+        // process() should handle the error gracefully (log and return)
         Pipeline::process();
+        $this->assertNull(Pipeline::$data);
     }
 
     /**
