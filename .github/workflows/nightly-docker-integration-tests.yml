@@ -1,0 +1,92 @@
+name: Nightly Docker Integration Tests
+
+on:
+  schedule:
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+    inputs:
+      wordpress-branch:
+        description: 'Branch for pipeline-wordpress'
+        required: false
+        default: 'main'
+      cloudrequestengine-branch:
+        description: 'Branch for pipeline-php-cloudrequestengine'
+        required: false
+        default: 'main'
+      engines-branch:
+        description: 'Branch for pipeline-php-engines'
+        required: false
+        default: 'main'
+      core-branch:
+        description: 'Branch for pipeline-php-core'
+        required: false
+        default: 'main'
+
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Checkout pipeline-wordpress
+        uses: actions/checkout@v4
+        with:
+          repository: 51Degrees/pipeline-wordpress
+          ref: ${{ inputs.wordpress-branch || 'main' }}
+          path: pipeline-wordpress
+          token: ${{ secrets.ACCESS_TOKEN }}
+
+      - name: Checkout pipeline-php-cloudrequestengine
+        uses: actions/checkout@v4
+        with:
+          repository: 51Degrees/pipeline-php-cloudrequestengine
+          ref: ${{ inputs.cloudrequestengine-branch || 'main' }}
+          path: pipeline-php-cloudrequestengine
+          token: ${{ secrets.ACCESS_TOKEN }}
+
+      - name: Checkout pipeline-php-engines
+        uses: actions/checkout@v4
+        with:
+          repository: 51Degrees/pipeline-php-engines
+          ref: ${{ inputs.engines-branch || 'main' }}
+          path: pipeline-php-engines
+          token: ${{ secrets.ACCESS_TOKEN }}
+
+      - name: Checkout pipeline-php-core
+        uses: actions/checkout@v4
+        with:
+          repository: 51Degrees/pipeline-php-core
+          ref: ${{ inputs.core-branch || 'main' }}
+          path: pipeline-php-core
+          token: ${{ secrets.ACCESS_TOKEN }}
+
+      - name: Install PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer
+
+      - name: Configure local dependencies
+        working-directory: pipeline-wordpress
+        run: ./ci/configure-local-deps.ps1
+
+      - name: Install Composer dependencies
+        working-directory: pipeline-wordpress/lib
+        run: composer update --no-interaction
+
+      - name: Start Docker environment
+        working-directory: pipeline-wordpress
+        run: docker compose -f ci/docker-compose.test.yml up -d
+
+      - name: Run integration tests
+        working-directory: pipeline-wordpress
+        env:
+          SUPER_RESOURCE_KEY: ${{ secrets.SUPER_RESOURCE_KEY }}
+        run: ./ci/run-docker-tests.ps1
+
+      - name: Tear down Docker environment
+        if: always()
+        working-directory: pipeline-wordpress
+        run: docker compose -f ci/docker-compose.test.yml down
