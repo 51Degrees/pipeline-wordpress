@@ -1,8 +1,3 @@
-param (
-    [Parameter(Mandatory=$true)]
-    [string]$RepoName
-)
+param ([Parameter(Mandatory)][string]$RepoName)
 
-./php/run-unit-tests.ps1 -RepoName $RepoName
-
-exit $LASTEXITCODE
+./php/run-unit-tests.ps1 -RepoName:$RepoName

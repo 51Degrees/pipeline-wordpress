@@ -1,8 +1,3 @@
-param (
-    [Parameter(Mandatory=$true)]
-    [string]$LanguageVersion
-)
+param ([Parameter(Mandatory)][string]$LanguageVersion)
 
-./php/setup-environment.ps1 -LanguageVersion $LanguageVersion
-
-exit $LASTEXITCODE
+./php/setup-environment.ps1 -LanguageVersion:$LanguageVersion

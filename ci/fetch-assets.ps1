@@ -1,1 +1,1 @@
-Write-Output "No assets needed"
+Write-Host 'No assets needed'
