@@ -1,0 +1,10 @@
+/.*
+/lib/.*
+/ci
+/tests
+
+/phpunit.xml
+/README.md
+
++ conditional-group-block/build
+/conditional-group-block/*

@@ -200,14 +200,11 @@ you will need to follow these steps:
 1.  Clone 51Degrees plugin GitHub repository from
 [here](https://github.com/51Degrees/pipeline-wordpress/).
 
-2.  Execute `composer install` in the `lib` directory.
+2.  Run the [ci/build-project.ps1](ci/build-project.ps1) script.
 
-3.  Create a new directory outside this repo called `fiftyonedegrees`
-and copy all directories and php files from the root of this repo into it.
+3.  Zip up the resulting `package/fiftyonedegrees` directory as `fiftyonedegrees.zip` (just the contents, not the dir itself). Delete the `package` directory.
 
-4.  Copy the `fiftyonedegrees` directory into your 'wp-content/plugins' directory.
-
-5.  Activate the 51Degrees plugin.
+5. Install [wp-cli](https://wp-cli.org/) and  run `wp plugin install --activate /path/to/your/zip` in the WordPress directory.
 
 # Plugin Tests
 

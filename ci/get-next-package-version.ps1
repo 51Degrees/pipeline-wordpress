@@ -1,10 +1,6 @@
 param (
-    [Parameter(Mandatory=$true)]
-    [string]$RepoName,
-    [Parameter(Mandatory=$true)]
-    [string]$VariableName
+    [Parameter(Mandatory)][string]$RepoName,
+    [Parameter(Mandatory)][string]$VariableName
 )
 
-./php/get-next-package-version.ps1 -RepoName $RepoName -VariableName $VariableName
-
-exit $LASTEXITCODE
+./php/get-next-package-version.ps1 -RepoName:$RepoName -VariableName:$VariableName

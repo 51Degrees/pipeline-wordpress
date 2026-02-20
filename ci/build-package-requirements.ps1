@@ -1,1 +1,1 @@
-Write-Output "No pre-build requirements needed"
+Write-Host 'No pre-build requirements needed'

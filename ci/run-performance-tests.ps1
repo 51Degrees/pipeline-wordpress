@@ -1,1 +1,1 @@
-Write-Output "There are no performance tests"
+Write-Host 'There are no performance tests'
