@@ -78,7 +78,7 @@ class Pipeline
             $cloud = new CloudRequestEngine(['resourceKey' => $resourceKey]);
             // Get engines available with the Resource Key
             $engines = array_keys($cloud->getEngineProperties());
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             $error = $e->getMessage();
 
             return [
@@ -159,7 +159,16 @@ class Pipeline
             $flowData->evidence->setFromWebRequest();
 
             // Process flowData with evidence supplied
-            $flowData->process();
+            try {
+                $flowData->process();
+            } catch (\Throwable $e) {
+                error_log(
+                    'Error occurred during 51Degrees pipeline processing: '
+                    . $e->getMessage()
+                );
+
+                return;
+            }
 
             // Some browsers require that extra HTTP headers are explicitly
             // requested. So set whatever headers are required by the browser
