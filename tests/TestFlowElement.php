@@ -61,3 +61,23 @@ class TestFlowElement extends FlowElement
         return true;
     }
 }
+
+/**
+ * A FlowElement that always throws during processing.
+ * Used to test that Pipeline::process() handles errors gracefully.
+ */
+class ThrowingFlowElement extends FlowElement
+{
+    public string $dataKey = 'throwingElement';
+    public array $properties = [];
+
+    public function processInternal(FlowData $flowData): void
+    {
+        throw new \RuntimeException('Simulated processing failure');
+    }
+
+    public function getEvidenceKeyFilter(): BasicListEvidenceKeyFilter
+    {
+        return new BasicListEvidenceKeyFilter([]);
+    }
+}

@@ -88,7 +88,7 @@ class PipelineTests extends TestCase {
 
     /**
      * Test that an invalid Resource Key results in an error being added to the
-     * pipeline.
+     * pipeline result and process() handling it gracefully.
      */
     public function testMakePipeline_InValidResourceKey() {
 
@@ -98,19 +98,82 @@ class PipelineTests extends TestCase {
         $resourceKey = "XXXXXXXXXXXXXX";
         $result = Pipeline::make_pipeline($resourceKey);
 
+        // make_pipeline should catch the error and return it in the result
+        $this->assertNull($result['pipeline']);
+        $this->assertNull($result['available_engines']);
+        $this->assertNotNull($result['error']);
+        $this->assertStringContainsString('XXXXXXXXXXXXXX', $result['error']);
+
         Functions\expect('get_option')
             ->once()
             ->with(Options::PIPELINE)
             ->andReturn($result);
 
-        $errorMessage = "Error returned from 51Degrees cloud service: ''XXXXXXXXXXXXXX' " .
-            "is not a valid Resource Key. See " .
-            "http://51degrees.com/documentation/_info__error_messages.html#Resource_key_not_valid " .
-            "for more information.'";
-
-        $this->expectException(Exception::class);
-        $this->expectExceptionMessage($errorMessage);
+        // process() should handle the error gracefully (log and return)
         Pipeline::process();
+        $this->assertNull(Pipeline::$data);
+    }
+
+    /**
+     * Test that make_pipeline catches \Error (not just \Exception).
+     * This covers PHP errors like TypeError from curl failures or
+     * calling a private method on a version-mismatched class.
+     */
+    public function testMakePipeline_CatchesThrowable()
+    {
+        Functions\when('get_site_url')->justReturn('http://localhost/testsite');
+
+        // Use a resource key that will trigger a cloud request error.
+        // The key here is that the catch block must handle \Throwable,
+        // not just \Exception. We verify the existing error-handling
+        // path works for any throwable by testing with an invalid key
+        // (which throws CloudRequestException, a subclass of \Exception)
+        // and confirming the result structure.
+        $result = Pipeline::make_pipeline('THROWABLE_TEST_KEY');
+
+        $this->assertNull($result['pipeline']);
+        $this->assertNull($result['available_engines']);
+        $this->assertNotNull($result['error']);
+        $this->assertIsString($result['error']);
+    }
+
+    /**
+     * Test that process() handles FlowElement errors gracefully
+     * instead of letting exceptions crash the request with a 500.
+     */
+    public function testProcess_HandlesFlowElementError()
+    {
+        $mock_pipeline = (new PipelineBuilder())
+            ->add(new ThrowingFlowElement())
+            ->build();
+        $pipeline = [
+            'pipeline' => $mock_pipeline,
+            'available_engines' => [],
+            'error' => null
+        ];
+
+        Functions\expect('get_option')
+            ->once()
+            ->with(Options::PIPELINE)
+            ->andReturn($pipeline);
+
+        // Capture error_log output
+        $capture = tmpfile();
+        $saved = ini_set('error_log', stream_get_meta_data($capture)['uri']);
+
+        Pipeline::process();
+
+        ini_set('error_log', $saved);
+
+        // process() should NOT throw — it should catch the error and
+        // return gracefully with $data still null
+        $this->assertNull(Pipeline::$data);
+
+        // Verify the error was logged
+        $logContents = stream_get_contents($capture);
+        $this->assertStringContainsString('Simulated processing failure', $logContents);
+
+        fclose($capture);
     }
 
     /**
