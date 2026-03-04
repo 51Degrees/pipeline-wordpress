@@ -8,6 +8,9 @@ $repo = (Get-Item $PSScriptRoot/..).FullName
 composer install --working-dir "$repo/lib" --no-interaction
 rsync -r "--exclude-from=$repo/.distignore" $repo/ $package/
 
+Write-Host "Removing dev dependencies from the package..."
+composer update -d "$package/lib" --no-dev
+
 if ($Version) {
     $file = "$package/fiftyonedegrees.php"
     [regex]$regex = '(?m)^(\s*\*\s*Version:\s*).*'
