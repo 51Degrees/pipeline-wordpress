@@ -11,9 +11,14 @@ $PSNativeCommandUseErrorActionPreference = $true
 
 $package = "$PWD/package/fiftyonedegrees"
 
-if (-not (Get-Command 'svn' -ErrorAction SilentlyContinue)) {
+if (-not (Get-Command 'svn' -ErrorAction SilentlyContinue) -and $env:CI) {
     sudo apt-get update -y
     sudo apt-get install --no-install-recommends subversion
+}
+
+if ($env:CI) {
+    $svnConfDir = New-Item -ItemType directory -Force -Path ~/.subversion
+    Write-Output "[global]" "http-timeout = 7200" > $svnConfDir/servers
 }
 
 Write-Host "Checking out $WordpressSvnUrl..."
