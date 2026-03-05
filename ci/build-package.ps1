@@ -12,7 +12,11 @@ Write-Host "Removing dev dependencies from the package..."
 composer update -d "$package/lib" --no-dev
 
 if ($Version) {
+    $wpVersion = (Invoke-WebRequest 'https://api.wordpress.org/core/version-check/1.7/' | ConvertFrom-Json).offers `
+        | Sort-Object -Property {[version]$_.version} -Bottom 1
     $file = "$package/fiftyonedegrees.php"
-    [regex]$regex = '(?m)^(\s*\*\s*Version:\s*).*'
-    $regex.Replace((Get-Content -Raw $file), "`${1}$Version", 1) | Set-Content $file
+    $content = Get-Content -Raw $file
+    $content = ([regex]'(?m)^(\s*\*\s*Version:\s*).*').Replace($content, "`${1}$Version", 1)
+    $content = ([regex]'(?m)^Tested up to:\s+.*').Replace($content, "Tested up to: $wpVersion", 1)
+    $content | Set-Content $file
 }

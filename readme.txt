@@ -4,11 +4,11 @@ Contributors: 51Degrees
 Donate link: https://51degrees.com/
 Tags: 51degrees, device detection, location, Google Analytics, device, detect, device type, smartphone, tablet, desktop, mobile, optimize, detection, customizable, personalized, tailored, targeting, responsive, mobile website, mobile friendly, user experience, ecommerce, OpenStreetMap, Digital element, Geolocation
 Requires at least: 4.7
-Tested up to: 5.9
-Requires PHP: 5.6
+Tested up to: 6.9.1
+Requires PHP: 8.2
 Stable tag: 1.0.0
 License: EUPL
- 
+
 The best plugin for WordPress to send Device properties as Custom Dimensions to Google Analytics to get richer insights of device specifications and capabilities.
 
 == Description ==
@@ -34,7 +34,7 @@ Please submit any issues or problems to the [GitHub](https://github.com/51Degree
 
 
 == Installation ==
- 
+
 Following way can be used to install 51Degrees WordPress Plugin.
 
 = Installation from within WordPress =
@@ -44,7 +44,7 @@ Following way can be used to install 51Degrees WordPress Plugin.
 3. Install and activate the 51Degrees plugin.
 
 For instructions on how to install the plugin manually or by uploading a zip file, please see the plugin [GitHub](https://github.com/51Degrees/pipeline-wordpress/) repository.
- 
+
 = After activation =
 
 1. Visit the new `51Degrees` Settings menu.
@@ -85,7 +85,7 @@ You can continue using your existing installed plugins to send Custom Dimensions
 If you're experiencing any issues, use the WordPress.org [support forums](https://wordpress.org/support/plugin/51degrees-optimize-by-device-location/). If you have a technical issue with the plugin where you already have more insight on how to fix it, you can also open an issue on [GitHub](https://github.com/51Degrees/pipeline-wordpress/issues).
 
 == Changelog ==
- 
+
 = 1.0.0 =
 * Initial Release.
 
