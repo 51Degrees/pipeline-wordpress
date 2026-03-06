@@ -50,22 +50,18 @@ class Pipeline
      */
     public static function make_pipeline($resourceKey)
     {
-        $url = get_site_url();
-
         // Prepare PipelineBuilder and add the JavaScript settings for the
         // JavaScriptBuilder, in this case an endpoint to call back to
         // retrieve additional properties populated by client side evidence
         // this ?json endpoint is used later to serve results from a special
-        // json engine automatically included in the pipeline
+        // json engine automatically included in the pipeline.
+        // Host and protocol are intentionally left empty so that
+        // JavascriptBuilderElement uses per-request evidence (the browser's
+        // Host header). This avoids baking in a build-time hostname that
+        // may differ from how the browser reaches the site.
         $builder = new PipelineBuilder([
             'javascriptBuilderSettings' => [
                 'endpoint' => Pipeline::getRestEndpoint(),
-                'host' => isset($_SERVER['HTTP_HOST'])
-                    ? sanitize_text_field($_SERVER['HTTP_HOST'])
-                    : $url,
-                'protocol' => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'
-                    ? 'https'
-                    : 'http',
                 'minify' => false
             ]
         ]);
