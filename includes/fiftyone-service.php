@@ -89,6 +89,13 @@ class FiftyoneService {
 	    add_action(
             'admin_init',
             array($this, 'fiftyonedegrees_register_settings'));
+
+        // Rebuild pipeline when permalink structure changes
+        add_action(
+            'updated_option',
+            array($this, 'fiftyonedegrees_updated_option'),
+            10,
+            3);
     }
     
     /**
@@ -276,6 +283,30 @@ class FiftyoneService {
         if ($option === Options::GA_SEND_PAGE_VIEW_VAL &&
             $old_value !== $new_value) {
             update_option(Options::GA_SEND_PAGE_VIEW_UPDATED, true);
+        }
+    }
+
+    /**
+     * Rebuilds the pipeline when the permalink structure changes.
+     * Hooked to 'updated_option' (fires after the DB write) so that
+     * rest_url() returns the URL for the new permalink structure.
+     *
+     * @return void
+     */
+    function fiftyonedegrees_updated_option($option, $old_value, $new_value) {
+        if ($option === 'permalink_structure') {
+            $resource_key = get_option(Options::RESOURCE_KEY);
+            if ($resource_key) {
+                if (session_status() === PHP_SESSION_ACTIVE &&
+                    isset($_SESSION["fiftyonedegrees_data"])) {
+                    unset($_SESSION["fiftyonedegrees_data"]);
+                    update_option(Options::SESSION_INVALIDATED, time());
+                }
+                $pipeline = Pipeline::make_pipeline($resource_key);
+                if ($pipeline) {
+                    update_option(Options::PIPELINE, $pipeline);
+                }
+            }
         }
     }
 

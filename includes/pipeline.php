@@ -50,9 +50,7 @@ class Pipeline
      */
     public static function make_pipeline($resourceKey)
     {
-        // Get App Context from the URL.
         $url = get_site_url();
-        $appContext = Pipeline::getAppContext($url);
 
         // Prepare PipelineBuilder and add the JavaScript settings for the
         // JavaScriptBuilder, in this case an endpoint to call back to
@@ -61,7 +59,7 @@ class Pipeline
         // json engine automatically included in the pipeline
         $builder = new PipelineBuilder([
             'javascriptBuilderSettings' => [
-                'endpoint' => $appContext . '/wp-json/fiftyonedegrees/v4/json',
+                'endpoint' => Pipeline::getRestEndpoint(),
                 'host' => isset($_SERVER['HTTP_HOST'])
                     ? sanitize_text_field($_SERVER['HTTP_HOST'])
                     : $url,
@@ -350,6 +348,26 @@ class Pipeline
         }
 
         return '';
+    }
+
+    /**
+     * Gets the REST API endpoint path for the 51Degrees JSON callback.
+     * Uses WordPress rest_url() to support all permalink structures
+     * (pretty permalinks, plain permalinks, subdirectory installs).
+     *
+     * @return string the endpoint path (e.g. "/wp-json/fiftyonedegrees/v4/json"
+     *                or "/?rest_route=/fiftyonedegrees/v4/json")
+     */
+    public static function getRestEndpoint()
+    {
+        $restUrl = rest_url('fiftyonedegrees/v4/json');
+        $parsed = parse_url($restUrl);
+        $endpoint = $parsed['path'] ?? '/';
+        if (isset($parsed['query'])) {
+            $endpoint .= '?' . $parsed['query'];
+        }
+
+        return $endpoint;
     }
 
     /**
