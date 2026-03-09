@@ -57,6 +57,8 @@ Push-Location wp
 try {
     Write-Host "=== Setting up the database"
     php $wp config create --dbname=wp --dbuser=root --dbpass=root
+    php $wp config set WP_SITEURL "http://localhost:8080" --type=constant
+    php $wp config set WP_HOME "http://localhost:8080" --type=constant
     php $wp db create
 
     Write-Host "Installing WordPress"
