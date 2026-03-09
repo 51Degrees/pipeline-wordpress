@@ -3,7 +3,6 @@ param (
     [Parameter(Mandatory)][hashtable]$Keys
 )
 $ErrorActionPreference = "Stop"
-$PSNativeCommandUseErrorActionPreference = $true
 
 if (!$Keys.TestResourceKey) {
     Write-Host "::warning file=$($MyInvocation.ScriptName),line=$($MyInvocation.ScriptLineNumber),title=No Resource Key::No resource key was provided, so integration tests will not run."
@@ -38,32 +37,32 @@ function Wait-Port ([int]$Port, [int]$Tries = 10) {
     Write-Error "Port $Port is not up after $Tries tries"
 }
 
-Write-Host "Zipping the plugin"
+Write-Host "=== Zipping the plugin"
 $plugin = "$PWD/fiftyonedegrees.zip"
 Push-Location package
 zip -qr $plugin .
 Pop-Location
 
-Write-Host "Starting the database"
+Write-Host "=== Starting the database"
 sudo systemctl start mysql.service
 
-Write-Host "Installing wp-cli"
+Write-Host "=== Installing wp-cli"
 Invoke-WebRequest -OutFile 'wp-cli.phar' -Uri 'https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar'
 $wp = "$PWD/wp-cli.phar"
 php $wp --info
 
-Write-Host "Downloading WordPress"
+Write-Host "=== Downloading WordPress"
 php $wp core download --path=wp
 Push-Location wp
 try {
-    Write-Host "Setting up the database"
+    Write-Host "=== Setting up the database"
     php $wp config create --dbname=wp --dbuser=root --dbpass=root
     php $wp db create
 
     Write-Host "Installing WordPress"
-    php $wp core install --url=localhost:8080 --title="WP test" --admin_user=wpcli --admin_password=wpcli --admin_email=noreply@example.com --skip-email
+    php $wp core install --url=localhost:8080 --title="WP test" --admin_user=admin --admin_password=admin --admin_email=noreply@example.com --skip-email
 
-    Write-Host "Installing the plugin"
+    Write-Host "=== Installing the plugin"
     php $wp plugin install --activate $plugin
     php $wp option update fiftyonedegrees_resource_key $env:RESOURCEKEY
 
@@ -76,7 +75,7 @@ try {
     }
 
     try {
-        Write-Host "Starting the server"
+        Write-Host "=== Starting the server"
         $addr = "localhost:8080"
         $server = php -S $addr &
 
@@ -101,6 +100,19 @@ try {
                 "User-Agent" = "Mozilla/5.0 (Linux; Android 10; SM-G973F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36"
             }).Content -match "fiftyonedegrees-js"
         }
+
+        Write-Host "=== Installing Selenium test prerequisites"
+        $env:PYTHONPATH = "$PWD/.pythonpath"
+        pip install -t $env:PYTHONPATH -r "$PSScriptRoot/integration-tests/requirements.txt"
+
+        Write-Host "=== Running Selenium tests"
+        Push-Location "$PSScriptRoot/integration-tests"
+        try {
+            python -m pytest || $(++$failed)
+        } finally {
+            Pop-Location
+        }
+
     } finally {
         Stop-Job $server
         Receive-Job $server -ErrorAction SilentlyContinue
