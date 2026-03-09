@@ -98,11 +98,9 @@ def set_permalink(session, structure):
 @pytest.fixture(scope='module')
 def browser():
     """Create a Selenium WebDriver connected to the remote Selenium instance."""
-    options = Options()
-    driver = webdriver.Remote(
-        command_executor=SELENIUM_URL,
-        options=options,
-    )
+    options = webdriver.ChromeOptions()
+    options.add_argument("--headless=new")
+    driver = webdriver.Chrome(options=options)
     driver.set_script_timeout(20)
     driver.implicitly_wait(10)
 
