@@ -96,6 +96,13 @@ class FiftyoneService {
             array($this, 'fiftyonedegrees_updated_option'),
             10,
             3);
+
+        // Build pipeline when resource key is first created (e.g. via WP-CLI)
+        add_action(
+            'add_option',
+            array($this, 'fiftyonedegrees_add_option'),
+            10,
+            2);
     }
     
     /**
@@ -283,6 +290,24 @@ class FiftyoneService {
         if ($option === Options::GA_SEND_PAGE_VIEW_VAL &&
             $old_value !== $new_value) {
             update_option(Options::GA_SEND_PAGE_VIEW_UPDATED, true);
+        }
+    }
+
+    /**
+     * Builds the pipeline when the resource key option is first created,
+     * e.g. via WP-CLI where update_option hook does not fire.
+     *
+     * @param string $option the option name
+     * @param mixed $value the option value
+     * @return void
+     */
+    function fiftyonedegrees_add_option($option, $value)
+    {
+        if ($option === Options::RESOURCE_KEY && $value) {
+            $pipeline = Pipeline::make_pipeline($value);
+            if ($pipeline) {
+                update_option(Options::PIPELINE, $pipeline);
+            }
         }
     }
 
