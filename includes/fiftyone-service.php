@@ -89,6 +89,20 @@ class FiftyoneService {
 	    add_action(
             'admin_init',
             array($this, 'fiftyonedegrees_register_settings'));
+
+        // Rebuild pipeline when permalink structure changes
+        add_action(
+            'updated_option',
+            array($this, 'fiftyonedegrees_updated_option'),
+            10,
+            3);
+
+        // Build pipeline when resource key is first created (e.g. via WP-CLI)
+        add_action(
+            'add_option',
+            array($this, 'fiftyonedegrees_add_option'),
+            10,
+            2);
     }
     
     /**
@@ -276,6 +290,48 @@ class FiftyoneService {
         if ($option === Options::GA_SEND_PAGE_VIEW_VAL &&
             $old_value !== $new_value) {
             update_option(Options::GA_SEND_PAGE_VIEW_UPDATED, true);
+        }
+    }
+
+    /**
+     * Builds the pipeline when the resource key option is first created,
+     * e.g. via WP-CLI where update_option hook does not fire.
+     *
+     * @param string $option the option name
+     * @param mixed $value the option value
+     * @return void
+     */
+    function fiftyonedegrees_add_option($option, $value)
+    {
+        if ($option === Options::RESOURCE_KEY && $value) {
+            $pipeline = Pipeline::make_pipeline($value);
+            if ($pipeline) {
+                update_option(Options::PIPELINE, $pipeline);
+            }
+        }
+    }
+
+    /**
+     * Rebuilds the pipeline when the permalink structure changes.
+     * Hooked to 'updated_option' (fires after the DB write) so that
+     * rest_url() returns the URL for the new permalink structure.
+     *
+     * @return void
+     */
+    function fiftyonedegrees_updated_option($option, $old_value, $new_value) {
+        if ($option === 'permalink_structure') {
+            $resource_key = get_option(Options::RESOURCE_KEY);
+            if ($resource_key) {
+                if (session_status() === PHP_SESSION_ACTIVE &&
+                    isset($_SESSION["fiftyonedegrees_data"])) {
+                    unset($_SESSION["fiftyonedegrees_data"]);
+                    update_option(Options::SESSION_INVALIDATED, time());
+                }
+                $pipeline = Pipeline::make_pipeline($resource_key);
+                if ($pipeline) {
+                    update_option(Options::PIPELINE, $pipeline);
+                }
+            }
         }
     }
 

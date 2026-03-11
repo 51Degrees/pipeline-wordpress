@@ -50,24 +50,18 @@ class Pipeline
      */
     public static function make_pipeline($resourceKey)
     {
-        // Get App Context from the URL.
-        $url = get_site_url();
-        $appContext = Pipeline::getAppContext($url);
-
         // Prepare PipelineBuilder and add the JavaScript settings for the
         // JavaScriptBuilder, in this case an endpoint to call back to
         // retrieve additional properties populated by client side evidence
         // this ?json endpoint is used later to serve results from a special
-        // json engine automatically included in the pipeline
+        // json engine automatically included in the pipeline.
+        // Host and protocol are intentionally left empty so that
+        // JavascriptBuilderElement uses per-request evidence (the browser's
+        // Host header). This avoids baking in a build-time hostname that
+        // may differ from how the browser reaches the site.
         $builder = new PipelineBuilder([
             'javascriptBuilderSettings' => [
-                'endpoint' => $appContext . '/wp-json/fiftyonedegrees/v4/json',
-                'host' => isset($_SERVER['HTTP_HOST'])
-                    ? sanitize_text_field($_SERVER['HTTP_HOST'])
-                    : $url,
-                'protocol' => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'
-                    ? 'https'
-                    : 'http',
+                'endpoint' => Pipeline::getRestEndpoint(),
                 'minify' => false
             ]
         ]);
@@ -350,6 +344,26 @@ class Pipeline
         }
 
         return '';
+    }
+
+    /**
+     * Gets the REST API endpoint path for the 51Degrees JSON callback.
+     * Uses WordPress rest_url() to support all permalink structures
+     * (pretty permalinks, plain permalinks, subdirectory installs).
+     *
+     * @return string the endpoint path (e.g. "/wp-json/fiftyonedegrees/v4/json"
+     *                or "/?rest_route=/fiftyonedegrees/v4/json")
+     */
+    public static function getRestEndpoint()
+    {
+        $restUrl = rest_url('fiftyonedegrees/v4/json');
+        $parsed = parse_url($restUrl);
+        $endpoint = $parsed['path'] ?? '/';
+        if (isset($parsed['query'])) {
+            $endpoint .= '?' . $parsed['query'];
+        }
+
+        return $endpoint;
     }
 
     /**

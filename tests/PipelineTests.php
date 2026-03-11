@@ -17,6 +17,7 @@
 */
 
 require_once(__DIR__ . "/../includes/pipeline.php");
+require_once(__DIR__ . "/../includes/fiftyone-service.php");
 require_once(__DIR__ . "/TestFlowElement.php");
 
 use fiftyone\pipeline\core\PipelineBuilder;
@@ -65,6 +66,7 @@ class PipelineTests extends TestCase {
 
         //A fake get_site_url() that always return 'http://localhost/testsite'
         Functions\when('get_site_url')->justReturn('http://localhost/testsite');
+        Functions\when('rest_url')->justReturn('http://localhost/testsite/wp-json/fiftyonedegrees/v4/json');
 
         $resourceKey = $_ENV["RESOURCEKEY"];
         if ($resourceKey === "!!YOUR_RESOURCE_KEY!!") {
@@ -94,6 +96,7 @@ class PipelineTests extends TestCase {
 
         //A fake get_site_url() that always return 'http://localhost/testsite'
         Functions\when('get_site_url')->justReturn('http://localhost/testsite');
+        Functions\when('rest_url')->justReturn('http://localhost/testsite/wp-json/fiftyonedegrees/v4/json');
 
         $resourceKey = "XXXXXXXXXXXXXX";
         $result = Pipeline::make_pipeline($resourceKey);
@@ -122,6 +125,7 @@ class PipelineTests extends TestCase {
     public function testMakePipeline_CatchesThrowable()
     {
         Functions\when('get_site_url')->justReturn('http://localhost/testsite');
+        Functions\when('rest_url')->justReturn('http://localhost/testsite/wp-json/fiftyonedegrees/v4/json');
 
         // Use a resource key that will trigger a cloud request error.
         // The key here is that the catch block must handle \Throwable,
@@ -183,6 +187,7 @@ class PipelineTests extends TestCase {
 
         //A fake get_site_url() that always return 'http://localhost/testsite'
         Functions\when('get_site_url')->justReturn('http://localhost/testsite');
+        Functions\when('rest_url')->justReturn('http://localhost/testsite/wp-json/fiftyonedegrees/v4/json');
 
         $resourceKey = $_ENV["RESOURCEKEY"];
         if ($resourceKey === "!!YOUR_RESOURCE_KEY!!") {
@@ -379,5 +384,68 @@ class PipelineTests extends TestCase {
         $this->assertTrue($createdAt < Pipeline::$data['createdAt']);
         $this->assertEquals(Pipeline::$data, $_SESSION["fiftyonedegrees_data"]);
 
+    }
+
+    // Data Provider for testGetRestEndpoint
+    public static function provider_testGetRestEndpoint() {
+        return array(
+            'pretty permalinks' => array(
+                'http://localhost/wp-json/fiftyonedegrees/v4/json',
+                '/wp-json/fiftyonedegrees/v4/json'
+            ),
+            'pretty permalinks with subdirectory' => array(
+                'http://localhost/blog/wp-json/fiftyonedegrees/v4/json',
+                '/blog/wp-json/fiftyonedegrees/v4/json'
+            ),
+            'plain permalinks' => array(
+                'http://localhost/?rest_route=/fiftyonedegrees/v4/json',
+                '/?rest_route=/fiftyonedegrees/v4/json'
+            ),
+            'plain permalinks with subdirectory' => array(
+                'http://localhost/blog/?rest_route=/fiftyonedegrees/v4/json',
+                '/blog/?rest_route=/fiftyonedegrees/v4/json'
+            ),
+        );
+    }
+
+    /**
+     * Test that getRestEndpoint extracts the correct path from rest_url()
+     * for various permalink configurations.
+     * @dataProvider provider_testGetRestEndpoint
+     */
+    public function testGetRestEndpoint($restUrl, $expectedEndpoint) {
+        Functions\when('rest_url')->justReturn($restUrl);
+
+        $result = Pipeline::getRestEndpoint();
+        $this->assertEquals($expectedEndpoint, $result);
+    }
+
+    /**
+     * Test that changing the permalink structure triggers a pipeline rebuild.
+     */
+    public function testPermalinkChangeRebuildsPipeline() {
+        Functions\when('get_site_url')->justReturn('http://localhost');
+        Functions\when('rest_url')->justReturn('http://localhost/wp-json/fiftyonedegrees/v4/json');
+
+        $resourceKey = 'XXXXXXXXXXXXXX';
+
+        Functions\expect('get_option')
+            ->once()
+            ->with(Options::RESOURCE_KEY)
+            ->andReturn($resourceKey);
+
+        $capturedPipeline = null;
+        Functions\expect('update_option')
+            ->once()
+            ->with(Options::PIPELINE, \Mockery::on(function ($pipeline) use (&$capturedPipeline) {
+                $capturedPipeline = $pipeline;
+                return is_array($pipeline);
+            }));
+
+        $service = new FiftyoneService();
+        $service->fiftyonedegrees_updated_option('permalink_structure', '/%postname%/', '');
+
+        $this->assertNotNull($capturedPipeline);
+        $this->assertArrayHasKey('pipeline', $capturedPipeline);
     }
 }
