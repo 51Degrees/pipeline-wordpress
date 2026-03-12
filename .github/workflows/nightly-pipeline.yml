@@ -45,3 +45,6 @@ jobs:
     secrets:
       token: ${{ secrets.ACCESS_TOKEN }}
       TestResourceKey: ${{ secrets.SUPER_RESOURCE_KEY }}
+      WordpressSvnUrl: ${{ vars.SVN_URL }}
+      WordpressSvnUser: ${{ secrets.SVN_USER }}
+      WordpressSvnPassword: ${{ secrets.SVN_PASSWORD }}
