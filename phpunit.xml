@@ -14,6 +14,7 @@
       <file>tests/GaServiceTests.php</file>
       <file>tests/GaTrackingGtagTests.php</file>
       <file>tests/GaHookTests.php</file>
+      <file>tests/ClientIpResolverTests.php</file>
     </testsuite>
     <testsuite name="Integration">
       <file>tests/PipelineTests.php</file>

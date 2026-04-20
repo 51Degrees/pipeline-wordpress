@@ -50,7 +50,6 @@ class Options
      * Value is stored as an int as returned by time().
      */
     const SESSION_INVALIDATED = "fiftyonedegrees_session_invalidated";
-    
 
     /**
      * Key for storing whether or not Google Analytics tracking is
