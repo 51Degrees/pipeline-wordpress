@@ -17,6 +17,7 @@
 */
 
 require_once __DIR__ . '/../options.php';
+require_once __DIR__ . '/client-ip.php';
 
 /**
  * Suspicious activity detection engine.
@@ -135,7 +136,7 @@ class SuspiciousActivity
             }
         }
 
-        $ip = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '127.0.0.1';
+        $ip = ClientIpResolver::resolve() ?: '127.0.0.1';
         $ua = sanitize_text_field(
             wp_unslash(isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '')
         );
@@ -190,38 +191,6 @@ class SuspiciousActivity
             }
         }
         return null;
-    }
-
-    /**
-     * Records a request timestamp and returns the new count within the window.
-     *
-     * @access public
-    
-     * @param  string $did   visitor identifier
-     * @return int    number of requests in the current window
-     */
-    public static function record_request($did)
-    {
-        $key = self::build_transient_key($did);
-        $window = (int) get_option(Options::SUSPICIOUS_WINDOW, 30);
-        $now = microtime(true);
-
-        $timestamps = get_transient($key);
-        if (!is_array($timestamps)) {
-            $timestamps = [];
-        }
-
-        $timestamps = array_values(array_filter(
-            $timestamps,
-            function ($t) use ($now, $window) {
-                return $t >= $now - $window;
-            }
-        ));
-
-        $timestamps[] = $now;
-        set_transient($key, $timestamps, $window);
-
-        return count($timestamps);
     }
 
     /**
