@@ -152,6 +152,12 @@ class Pipeline
             // Set evidence from web request.
             $flowData->evidence->setFromWebRequest();
 
+            // Suspicious activity detection relies on IdProbLic/IdProbGlobal;
+            // the cloud requires query.id.usage for those to be populated.
+            if (get_option(Options::SUSPICIOUS_ENABLE, 'off') === 'on') {
+                $flowData->evidence->set('query.id.usage', 'non-marketing');
+            }
+
             // Process flowData with evidence supplied
             try {
                 $flowData->process();

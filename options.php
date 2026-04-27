@@ -160,5 +160,31 @@ class Options
      * Google Analytics.
      */
     const GA_AUTH_DATE = "fiftyonedegrees_ga_auth_date";
+
+    /**
+     * Options group key for suspicious activity detection settings.
+     */
+    const SUSPICIOUS_GROUP_KEY = "fiftyonedegrees_suspicious_options";
+
+    /**
+     * Key for storing whether suspicious activity detection is enabled.
+     * Value is 'on' or 'off'.
+     */
+    const SUSPICIOUS_ENABLE = "fiftyonedegrees_suspicious_enable";
+
+    /**
+     * Key for storing the URL to redirect suspicious visitors to.
+     */
+    const SUSPICIOUS_REDIRECT_URL = "fiftyonedegrees_suspicious_redirect_url";
+
+    /**
+     * Key for storing the number of requests that triggers a redirect.
+     */
+    const SUSPICIOUS_REQUESTS = "fiftyonedegrees_suspicious_requests";
+
+    /**
+     * Key for storing the time window (in seconds) for counting requests.
+     */
+    const SUSPICIOUS_WINDOW = "fiftyonedegrees_suspicious_window";
 }
 ?>

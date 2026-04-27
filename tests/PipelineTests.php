@@ -181,6 +181,65 @@ class PipelineTests extends TestCase {
     }
 
     /**
+     * Test that when suspicious activity detection is enabled,
+     * Pipeline::process sets query.id.usage = 'non-marketing' so the
+     * cloud can generate IdProbLic / IdProbGlobal.
+     */
+    public function testProcess_SetsIdUsageWhenSuspiciousEnabled() {
+        $mock_pipeline = (new PipelineBuilder())
+            ->add(new TestFlowElement())
+            ->build();
+        $pipeline = [
+            'pipeline' => $mock_pipeline,
+            'available_engines' => ['testElement'],
+            'error' => null,
+        ];
+
+        Functions\when('get_option')->alias(function ($name, $default = null) use ($pipeline) {
+            if ($name === Options::PIPELINE) return $pipeline;
+            if ($name === Options::SUSPICIOUS_ENABLE) return 'on';
+            return $default;
+        });
+
+        Pipeline::reset();
+        Pipeline::process();
+
+        $this->assertSame(
+            'non-marketing',
+            Pipeline::$data['flowData']->evidence->get('query.id.usage')
+        );
+    }
+
+    /**
+     * Test that when suspicious activity detection is disabled,
+     * Pipeline::process does not set query.id.usage — avoids wasted
+     * 51DiD generation at the cloud for sites not using the feature.
+     */
+    public function testProcess_DoesNotSetIdUsageWhenSuspiciousDisabled() {
+        $mock_pipeline = (new PipelineBuilder())
+            ->add(new TestFlowElement())
+            ->build();
+        $pipeline = [
+            'pipeline' => $mock_pipeline,
+            'available_engines' => ['testElement'],
+            'error' => null,
+        ];
+
+        Functions\when('get_option')->alias(function ($name, $default = null) use ($pipeline) {
+            if ($name === Options::PIPELINE) return $pipeline;
+            if ($name === Options::SUSPICIOUS_ENABLE) return 'off';
+            return $default;
+        });
+
+        Pipeline::reset();
+        Pipeline::process();
+
+        $this->assertNull(
+            Pipeline::$data['flowData']->evidence->get('query.id.usage')
+        );
+    }
+
+    /**
      * Test that the process method returns the expected result.
      */
     public function testProcess() {

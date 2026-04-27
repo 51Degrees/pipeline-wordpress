@@ -126,6 +126,7 @@ class Fiftyonedegrees {
         require_once __DIR__ . '/includes/ga-service.php';
         require_once __DIR__ . '/includes/ga-tracking-gtag.php';
         require_once __DIR__ . '/options.php';
+        require_once __DIR__ . '/includes/suspicious-activity.php';
         
         // Include Custom_Dimensions class
         if (!class_exists('Fiftyonedegrees_Custom_Dimensions')) {

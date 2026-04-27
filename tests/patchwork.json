@@ -1,5 +1,8 @@
 {
     "redefinable-internals": [
-        "session_status"
+        "session_status",
+        "headers_sent",
+        "php_sapi_name",
+        "error_log"
     ]
 }

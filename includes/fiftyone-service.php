@@ -171,6 +171,33 @@ class FiftyoneService {
         register_setting(
             Options::GROUP_KEY,
             Options::RESOURCE_KEY);
+
+        // Suspicious activity detection settings.
+        add_option(Options::SUSPICIOUS_ENABLE, 'off');
+        add_option(Options::SUSPICIOUS_REDIRECT_URL, '');
+        add_option(Options::SUSPICIOUS_REQUESTS, 5);
+        add_option(Options::SUSPICIOUS_WINDOW, 30);
+
+        register_setting(Options::SUSPICIOUS_GROUP_KEY, Options::SUSPICIOUS_ENABLE, [
+            'type' => 'string',
+            'sanitize_callback' => function ($v) { return $v === 'on' ? 'on' : 'off'; },
+            'default' => 'off',
+        ]);
+        register_setting(Options::SUSPICIOUS_GROUP_KEY, Options::SUSPICIOUS_REDIRECT_URL, [
+            'type' => 'string',
+            'sanitize_callback' => 'esc_url_raw',
+            'default' => '',
+        ]);
+        register_setting(Options::SUSPICIOUS_GROUP_KEY, Options::SUSPICIOUS_REQUESTS, [
+            'type' => 'integer',
+            'sanitize_callback' => function ($v) { return max(1, (int) $v); },
+            'default' => 5,
+        ]);
+        register_setting(Options::SUSPICIOUS_GROUP_KEY, Options::SUSPICIOUS_WINDOW, [
+            'type' => 'integer',
+            'sanitize_callback' => function ($v) { return max(1, min(3600, (int) $v)); },
+            'default' => 30,
+        ]);
     }
 
     /**
@@ -279,6 +306,10 @@ class FiftyoneService {
                 delete_option(Options::RESOURCE_KEY_UPDATED);
             }
             
+        }
+
+        if ($option === Options::SUSPICIOUS_ENABLE && $new_value === 'on' && $old_value !== 'on') {
+            update_option(Options::SESSION_INVALIDATED, time());
         }
 
         if ($option === Options::GA_TRACKING_ID &&

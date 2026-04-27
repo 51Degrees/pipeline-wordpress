@@ -18,15 +18,10 @@
     clause in Article 5 of the EUPL shall not apply.
 */
 
-    if (isset($_GET["tab"])) {
-
-        $active_tab = sanitize_text_field( $_GET["tab"] );
-    
-    } else {
-
-        $active_tab = "setup";
-
-    }
+    $valid_tabs = ['setup', 'google-analytics', 'properties', 'help', 'suspicious'];
+    $active_tab = isset($_GET['tab']) && in_array($_GET['tab'], $valid_tabs, true)
+        ? $_GET['tab']
+        : 'setup';
 
 ?>
 
@@ -34,7 +29,8 @@
     <a href="?page=51Degrees&tab=setup" class="nav-tab <?php echo $active_tab == 'setup' ? 'nav-tab-active' : ''; ?>">Setup</a>
     <a href="?page=51Degrees&tab=google-analytics" class="nav-tab <?php echo $active_tab == 'google-analytics' ? 'nav-tab-active' : ''; ?>" style="<?php echo !get_option(Options::RESOURCE_KEY) ? 'pointer-events:none;color:#C0C0C0;' : ''; ?>">Google Analytics</a>
 	
-    <a href="?page=51Degrees&tab=properties" class="nav-tab <?php echo $active_tab == 'properties' ? 'nav-tab-active' : '';  ?>" style="<?php echo !get_option(Options::RESOURCE_KEY) ? 'pointer-events:none;color:#C0C0C0;' : ''; ?>">Properties</a>	
+    <a href="?page=51Degrees&tab=properties" class="nav-tab <?php echo $active_tab == 'properties' ? 'nav-tab-active' : '';  ?>" style="<?php echo !get_option(Options::RESOURCE_KEY) ? 'pointer-events:none;color:#C0C0C0;' : ''; ?>">Properties</a>
+    <a href="?page=51Degrees&tab=suspicious" class="nav-tab <?php echo $active_tab == 'suspicious' ? 'nav-tab-active' : ''; ?>" style="<?php echo !get_option(Options::RESOURCE_KEY) ? 'pointer-events:none;color:#C0C0C0;' : ''; ?>"><?php esc_html_e('Suspicious', '51D'); ?></a>
     <a href="?page=51Degrees&tab=help" class="nav-tab <?php echo $active_tab == 'help' ? 'nav-tab-active' : ''; ?>">Help</a>
 </h2>
                   
