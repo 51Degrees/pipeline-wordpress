@@ -18,10 +18,12 @@
     clause in Article 5 of the EUPL shall not apply.
 */
 
-    if (isset($_GET["tab"])) {
+$allowed_tabs = ['setup', 'google-analytics', 'properties', 'robots', 'suspicious', 'help'];
+
+if (isset($_GET["tab"]) && in_array(sanitize_text_field($_GET["tab"]), $allowed_tabs, true)) {
 
         $active_tab = sanitize_text_field( $_GET["tab"] );
-    
+
     } else {
 
         $active_tab = "setup";
@@ -34,10 +36,12 @@
     <a href="?page=51Degrees&tab=setup" class="nav-tab <?php echo $active_tab == 'setup' ? 'nav-tab-active' : ''; ?>">Setup</a>
     <a href="?page=51Degrees&tab=google-analytics" class="nav-tab <?php echo $active_tab == 'google-analytics' ? 'nav-tab-active' : ''; ?>" style="<?php echo !get_option(Options::RESOURCE_KEY) ? 'pointer-events:none;color:#C0C0C0;' : ''; ?>">Google Analytics</a>
 	
-    <a href="?page=51Degrees&tab=properties" class="nav-tab <?php echo $active_tab == 'properties' ? 'nav-tab-active' : '';  ?>" style="<?php echo !get_option(Options::RESOURCE_KEY) ? 'pointer-events:none;color:#C0C0C0;' : ''; ?>">Properties</a>	
+    <a href="?page=51Degrees&tab=properties" class="nav-tab <?php echo $active_tab == 'properties' ? 'nav-tab-active' : '';  ?>" style="<?php echo !get_option(Options::RESOURCE_KEY) ? 'pointer-events:none;color:#C0C0C0;' : ''; ?>">Properties</a>
+    <a href="?page=51Degrees&tab=robots" class="nav-tab <?php echo $active_tab == 'robots' ? 'nav-tab-active' : ''; ?>" style="<?php echo !get_option(Options::RESOURCE_KEY) ? 'pointer-events:none;color:#C0C0C0;' : ''; ?>">Robots.txt</a>
+    <a href="?page=51Degrees&tab=suspicious" class="nav-tab <?php echo $active_tab == 'suspicious' ? 'nav-tab-active' : ''; ?>" style="<?php echo !get_option(Options::RESOURCE_KEY) ? 'pointer-events:none;color:#C0C0C0;' : ''; ?>"><?php esc_html_e('Suspicious', '51D'); ?></a>
     <a href="?page=51Degrees&tab=help" class="nav-tab <?php echo $active_tab == 'help' ? 'nav-tab-active' : ''; ?>">Help</a>
 </h2>
                   
 <?php
 
-include plugin_dir_path(__FILE__) . esc_html( $active_tab ) . ".php";
+include plugin_dir_path(__FILE__) . $active_tab . ".php";

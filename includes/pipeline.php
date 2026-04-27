@@ -22,6 +22,7 @@ use fiftyone\pipeline\core\PipelineBuilder;
 use fiftyone\pipeline\core\Utils;
 
 require_once __DIR__ . '/../options.php';
+require_once __DIR__ . '/client-ip.php';
 
 class Pipeline
 {
@@ -151,6 +152,17 @@ class Pipeline
 
             // Set evidence from web request.
             $flowData->evidence->setFromWebRequest();
+
+            $resolvedIp = ClientIpResolver::resolve();
+            if ($resolvedIp !== '') {
+                $flowData->evidence->set('query.client-ip', $resolvedIp);
+            }
+
+            // Suspicious activity detection relies on IdProbLic/IdProbGlobal;
+            // the cloud requires query.id.usage for those to be populated.
+            if (get_option(Options::SUSPICIOUS_ENABLE, 'off') === 'on') {
+                $flowData->evidence->set('query.id.usage', 'non-marketing');
+            }
 
             // Process flowData with evidence supplied
             try {

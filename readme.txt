@@ -23,6 +23,14 @@ This plugin makes use of the 51Degrees Pipeline API to deliver various data inte
 
 51Degrees plugin allows you to add the Device Data Properties as Custom Dimensions to Google Analytics in a seamless and useful manner. The integration is super simple and does not require the help of a developer to set up the integration. Once you integrate Google Analytics in WordPress using 51Degrees, you will be able to fetch the Custom Dimensions in the Google Analytics Custom Reports to get the useful insights.
 
+## Suspicious Activity Detection
+
+Detect and redirect visitors who make too many requests in a short time window. Configure the threshold, time window, and redirect URL from the Suspicious tab in Settings > 51Degrees.
+
+## Dynamic Robots.txt with Crawler Detection
+
+Use 51Degrees device detection to intelligently manage your robots.txt file and control crawler access. The plugin automatically detects crawlers and bad bots, then enforces access policies based on crawler type. Protect your site from unwanted scraping and DDoS attempts while allowing legitimate search engines and analytics crawlers to function normally.
+
 ## Advanced Features and Developer Info
 
 For advanced feature usage, including in-page value replacement and shortcodes, conditional display based on property values, and access to 51Degrees property data from PHP and JavaScript, see the project [GitHub](https://github.com/51Degrees/pipeline-wordpress/) repository.

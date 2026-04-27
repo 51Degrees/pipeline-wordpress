@@ -67,6 +67,21 @@
                     <input name="<?php echo Options::RESOURCE_KEY; ?>" type="text" id="<?php echo Options::RESOURCE_KEY; ?>" value="<?php echo esc_attr(get_option(Options::RESOURCE_KEY));?>" class="regular-text">
                 </td>
             </tr>
+            <tr>
+                <th scope="row">
+                    <label for="<?php echo Options::PIPELINE_ENABLE; ?>">Device Detection</label>
+                </th>
+                <td>
+                    <input type="hidden" name="<?php echo Options::PIPELINE_ENABLE; ?>" value="off">
+                    <label>
+                        <input name="<?php echo Options::PIPELINE_ENABLE; ?>" type="checkbox" id="<?php echo Options::PIPELINE_ENABLE; ?>" value="on" <?php checked(get_option(Options::PIPELINE_ENABLE, 'on'), 'on'); ?>>
+                        Enable 51Degrees device detection on every request
+                    </label>
+                    <p class="description">
+                        Disable to stop device detection calls entirely. This will also disable Robots Enforce. Automatically re-enabled when any feature that requires it is turned on.
+                    </p>
+                </td>
+            </tr>
         </tbody>
     </table>
 

@@ -28,14 +28,21 @@ use \Brain\Monkey\Filters;
 
 class PipelineTests extends TestCase {
 
+    private $serverBackup;
+    private $getBackup;
+
     public function set_up() {
         Pipeline::reset();
         parent::set_up();
         Brain\Monkey\setUp();
         $_SESSION = null;
+        $this->serverBackup = $_SERVER;
+        $this->getBackup = $_GET;
     }
 
     public function tear_down() {
+        $_SERVER = $this->serverBackup;
+        $_GET = $this->getBackup;
         Brain\Monkey\tearDown();
         parent::tear_down();
     }
@@ -178,6 +185,65 @@ class PipelineTests extends TestCase {
         $this->assertStringContainsString('Simulated processing failure', $logContents);
 
         fclose($capture);
+    }
+
+    /**
+     * Test that when suspicious activity detection is enabled,
+     * Pipeline::process sets query.id.usage = 'non-marketing' so the
+     * cloud can generate IdProbLic / IdProbGlobal.
+     */
+    public function testProcess_SetsIdUsageWhenSuspiciousEnabled() {
+        $mock_pipeline = (new PipelineBuilder())
+            ->add(new TestFlowElement())
+            ->build();
+        $pipeline = [
+            'pipeline' => $mock_pipeline,
+            'available_engines' => ['testElement'],
+            'error' => null,
+        ];
+
+        Functions\when('get_option')->alias(function ($name, $default = null) use ($pipeline) {
+            if ($name === Options::PIPELINE) return $pipeline;
+            if ($name === Options::SUSPICIOUS_ENABLE) return 'on';
+            return $default;
+        });
+
+        Pipeline::reset();
+        Pipeline::process();
+
+        $this->assertSame(
+            'non-marketing',
+            Pipeline::$data['flowData']->evidence->get('query.id.usage')
+        );
+    }
+
+    /**
+     * Test that when suspicious activity detection is disabled,
+     * Pipeline::process does not set query.id.usage — avoids wasted
+     * 51DiD generation at the cloud for sites not using the feature.
+     */
+    public function testProcess_DoesNotSetIdUsageWhenSuspiciousDisabled() {
+        $mock_pipeline = (new PipelineBuilder())
+            ->add(new TestFlowElement())
+            ->build();
+        $pipeline = [
+            'pipeline' => $mock_pipeline,
+            'available_engines' => ['testElement'],
+            'error' => null,
+        ];
+
+        Functions\when('get_option')->alias(function ($name, $default = null) use ($pipeline) {
+            if ($name === Options::PIPELINE) return $pipeline;
+            if ($name === Options::SUSPICIOUS_ENABLE) return 'off';
+            return $default;
+        });
+
+        Pipeline::reset();
+        Pipeline::process();
+
+        $this->assertNull(
+            Pipeline::$data['flowData']->evidence->get('query.id.usage')
+        );
     }
 
     /**
@@ -448,4 +514,91 @@ class PipelineTests extends TestCase {
         $this->assertNotNull($capturedPipeline);
         $this->assertArrayHasKey('pipeline', $capturedPipeline);
     }
+
+    /**
+     * Test that Pipeline::process sets query.client-ip from
+     * REMOTE_ADDR when no proxy headers are present.
+     */
+    public function testProcess_SetsResolvedClientIpAsQueryEvidence() {
+        Functions\when('get_site_url')->justReturn('http://localhost/testsite');
+        Functions\when('rest_url')->justReturn('http://localhost/testsite/wp-json/fiftyonedegrees/v4/json');
+
+        $resourceKey = $_ENV["RESOURCEKEY"];
+        if ($resourceKey === "!!YOUR_RESOURCE_KEY!!") {
+            $this->fail("Resource Key required; set RESOURCEKEY env or .env");
+        }
+
+        $_SERVER['REMOTE_ADDR'] = '203.0.113.1';
+        $pipeline = Pipeline::make_pipeline($resourceKey);
+        Functions\when('get_option')->alias(function ($name, $default = null) use ($pipeline) {
+            if ($name === Options::PIPELINE) return $pipeline;
+            return $default;
+        });
+
+        Pipeline::process();
+
+        $flowData = Pipeline::$data['flowData'];
+        $this->assertSame('203.0.113.1', $flowData->evidence->get('query.client-ip'));
+        $this->assertSame('203.0.113.1', $flowData->evidence->get('server.client-ip'));
+    }
+
+    /**
+     * Test that a URL-supplied ?client-ip is overwritten by the
+     * resolver, preventing visitors from spoofing the cloud-detected IP.
+     */
+    public function testProcess_QueryStringClientIpIsOverriddenByResolver() {
+        Functions\when('get_site_url')->justReturn('http://localhost/testsite');
+        Functions\when('rest_url')->justReturn('http://localhost/testsite/wp-json/fiftyonedegrees/v4/json');
+
+        $resourceKey = $_ENV["RESOURCEKEY"];
+        if ($resourceKey === "!!YOUR_RESOURCE_KEY!!") {
+            $this->fail("Resource Key required; set RESOURCEKEY env or .env");
+        }
+
+        $_SERVER['REMOTE_ADDR'] = '203.0.113.1';
+        $_GET['client-ip'] = 'attacker.ip.spoof';
+        $pipeline = Pipeline::make_pipeline($resourceKey);
+        Functions\when('get_option')->alias(function ($name, $default = null) use ($pipeline) {
+            if ($name === Options::PIPELINE) return $pipeline;
+            return $default;
+        });
+
+        Pipeline::process();
+
+        $flowData = Pipeline::$data['flowData'];
+        $this->assertSame(
+            '203.0.113.1',
+            $flowData->evidence->get('query.client-ip'),
+            'URL-supplied client-ip must not reach the cloud'
+        );
+    }
+
+    /**
+     * Test that when the resolver returns '' (REMOTE_ADDR absent),
+     * Pipeline::process does not set query.client-ip — the cloud
+     * treats an empty client-ip as broken input.
+     */
+    public function testProcess_EmptyResolvedIpDoesNotPollute() {
+        Functions\when('get_site_url')->justReturn('http://localhost/testsite');
+        Functions\when('rest_url')->justReturn('http://localhost/testsite/wp-json/fiftyonedegrees/v4/json');
+
+        $resourceKey = $_ENV["RESOURCEKEY"];
+        if ($resourceKey === "!!YOUR_RESOURCE_KEY!!") {
+            $this->fail("Resource Key required; set RESOURCEKEY env or .env");
+        }
+
+        $_SERVER = [];
+        $_GET = [];
+        $pipeline = Pipeline::make_pipeline($resourceKey);
+        Functions\when('get_option')->alias(function ($name, $default = null) use ($pipeline) {
+            if ($name === Options::PIPELINE) return $pipeline;
+            return $default;
+        });
+
+        Pipeline::process();
+
+        $flowData = Pipeline::$data['flowData'];
+        $this->assertNull($flowData->evidence->get('query.client-ip'));
+    }
+
 }
