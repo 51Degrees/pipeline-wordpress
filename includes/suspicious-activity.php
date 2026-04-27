@@ -253,13 +253,16 @@ class SuspiciousActivity
     }
 
     /**
-     * Returns true if the current request is for the configured redirect
-     * target page (loop prevention).
+     * Returns true if the current request is for the suspicious redirect
+     * target or the robots.txt bot redirect target. Skipping both prevents
+     * loops with the suspicious feature itself and the robots.txt feature
+     * (a bot redirected to its destination must not then be redirected
+     * onward as suspicious).
      *
-     * Resolves both URLs to a WordPress post ID first. This catches the
-     * case where the target page is the static front page: WordPress
-     * canonicalises /page-slug/ to / for the home request, and a plain
-     * path comparison would treat them as different and loop.
+     * Resolves URLs to a WordPress post ID. This catches the case where
+     * the target page is the static front page: WordPress canonicalises
+     * /page-slug/ to / for the home request, and a plain path comparison
+     * would treat them as different and loop.
      *
      * @access private
      *
@@ -267,29 +270,34 @@ class SuspiciousActivity
      */
     private static function is_on_redirect_target()
     {
-        $target = get_option(Options::SUSPICIOUS_REDIRECT_URL);
-        if (!$target) {
+        $targets = array_filter([
+            get_option(Options::SUSPICIOUS_REDIRECT_URL),
+            get_option(Options::ROBOTS_REDIRECT_URL),
+        ]);
+        if (empty($targets)) {
             return false;
         }
 
         $current_uri = $_SERVER['REQUEST_URI'] ?? '/';
+        $current_path = trailingslashit(strtok($current_uri, '?'));
+        $current_id = function_exists('url_to_postid') && function_exists('home_url')
+            ? url_to_postid(home_url($current_uri))
+            : 0;
 
-        if (function_exists('url_to_postid') && function_exists('home_url')) {
-            $target_id = url_to_postid($target);
-            if ($target_id > 0) {
-                $current_id = url_to_postid(home_url($current_uri));
-                if ($current_id === $target_id) {
+        foreach ($targets as $target) {
+            if ($current_id > 0) {
+                $target_id = url_to_postid($target);
+                if ($target_id > 0 && $current_id === $target_id) {
                     return true;
                 }
             }
+            $target_path = trailingslashit(wp_parse_url($target, PHP_URL_PATH) ?: '/');
+            if ($current_path === $target_path) {
+                return true;
+            }
         }
 
-        $current_path = trailingslashit(strtok($current_uri, '?'));
-        $target_path = trailingslashit(
-            wp_parse_url($target, PHP_URL_PATH) ?: '/'
-        );
-
-        return $current_path === $target_path;
+        return false;
     }
 }
 

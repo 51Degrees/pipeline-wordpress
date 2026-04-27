@@ -615,6 +615,27 @@ class SuspiciousActivityTests extends TestCase
     }
 
     /**
+     * Test that suspicious detection skips when the request is on the
+     * robots.txt bot redirect URL. Without this, a bot redirected by the
+     * robots feature accumulates hits on the bot page and gets bounced
+     * onward to the suspicious page, producing too-many-redirects loops.
+     */
+    public function testLoopPreventionOnBotRedirectUrl()
+    {
+        $this->options[Options::SUSPICIOUS_ENABLE] = 'on';
+        $this->options[Options::SUSPICIOUS_REQUESTS] = 1;
+        $this->options[Options::SUSPICIOUS_REDIRECT_URL] = 'http://example.com/blocked/';
+        $this->options[Options::ROBOTS_REDIRECT_URL] = 'http://example.com/bot/';
+        Pipeline::$data = ['properties' => [], 'flowData' => null, 'errors' => []];
+
+        $_SERVER['REQUEST_URI'] = '/bot/';
+
+        SuspiciousActivity::check_and_maybe_redirect();
+
+        self::assertEmpty($this->transients);
+    }
+
+    /**
      * Test that the IP+UA hash works with non-ASCII and binary characters
      * in the User-Agent string.
      */
