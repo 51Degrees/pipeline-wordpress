@@ -1,0 +1,8 @@
+[
+  {
+    "id": "socw",
+    "label": "MOW Search Only Terms Web (SOCW)",
+    "description": "Defines terms for search-only crawler access. Numbered versions are immutable; the plugin checks daily for the next version.",
+    "url": "https://m4ow.uk/socw/1.txt"
+  }
+]

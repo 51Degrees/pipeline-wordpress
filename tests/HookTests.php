@@ -226,5 +226,224 @@ class HookTests extends TestCase {
         // to worry.
         $this->assertTrue(true);
     }
+
+    /**
+     * When PIPELINE_ENABLE is 'off', fiftyonedegrees_init() must not call
+     * Pipeline::process() — Pipeline::$data stays null.
+     */
+    public function testPipelineEnableOffSkipsProcessing() {
+        Functions\when('get_option')->alias(function($arg, $default = null) {
+            if ($arg === Options::PIPELINE_ENABLE) return 'off';
+            if ($arg === Options::PIPELINE) return HookTests::$pipeline;
+            return $default;
+        });
+        Pipeline::reset();
+        FiftyoneService::fiftyonedegrees_init();
+        $this->assertNull(Pipeline::$data);
+    }
+
+    /**
+     * When PIPELINE_ENABLE is 'on', fiftyonedegrees_init() must call
+     * Pipeline::process() — Pipeline::$data is populated.
+     */
+    public function testPipelineEnableOnCallsProcess() {
+        Functions\when('get_option')->alias(function($arg, $default = null) {
+            if ($arg === Options::PIPELINE_ENABLE) return 'on';
+            if ($arg === Options::PIPELINE) return HookTests::$pipeline;
+            return $default;
+        });
+        Pipeline::reset();
+        FiftyoneService::fiftyonedegrees_init();
+        $this->assertNotNull(Pipeline::$data);
+    }
+
+    /**
+     * The pipeline_autoenable_notice action must be registered.
+     */
+    public function testPipelineAutoEnableNoticeActionRegistered() {
+        (new FiftyoneService())->setup_wp_actions();
+        self::assertNotFalse(has_action(
+            'admin_notices',
+            'FiftyoneService->fiftyonedegrees_pipeline_autoenable_notice()'));
+    }
+
+    /**
+     * When ROBOTS_ENFORCE is saved as 'on' and PIPELINE_ENABLE is 'off',
+     * fiftyonedegrees_update_option() must set PIPELINE_ENABLE to 'on'
+     * and set the auto-enable transient.
+     */
+    public function testRobotsEnforceOnAutoEnablesPipeline() {
+        Functions\when('get_option')->alias(function($arg, $default = null) {
+            if ($arg === Options::PIPELINE_ENABLE) return 'off';
+            if ($arg === Options::PIPELINE) return HookTests::$pipeline;
+            return $default;
+        });
+
+        $updated = [];
+        Functions\when('update_option')->alias(function($key, $value) use (&$updated) {
+            $updated[$key] = $value;
+            return true;
+        });
+
+        $transientKey = null;
+        Functions\when('set_transient')->alias(function($key) use (&$transientKey) {
+            $transientKey = $key;
+            return true;
+        });
+        Functions\when('delete_option')->justReturn(true);
+
+        $service = new FiftyoneService();
+        $service->fiftyonedegrees_update_option(
+            Options::ROBOTS_ENFORCE, 'off', 'on');
+
+        $this->assertArrayHasKey(Options::PIPELINE_ENABLE, $updated);
+        $this->assertEquals('on', $updated[Options::PIPELINE_ENABLE]);
+        $this->assertEquals(
+            'fiftyonedegrees_pipeline_auto_enabled', $transientKey);
+    }
+
+    /**
+     * When ROBOTS_ENFORCE is saved as 'on' but PIPELINE_ENABLE is already 'on',
+     * no redundant update or transient should be written.
+     */
+    public function testRobotsEnforceOnDoesNotAutoEnableIfAlreadyOn() {
+        Functions\when('get_option')->alias(function($arg, $default = null) {
+            if ($arg === Options::PIPELINE_ENABLE) return 'on';
+            if ($arg === Options::PIPELINE) return HookTests::$pipeline;
+            return $default;
+        });
+
+        $updated = [];
+        Functions\when('update_option')->alias(function($key, $value) use (&$updated) {
+            $updated[$key] = $value;
+            return true;
+        });
+        Functions\when('delete_option')->justReturn(true);
+
+        $service = new FiftyoneService();
+        $service->fiftyonedegrees_update_option(
+            Options::ROBOTS_ENFORCE, 'on', 'on');
+
+        $this->assertArrayNotHasKey(Options::PIPELINE_ENABLE, $updated);
+    }
+
+    /**
+     * When ROBOTS_ENFORCE is saved as 'off', no auto-enable should happen.
+     */
+    public function testRobotsEnforceOffDoesNotAutoEnable() {
+        Functions\when('get_option')->alias(function($arg, $default = null) {
+            if ($arg === Options::PIPELINE_ENABLE) return 'off';
+            if ($arg === Options::PIPELINE) return HookTests::$pipeline;
+            return $default;
+        });
+
+        $updated = [];
+        Functions\when('update_option')->alias(function($key, $value) use (&$updated) {
+            $updated[$key] = $value;
+            return true;
+        });
+        Functions\when('delete_option')->justReturn(true);
+
+        $service = new FiftyoneService();
+        $service->fiftyonedegrees_update_option(
+            Options::ROBOTS_ENFORCE, 'on', 'off');
+
+        $this->assertArrayNotHasKey(Options::PIPELINE_ENABLE, $updated);
+    }
+
+    /**
+     * When PIPELINE_ENABLE is set to 'off' while ROBOTS_ENFORCE is set to 'on',
+     * fiftyonedegrees_update_option() must disable the ROBOTS_ENFORCE
+     */
+    public function testPipelineEnableOffAutoReenabledWhenRobotsEnforceOn() {
+        Functions\when('get_option')->alias(function($arg, $default = null) {
+            if ($arg === Options::ROBOTS_ENFORCE) return 'on';
+            if ($arg === Options::PIPELINE) return HookTests::$pipeline;
+            return $default;
+        });
+
+        $updated = [];
+        Functions\when('update_option')->alias(function($key, $value) use (&$updated) {
+            $updated[$key] = $value;
+            return true;
+        });
+
+        $transientKey = null;
+        Functions\when('set_transient')->alias(function($key) use (&$transientKey) {
+            $transientKey = $key;
+            return true;
+        });
+        Functions\when('delete_option')->justReturn(true);
+
+        $service = new FiftyoneService();
+        $service->fiftyonedegrees_update_option(
+            Options::PIPELINE_ENABLE, 'on', 'off');
+
+        $this->assertArrayHasKey(Options::ROBOTS_ENFORCE, $updated);
+        $this->assertEquals('off', $updated[Options::ROBOTS_ENFORCE]);
+    }
+
+    /**
+     * When PIPELINE_ENABLE is set to 'off' and ROBOTS_ENFORCE is also 'off',
+     * no auto-enable should happen.
+     */
+    public function testPipelineEnableOffDoesNotAutoReenableWhenRobotsEnforceOff() {
+        Functions\when('get_option')->alias(function($arg, $default = null) {
+            if ($arg === Options::ROBOTS_ENFORCE) return 'off';
+            if ($arg === Options::PIPELINE) return HookTests::$pipeline;
+            return $default;
+        });
+
+        $updated = [];
+        Functions\when('update_option')->alias(function($key, $value) use (&$updated) {
+            $updated[$key] = $value;
+            return true;
+        });
+        Functions\when('delete_option')->justReturn(true);
+
+        $service = new FiftyoneService();
+        $service->fiftyonedegrees_update_option(
+            Options::PIPELINE_ENABLE, 'on', 'off');
+
+        $this->assertArrayNotHasKey(Options::PIPELINE_ENABLE, $updated);
+    }
+
+    /**
+     * fiftyonedegrees_pipeline_autoenable_notice() outputs a notice when the
+     * transient is set, then deletes it.
+     */
+    public function testAutoEnableNoticeOutputsWhenTransientSet() {
+        Functions\when('get_transient')->alias(function($key) {
+            if ($key === 'fiftyonedegrees_pipeline_auto_enabled') {
+                return 'Robots Enforce';
+            }
+            return false;
+        });
+        Functions\when('delete_transient')->justReturn(true);
+        Functions\when('esc_html')->returnArg();
+
+        $service = new FiftyoneService();
+        ob_start();
+        $service->fiftyonedegrees_pipeline_autoenable_notice();
+        $output = ob_get_clean();
+
+        $this->assertStringContainsString('Device detection was automatically enabled', $output);
+        $this->assertStringContainsString('Robots Enforce', $output);
+    }
+
+    /**
+     * fiftyonedegrees_pipeline_autoenable_notice() outputs nothing when the
+     * transient is not set.
+     */
+    public function testAutoEnableNoticeOutputsNothingWhenTransientAbsent() {
+        Functions\when('get_transient')->justReturn(false);
+
+        $service = new FiftyoneService();
+        ob_start();
+        $service->fiftyonedegrees_pipeline_autoenable_notice();
+        $output = ob_get_clean();
+
+        $this->assertEmpty($output);
+    }
 }
 ?>

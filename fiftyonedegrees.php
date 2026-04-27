@@ -154,6 +154,12 @@ class Fiftyonedegrees {
 
 // ====================== active - inactive - delete hooks =========================
 
+require_once(__DIR__ . '/options.php');
+require_once(__DIR__ . '/includes/cloud-metadata.php');
+require_once(__DIR__ . '/includes/standard-tdls.php');
+require_once(__DIR__ . '/includes/robots-txt.php');
+FiftyOneDegreesRobotsTxt::init();
+
 // Activate Plugin
 /**
  * Create instance of fiftyonedegrees class.
@@ -164,11 +170,36 @@ function load_fiftyonedegrees() {
 
 add_action('plugin_loaded', 'load_fiftyonedegrees');
 
+function fiftyonedegrees_activate() {
+    add_option(Options::ROBOTS_PLAINTEXT_CACHE, '');
+    add_option(Options::ROBOTS_ANNOTATEDTEXT_CACHE, '');
+
+    // Initialize live standard TDL URL map from config (first-time only)
+    if (get_option(Options::ROBOTS_STANDARD_TDL_URLS) === false) {
+        $entries = FiftyOneDegreesStandardTdls::load();
+        $initial = [];
+        foreach ($entries as $entry) {
+            $initial[$entry['id']] = $entry['url'];
+        }
+        add_option(Options::ROBOTS_STANDARD_TDL_URLS, $initial);
+    }
+
+    if (!wp_next_scheduled('fiftyonedegrees_refresh_robots_txt')) {
+        wp_schedule_event(time(), 'daily', 'fiftyonedegrees_refresh_robots_txt');
+    }
+
+    if (!wp_next_scheduled('fiftyonedegrees_refresh_standard_tdls')) {
+        wp_schedule_event(time(), 'daily', 'fiftyonedegrees_refresh_standard_tdls');
+    }
+}
+register_activation_hook(__FILE__, 'fiftyonedegrees_activate');
+
 register_deactivation_hook(__FILE__, 'fiftyonedegrees_deactivate'); //in-active
 register_uninstall_hook(__FILE__, 'fiftyonedegrees_deactivate'); // delete
 
 function fiftyonedegrees_deactivate() {
-
+    wp_clear_scheduled_hook('fiftyonedegrees_refresh_robots_txt');
+    wp_clear_scheduled_hook('fiftyonedegrees_refresh_standard_tdls');
     Fiftyonedegrees::get_instance()->delete_options();
     delete_option(Options::RESOURCE_KEY);
     delete_option(Options::PIPELINE);

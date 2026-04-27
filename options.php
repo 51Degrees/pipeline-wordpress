@@ -27,7 +27,8 @@ class Options
      * Options group key for this plugin's options.
      */
     const GROUP_KEY = "fiftyonedegrees_options";
-    
+    const ROBOTS_GROUP_KEY = "fiftyonedegrees_options_robots";
+
     /**
      * Key for storing the constructed pipeline.
      */
@@ -160,5 +161,70 @@ class Options
      * Google Analytics.
      */
     const GA_AUTH_DATE = "fiftyonedegrees_ga_auth_date";
+
+    /**
+     * Key used to store selected standard TDL IDs.
+     * Stored as an array of string IDs matching entries in config/robots-standard-tdls.json.
+     */
+    const ROBOTS_STANDARD_TDL_SELECTED = "fiftyonedegrees_robots_standard_tdl_selected";
+
+    /**
+     * Key used to store the live current URL for each standard TDL entry.
+     * Stored as an associative array: id => current_url.
+     * Auto-managed by the daily cron; not registered via register_setting.
+     */
+    const ROBOTS_STANDARD_TDL_URLS = "fiftyonedegrees_robots_standard_tdl_urls";
+
+    /**
+     * Key used to store user-entered custom TDL URLs.
+     * Stored as an indexed array of URL strings.
+     */
+    const ROBOTS_CUSTOM_TDL = "fiftyonedegrees_robots_custom_tdl";
+
+    /**
+     * Key used to store whether robots.txt hosting is enabled.
+     */
+    const ROBOTS_ENABLE = "fiftyonedegrees_robots_enable";
+
+    /**
+     * Key used to store whether crawler enforcement (302 redirects) is enabled.
+     */
+    const ROBOTS_ENFORCE = "fiftyonedegrees_robots_enforce";
+
+    /**
+     * Key used to store the redirect URL for bot enforcement.
+     */
+    const ROBOTS_REDIRECT_URL = "fiftyonedegrees_robots_redirect_url";
+
+    /**
+     * Key used to store custom top entries for robots.txt.
+     */
+    const ROBOTS_CUSTOM_TOP = "fiftyonedegrees_robots_custom_top";
+
+    /**
+     * Key used to store custom bottom entries for robots.txt.
+     */
+    const ROBOTS_CUSTOM_BOTTOM = "fiftyonedegrees_robots_custom_bottom";
+
+    /**
+     * Key used to store allowed crawler categories for robots.txt enforcement.
+     * When never saved (null), defaults apply: deny Index, Train, Input; allow all others.
+     */
+    const ROBOTS_ALLOWED_CATEGORIES = "fiftyonedegrees_robots_allowed_categories";
+
+    /**
+     * Key used to cache the cloud-generated plain-text robots.txt content.
+     */
+    const ROBOTS_PLAINTEXT_CACHE = "fiftyonedegrees_robots_plaintext_cache";
+
+    /**
+     * Key used to cache the cloud-generated annotated robots.txt content.
+     */
+    const ROBOTS_ANNOTATEDTEXT_CACHE = "fiftyonedegrees_robots_annotatedtext_cache";
+
+    /**
+     * Key used to store whether the 51Degrees pipeline (device detection) is enabled.
+     */
+    const PIPELINE_ENABLE = "fiftyonedegrees_pipeline_enable";
 }
 ?>
