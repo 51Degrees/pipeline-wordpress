@@ -368,11 +368,14 @@ class FiftyOneDegreesRobotsTxt {
         }
 
         $ua_lower = strtolower($ua);
-        if (isset($dict[$ua_lower])) {
-            $ua_key = $ua_lower;
-        } elseif (isset($dict['*'])) {
-            $ua_key = '*';
-        } else {
+        $ua_key = '*';
+        foreach (array_keys($dict) as $token) {
+            if ($token !== '' && $token !== '*' && strpos($ua_lower, $token) !== false
+                && ($ua_key === '*' || strlen($token) > strlen($ua_key))) {
+                $ua_key = $token;
+            }
+        }
+        if (!isset($dict[$ua_key])) {
             return null;
         }
 

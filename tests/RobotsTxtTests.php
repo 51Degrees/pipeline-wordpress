@@ -1544,6 +1544,28 @@ class RobotsTxtTests extends TestCase {
         $this->assertNull($result, 'UA not in dict and no wildcard');
     }
 
+    public function testCheckPathAllowedRealUaMatchesByToken() {
+        // Real bot UAs include version + URL, e.g.
+        // "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)".
+        // The robots.txt token "Googlebot" must still match.
+        $dict = ['googlebot' => ['/private/' => false]];
+        $real = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
+        $result = FiftyOneDegreesRobotsTxt::check_path_allowed($dict, $real, '/private/page');
+        $this->assertFalse($result);
+    }
+
+    public function testCheckPathAllowedLongestMatchingTokenWins() {
+        // When multiple tokens are substrings of the UA, the longest wins
+        // (most specific rule applies).
+        $dict = [
+            'bot' => ['/private/' => true],
+            'googlebot' => ['/private/' => false],
+        ];
+        $real = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
+        $result = FiftyOneDegreesRobotsTxt::check_path_allowed($dict, $real, '/private/page');
+        $this->assertFalse($result, 'Longer token "googlebot" wins over "bot"');
+    }
+
     public function testCheckPathAllowedExactPathDisallow() {
         $dict = ['*' => ['/private/' => false]];
         $result = FiftyOneDegreesRobotsTxt::check_path_allowed($dict, 'anybot', '/private/');
