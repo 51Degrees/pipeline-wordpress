@@ -115,6 +115,14 @@ $supports_robots_txt = FiftyOneDegreesCloudMetadata::supports_robots_txt();
             </tr>
 
             <tr valign="top">
+                <th scope="row"><label for="<?php echo Options::ROBOTS_REDIRECT_URL; ?>"><?php echo esc_html(FiftyOneDegreesStrings::get('robots.field.redirect_url_label')); ?></label></th>
+                <td>
+                    <input type="url" name="<?php echo Options::ROBOTS_REDIRECT_URL; ?>" value="<?php echo esc_attr($redirect_url); ?>" class="regular-text" placeholder="<?php echo esc_attr(FiftyOneDegreesStrings::get('robots.field.redirect_url_placeholder')); ?>" />
+                    <p class="description"><?php echo esc_html(FiftyOneDegreesStrings::get('robots.field.redirect_url_description')); ?></p>
+                </td>
+            </tr>
+
+            <tr valign="top">
                 <th scope="row"><?php echo esc_html(FiftyOneDegreesStrings::get('robots.field.categories_label')); ?></th>
                 <td>
                     <fieldset>
@@ -181,14 +189,6 @@ $supports_robots_txt = FiftyOneDegreesCloudMetadata::supports_robots_txt();
                             placeholder="<?php echo esc_attr(FiftyOneDegreesStrings::get('robots.field.tdl_custom_placeholder')); ?>"
                         ><?php echo esc_textarea(implode("\n", $custom_tdl)); ?></textarea>
                     </fieldset>
-                </td>
-            </tr>
-
-            <tr valign="top">
-                <th scope="row"><label for="<?php echo Options::ROBOTS_REDIRECT_URL; ?>"><?php echo esc_html(FiftyOneDegreesStrings::get('robots.field.redirect_url_label')); ?></label></th>
-                <td>
-                    <input type="url" name="<?php echo Options::ROBOTS_REDIRECT_URL; ?>" value="<?php echo esc_attr($redirect_url); ?>" class="regular-text" placeholder="<?php echo esc_attr(FiftyOneDegreesStrings::get('robots.field.redirect_url_placeholder')); ?>" />
-                    <p class="description"><?php echo esc_html(FiftyOneDegreesStrings::get('robots.field.redirect_url_description')); ?></p>
                 </td>
             </tr>
 
