@@ -49,7 +49,6 @@ class RobotsTxtTests extends TestCase {
             Options::ROBOTS_ALLOWED_CATEGORIES => null,
             Options::ROBOTS_REDIRECT_URL => '',
             Options::ROBOTS_STANDARD_TDL_SELECTED => [],
-            Options::ROBOTS_STANDARD_TDL_URLS => [],
             Options::ROBOTS_CUSTOM_TDL => [],
             Options::RESOURCE_KEY => '',
             Options::ROBOTS_PLAINTEXT_CACHE => '',
@@ -337,13 +336,14 @@ class RobotsTxtTests extends TestCase {
         $this->assertFalse($redirected);
     }
 
-    public function testIsCrawlerTrueWithoutCrawlerUsageSupportRedirectsAll() {
+    public function testIsCrawlerTrueWithoutCrawlerUsageSupportDoesNotRedirect() {
+        // Without CrawlerUsage on the resource key the plugin has no basis to
+        // deny a category-by-category check, so enforcement falls through.
         $this->mockGuardsPassed();
         $this->mockOptions([
             Options::ROBOTS_ENFORCE => 'on',
             Options::ROBOTS_ALLOWED_CATEGORIES => array_diff(self::ALL_TEST_CATEGORIES, ['Search']),
             Options::ROBOTS_REDIRECT_URL => 'https://example.com/denied',
-            Options::ROBOTS_PLAINTEXT_CACHE => "User-agent: *\nDisallow: /\n",
         ]);
         Patchwork\redefine('Pipeline::get', function ($engine, $prop) {
             if ($prop === 'iscrawler') return true;
@@ -353,24 +353,15 @@ class RobotsTxtTests extends TestCase {
             'FiftyOneDegreesCloudMetadata::supports_crawler_usage',
             Patchwork\always(false)
         );
-        Patchwork\redefine('exit', Patchwork\always(null));
 
-        $_SERVER['REQUEST_URI'] = '/some-page';
-        Functions\when('sanitize_text_field')->returnArg();
-        Functions\when('wp_unslash')->returnArg();
-        Functions\when('home_url')->justReturn('https://example.com/some-page');
-        Functions\when('trailingslashit')->alias(function ($u) {
-            return rtrim($u, '/') . '/';
-        });
-
-        $redirectedTo = null;
-        Functions\when('wp_redirect')->alias(function ($url) use (&$redirectedTo) {
-            $redirectedTo = $url;
+        $redirected = false;
+        Functions\when('wp_redirect')->alias(function () use (&$redirected) {
+            $redirected = true;
         });
 
         FiftyOneDegreesRobotsTxt::enforce_crawler_redirect();
 
-        $this->assertEquals('https://example.com/denied', $redirectedTo);
+        $this->assertFalse($redirected);
     }
 
     public function testRedirectLoopPreventionSkipsRedirect() {
@@ -861,240 +852,6 @@ class RobotsTxtTests extends TestCase {
         );
     }
 
-    public function testRefreshStandardTdlsUpdatesEntryOnSuccessfulNextVersion() {
-        $this->mockOptions([
-            Options::ROBOTS_STANDARD_TDL_URLS => ['socw' => 'https://m4ow.uk/socw/1.txt'],
-        ]);
-        $this->mockStandardTdlsConfig([
-            ['id' => 'socw', 'label' => 'SOCW', 'description' => '', 'url' => 'https://m4ow.uk/socw/1.txt'],
-        ]);
-        Functions\when('wp_remote_head')->justReturn('response');
-        Functions\when('is_wp_error')->justReturn(false);
-        Functions\when('wp_remote_retrieve_response_code')->justReturn(200);
-
-        $updated = [];
-        Functions\when('update_option')->alias(function ($key, $value) use (&$updated) {
-            $updated[$key] = $value;
-            return true;
-        });
-
-        FiftyOneDegreesRobotsTxt::refresh_standard_tdls_cron();
-
-        $this->assertArrayHasKey(Options::ROBOTS_STANDARD_TDL_URLS, $updated);
-        $this->assertEquals('https://m4ow.uk/socw/2.txt', $updated[Options::ROBOTS_STANDARD_TDL_URLS]['socw']);
-    }
-
-    public function testRefreshStandardTdlsKeepsCurrentUrlOn404() {
-        $this->mockOptions([
-            Options::ROBOTS_STANDARD_TDL_URLS => ['socw' => 'https://m4ow.uk/socw/3.txt'],
-        ]);
-        $this->mockStandardTdlsConfig([
-            ['id' => 'socw', 'label' => 'SOCW', 'description' => '', 'url' => 'https://m4ow.uk/socw/3.txt'],
-        ]);
-        Functions\when('wp_remote_head')->justReturn('response');
-        Functions\when('is_wp_error')->justReturn(false);
-        Functions\when('wp_remote_retrieve_response_code')->justReturn(404);
-
-        $updated = [];
-        Functions\when('update_option')->alias(function ($key, $value) use (&$updated) {
-            $updated[$key] = $value;
-            return true;
-        });
-
-        FiftyOneDegreesRobotsTxt::refresh_standard_tdls_cron();
-
-        $this->assertArrayNotHasKey(Options::ROBOTS_STANDARD_TDL_URLS, $updated);
-    }
-
-    public function testRefreshStandardTdlsSkipsEntryWithNonVersionedUrl() {
-        $this->mockOptions([
-            Options::ROBOTS_STANDARD_TDL_URLS => ['foo' => 'https://example.com/terms/stable'],
-        ]);
-        $this->mockStandardTdlsConfig([
-            ['id' => 'foo', 'label' => 'Foo', 'description' => '', 'url' => 'https://example.com/terms/stable'],
-        ]);
-
-        $headCalled = false;
-        Functions\when('wp_remote_head')->alias(function () use (&$headCalled) {
-            $headCalled = true;
-            return 'response';
-        });
-        Functions\when('update_option')->justReturn(true);
-
-        FiftyOneDegreesRobotsTxt::refresh_standard_tdls_cron();
-
-        $this->assertFalse($headCalled, 'Non-versioned URL must not trigger a HEAD request');
-    }
-
-    public function testRefreshStandardTdlsDoesNotCallUpdateOptionWhenNothingChanged() {
-        $this->mockOptions([
-            Options::ROBOTS_STANDARD_TDL_URLS => ['socw' => 'https://m4ow.uk/socw/1.txt'],
-        ]);
-        $this->mockStandardTdlsConfig([
-            ['id' => 'socw', 'label' => 'SOCW', 'description' => '', 'url' => 'https://m4ow.uk/socw/1.txt'],
-        ]);
-        Functions\when('wp_remote_head')->justReturn('response');
-        Functions\when('is_wp_error')->justReturn(false);
-        Functions\when('wp_remote_retrieve_response_code')->justReturn(404);
-
-        $updateCalled = false;
-        Functions\when('update_option')->alias(function () use (&$updateCalled) {
-            $updateCalled = true;
-            return true;
-        });
-
-        FiftyOneDegreesRobotsTxt::refresh_standard_tdls_cron();
-
-        $this->assertFalse($updateCalled, 'update_option must not be called when no version bumped');
-    }
-
-    public function testRefreshStandardTdlsKeepsCurrentUrlOnNetworkError() {
-        $this->mockOptions([
-            Options::ROBOTS_STANDARD_TDL_URLS => ['socw' => 'https://m4ow.uk/socw/1.txt'],
-        ]);
-        $this->mockStandardTdlsConfig([
-            ['id' => 'socw', 'label' => 'SOCW', 'description' => '', 'url' => 'https://m4ow.uk/socw/1.txt'],
-        ]);
-        Functions\when('wp_remote_head')->justReturn(null);
-        Functions\when('is_wp_error')->justReturn(true);
-
-        $updated = [];
-        Functions\when('update_option')->alias(function ($key, $value) use (&$updated) {
-            $updated[$key] = $value;
-            return true;
-        });
-
-        FiftyOneDegreesRobotsTxt::refresh_standard_tdls_cron();
-
-        $this->assertArrayNotHasKey(Options::ROBOTS_STANDARD_TDL_URLS, $updated);
-    }
-
-    public function testRefreshStandardTdlsIncrementsVersionByOneOnly() {
-        $this->mockOptions([
-            Options::ROBOTS_STANDARD_TDL_URLS => ['socw' => 'https://m4ow.uk/socw/5.txt'],
-        ]);
-        $this->mockStandardTdlsConfig([
-            ['id' => 'socw', 'label' => 'SOCW', 'description' => '', 'url' => 'https://m4ow.uk/socw/5.txt'],
-        ]);
-        $capturedUrl = null;
-        Functions\when('wp_remote_head')->alias(function ($url) use (&$capturedUrl) {
-            $capturedUrl = $url;
-            return 'response';
-        });
-        Functions\when('is_wp_error')->justReturn(false);
-        Functions\when('wp_remote_retrieve_response_code')->justReturn(404);
-        Functions\when('update_option')->justReturn(true);
-
-        FiftyOneDegreesRobotsTxt::refresh_standard_tdls_cron();
-
-        $this->assertEquals('https://m4ow.uk/socw/6.txt', $capturedUrl);
-    }
-
-    public function testRefreshStandardTdlsFallsBackToConfigUrlWhenOptionMissing() {
-        // id exists in config but not yet in ROBOTS_STANDARD_TDL_URLS option
-        $this->mockOptions([
-            Options::ROBOTS_STANDARD_TDL_URLS => [],
-        ]);
-        $this->mockStandardTdlsConfig([
-            ['id' => 'socw', 'label' => 'SOCW', 'description' => '', 'url' => 'https://m4ow.uk/socw/1.txt'],
-        ]);
-        $capturedUrl = null;
-        Functions\when('wp_remote_head')->alias(function ($url) use (&$capturedUrl) {
-            $capturedUrl = $url;
-            return 'response';
-        });
-        Functions\when('is_wp_error')->justReturn(false);
-        Functions\when('wp_remote_retrieve_response_code')->justReturn(404);
-        Functions\when('update_option')->justReturn(true);
-
-        FiftyOneDegreesRobotsTxt::refresh_standard_tdls_cron();
-
-        $this->assertEquals('https://m4ow.uk/socw/2.txt', $capturedUrl,
-            'Should probe next version derived from config url when option entry missing');
-    }
-
-    public function testRefreshStandardTdlsUpdatesMultipleEntriesIndependently() {
-        $this->mockOptions([
-            Options::ROBOTS_STANDARD_TDL_URLS => [
-                'socw' => 'https://m4ow.uk/socw/1.txt',
-                'foo'  => 'https://example.com/foo/3.txt',
-            ],
-        ]);
-        $this->mockStandardTdlsConfig([
-            ['id' => 'socw', 'label' => 'SOCW', 'description' => '', 'url' => 'https://m4ow.uk/socw/1.txt'],
-            ['id' => 'foo',  'label' => 'Foo',  'description' => '', 'url' => 'https://example.com/foo/3.txt'],
-        ]);
-        Functions\when('wp_remote_head')->alias(function ($url) {
-            // socw/2.txt exists; foo/4.txt does not
-            return strpos($url, 'socw') !== false ? 'response' : 'response';
-        });
-        Functions\when('is_wp_error')->justReturn(false);
-        Functions\when('wp_remote_retrieve_response_code')->alias(function () {
-            static $calls = 0;
-            $calls++;
-            return $calls === 1 ? 200 : 404; // first call (socw) = 200, second (foo) = 404
-        });
-
-        $updated = [];
-        Functions\when('update_option')->alias(function ($key, $value) use (&$updated) {
-            $updated[$key] = $value;
-            return true;
-        });
-
-        FiftyOneDegreesRobotsTxt::refresh_standard_tdls_cron();
-
-        $this->assertArrayHasKey(Options::ROBOTS_STANDARD_TDL_URLS, $updated);
-        $this->assertEquals('https://m4ow.uk/socw/2.txt', $updated[Options::ROBOTS_STANDARD_TDL_URLS]['socw']);
-        $this->assertEquals('https://example.com/foo/3.txt', $updated[Options::ROBOTS_STANDARD_TDL_URLS]['foo']);
-    }
-
-    public function testRefreshStandardTdlsSupportsDifferentExtensions() {
-        $this->mockOptions([
-            Options::ROBOTS_STANDARD_TDL_URLS => [
-                'socw' => 'https://m4ow.uk/socw/1.html',
-                'foo'  => 'https://example.com/foo/3',
-            ],
-        ]);
-
-        $this->mockStandardTdlsConfig([
-            ['id' => 'socw', 'label' => 'SOCW', 'description' => '', 'url' => 'https://m4ow.uk/socw/1.html'],
-            ['id' => 'foo',  'label' => 'Foo',  'description' => '', 'url' => 'https://example.com/foo/3'],
-        ]);
-
-        Functions\when('wp_remote_head')->alias(function ($url) {
-            return 'response';
-        });
-
-        Functions\when('is_wp_error')->justReturn(false);
-
-        Functions\when('wp_remote_retrieve_response_code')->alias(function ($response) {
-            static $calls = 0;
-            $calls++;
-
-            // first call socw → exists, second foo → exists
-            return 200;
-        });
-
-        $updated = [];
-
-        Functions\when('update_option')->alias(function ($key, $value) use (&$updated) {
-            $updated[$key] = $value;
-            return true;
-        });
-
-        FiftyOneDegreesRobotsTxt::refresh_standard_tdls_cron();
-
-        $this->assertEquals(
-            'https://m4ow.uk/socw/2.html',
-            $updated[Options::ROBOTS_STANDARD_TDL_URLS]['socw']
-        );
-
-        $this->assertEquals(
-            'https://example.com/foo/4',
-            $updated[Options::ROBOTS_STANDARD_TDL_URLS]['foo']
-        );
-    }
-
     public function testAnnotatedRobotsEndpointReturns404WhenCacheEmpty() {
         $this->mockOptions([Options::ROBOTS_ANNOTATEDTEXT_CACHE => '']);
         $service = new FiftyoneService();
@@ -1319,7 +1076,6 @@ class RobotsTxtTests extends TestCase {
         $programmaticFields = [
             Options::ROBOTS_PLAINTEXT_CACHE,
             Options::ROBOTS_ANNOTATEDTEXT_CACHE,
-            Options::ROBOTS_STANDARD_TDL_URLS,
         ];
         foreach ($programmaticFields as $opt) {
             foreach ($registered as [$group, $option]) {
@@ -1398,321 +1154,12 @@ class RobotsTxtTests extends TestCase {
         $this->assertSame(['https://example.com/terms/v1'], $result);
     }
 
-    public function testParseRobotsTxtEmptyStringReturnsEmptyArray() {
-        $result = FiftyOneDegreesRobotsTxt::parse_robots_txt_to_dict('');
-        $this->assertSame([], $result);
-    }
-
-    public function testParseRobotsTxtWhitespaceOnlyReturnsEmptyArray() {
-        $result = FiftyOneDegreesRobotsTxt::parse_robots_txt_to_dict("   \n\n  ");
-        $this->assertSame([], $result);
-    }
-
-    public function testParseRobotsTxtSingleUaDisallow() {
-        $content = "User-agent: Googlebot\nDisallow: /private/\n";
-        $result = FiftyOneDegreesRobotsTxt::parse_robots_txt_to_dict($content);
-        $this->assertArrayHasKey('googlebot', $result);
-        $this->assertArrayHasKey('/private/', $result['googlebot']);
-        $this->assertFalse($result['googlebot']['/private/']);
-    }
-
-    public function testParseRobotsTxtSingleUaAllow() {
-        $content = "User-agent: Googlebot\nAllow: /public/\n";
-        $result = FiftyOneDegreesRobotsTxt::parse_robots_txt_to_dict($content);
-        $this->assertArrayHasKey('googlebot', $result);
-        $this->assertTrue($result['googlebot']['/public/']);
-    }
-
-    public function testParseRobotsTxtMultipleUasShareRules() {
-        $content = "User-agent: Googlebot\nUser-agent: Bingbot\nDisallow: /secret/\n";
-        $result = FiftyOneDegreesRobotsTxt::parse_robots_txt_to_dict($content);
-        $this->assertArrayHasKey('googlebot', $result);
-        $this->assertArrayHasKey('bingbot', $result);
-        $this->assertFalse($result['googlebot']['/secret/']);
-        $this->assertFalse($result['bingbot']['/secret/']);
-    }
-
-    public function testParseRobotsTxtWildcardUaStoredAsAsterisk() {
-        $content = "User-agent: *\nDisallow: /\n";
-        $result = FiftyOneDegreesRobotsTxt::parse_robots_txt_to_dict($content);
-        $this->assertArrayHasKey('*', $result);
-        $this->assertFalse($result['*']['/']);
-    }
-
-    public function testParseRobotsTxtMixedAllowDisallowInBlock() {
-        $content = "User-agent: *\nAllow: /public/\nDisallow: /\n";
-        $result = FiftyOneDegreesRobotsTxt::parse_robots_txt_to_dict($content);
-        $this->assertTrue($result['*']['/public/']);
-        $this->assertFalse($result['*']['/']);
-    }
-
-    public function testParseRobotsTxtCommentLinesIgnored() {
-        $content = "# This is a comment\nUser-agent: *\nDisallow: /\n";
-        $result = FiftyOneDegreesRobotsTxt::parse_robots_txt_to_dict($content);
-        $this->assertArrayNotHasKey('# this is a comment', $result);
-        $this->assertArrayHasKey('*', $result);
-    }
-
-    public function testParseRobotsTxtSitemapAndTdlLinesIgnored() {
-        $content = "User-agent: *\nDisallow: /\nSitemap: https://example.com/sitemap.xml\nTDL: https://example.com/tdl/1.txt\n";
-        $result = FiftyOneDegreesRobotsTxt::parse_robots_txt_to_dict($content);
-        $this->assertArrayHasKey('*', $result);
-        $this->assertCount(1, $result['*']);
-    }
-
-    public function testParseRobotsTxtEmptyDisallowSkipped() {
-        $content = "User-agent: *\nDisallow:\n";
-        $result = FiftyOneDegreesRobotsTxt::parse_robots_txt_to_dict($content);
-        $this->assertSame([], $result);
-    }
-
-    public function testParseRobotsTxtBlockWithNoRulesSkipped() {
-        $content = "User-agent: Googlebot\n";
-        $result = FiftyOneDegreesRobotsTxt::parse_robots_txt_to_dict($content);
-        $this->assertSame([], $result);
-    }
-
-    public function testParseRobotsTxtMultipleBlocks() {
-        $content = "User-agent: Googlebot\nDisallow: /admin/\n\nUser-agent: *\nDisallow: /private/\n";
-        $result = FiftyOneDegreesRobotsTxt::parse_robots_txt_to_dict($content);
-        $this->assertFalse($result['googlebot']['/admin/']);
-        $this->assertFalse($result['*']['/private/']);
-        $this->assertArrayNotHasKey('/private/', $result['googlebot']);
-    }
-
-    public function testParseRobotsTxtCrLfNormalized() {
-        $content = "User-agent: *\r\nDisallow: /\r\n";
-        $result = FiftyOneDegreesRobotsTxt::parse_robots_txt_to_dict($content);
-        $this->assertArrayHasKey('*', $result);
-        $this->assertFalse($result['*']['/']);
-    }
-
-    public function testBuildEnforcementDictEmptyCacheAndNoCustom() {
-        $this->mockOptions([
-            Options::ROBOTS_PLAINTEXT_CACHE => '',
-            Options::ROBOTS_CUSTOM_TOP => '',
-            Options::ROBOTS_CUSTOM_BOTTOM => '',
-        ]);
-        $result = FiftyOneDegreesRobotsTxt::build_enforcement_dict();
-        $this->assertSame([], $result);
-    }
-
-    public function testBuildEnforcementDictCloudCacheOnly() {
-        $this->mockOptions([
-            Options::ROBOTS_PLAINTEXT_CACHE => "User-agent: *\nDisallow: /\n",
-            Options::ROBOTS_CUSTOM_TOP => '',
-            Options::ROBOTS_CUSTOM_BOTTOM => '',
-        ]);
-        $result = FiftyOneDegreesRobotsTxt::build_enforcement_dict();
-        $this->assertArrayHasKey('*', $result);
-        $this->assertFalse($result['*']['/']);
-    }
-
-    public function testBuildEnforcementDictCustomTopOverridesCloudSamePathAndUa() {
-        $this->mockOptions([
-            Options::ROBOTS_PLAINTEXT_CACHE => "User-agent: googlebot\nDisallow: /\n",
-            Options::ROBOTS_CUSTOM_TOP => "User-agent: googlebot\nAllow: /\n",
-            Options::ROBOTS_CUSTOM_BOTTOM => '',
-        ]);
-        $result = FiftyOneDegreesRobotsTxt::build_enforcement_dict();
-        $this->assertTrue($result['googlebot']['/'], 'Custom top Allow should override cloud Disallow');
-    }
-
-    public function testBuildEnforcementDictCustomBottomMergedWithCloud() {
-        $this->mockOptions([
-            Options::ROBOTS_PLAINTEXT_CACHE => "User-agent: *\nDisallow: /\n",
-            Options::ROBOTS_CUSTOM_TOP => '',
-            Options::ROBOTS_CUSTOM_BOTTOM => "User-agent: mybot\nAllow: /open/\n",
-        ]);
-        $result = FiftyOneDegreesRobotsTxt::build_enforcement_dict();
-        $this->assertArrayHasKey('*', $result);
-        $this->assertArrayHasKey('mybot', $result);
-        $this->assertTrue($result['mybot']['/open/']);
-    }
-
-    public function testBuildEnforcementDictCustomAddsNewUaNotInCloud() {
-        $this->mockOptions([
-            Options::ROBOTS_PLAINTEXT_CACHE => "User-agent: *\nDisallow: /\n",
-            Options::ROBOTS_CUSTOM_TOP => "User-agent: specialbot\nAllow: /allowed/\n",
-            Options::ROBOTS_CUSTOM_BOTTOM => '',
-        ]);
-        $result = FiftyOneDegreesRobotsTxt::build_enforcement_dict();
-        $this->assertArrayHasKey('specialbot', $result);
-        $this->assertTrue($result['specialbot']['/allowed/']);
-    }
-
-    public function testCheckPathAllowedUaNotInDictNoWildcardReturnsNull() {
-        $dict = ['googlebot' => ['/private/' => false]];
-        $result = FiftyOneDegreesRobotsTxt::check_path_allowed($dict, 'Bingbot', '/page');
-        $this->assertNull($result, 'UA not in dict and no wildcard');
-    }
-
-    public function testCheckPathAllowedRealUaMatchesByToken() {
-        // Real bot UAs include version + URL, e.g.
-        // "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)".
-        // The robots.txt token "Googlebot" must still match.
-        $dict = ['googlebot' => ['/private/' => false]];
-        $real = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
-        $result = FiftyOneDegreesRobotsTxt::check_path_allowed($dict, $real, '/private/page');
-        $this->assertFalse($result);
-    }
-
-    public function testCheckPathAllowedLongestMatchingTokenWins() {
-        // When multiple tokens are substrings of the UA, the longest wins
-        // (most specific rule applies).
-        $dict = [
-            'bot' => ['/private/' => true],
-            'googlebot' => ['/private/' => false],
-        ];
-        $real = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
-        $result = FiftyOneDegreesRobotsTxt::check_path_allowed($dict, $real, '/private/page');
-        $this->assertFalse($result, 'Longer token "googlebot" wins over "bot"');
-    }
-
-    public function testCheckPathAllowedExactPathDisallow() {
-        $dict = ['*' => ['/private/' => false]];
-        $result = FiftyOneDegreesRobotsTxt::check_path_allowed($dict, 'anybot', '/private/');
-        $this->assertFalse($result);
-    }
-
-    public function testCheckPathAllowedExactPathAllow() {
-        $dict = ['*' => ['/public/' => true]];
-        $result = FiftyOneDegreesRobotsTxt::check_path_allowed($dict, 'anybot', '/public/');
-        $this->assertTrue($result);
-    }
-
-    public function testCheckPathAllowedMoreSpecificAllowOverridesLessSpecificDisallow() {
-        // SE4: Disallow: / + Allow: /public/ → /public/page is allowed
-        $dict = ['*' => ['/' => false, '/public/' => true]];
-        $result = FiftyOneDegreesRobotsTxt::check_path_allowed($dict, 'anybot', '/public/page');
-        $this->assertTrue($result, 'SE4: more specific Allow wins');
-    }
-
-    public function testCheckPathAllowedMoreSpecificDisallowOverridesLessSpecificAllow() {
-        // SE5: Allow: / + Disallow: /private/ → /private/doc is blocked
-        $dict = ['*' => ['/' => true, '/private/' => false]];
-        $result = FiftyOneDegreesRobotsTxt::check_path_allowed($dict, 'anybot', '/private/doc');
-        $this->assertFalse($result, 'SE5: more specific Disallow wins');
-    }
-
-    public function testCheckPathAllowedNoPrefixMatchReturnsNull() {
-        $dict = ['*' => ['/admin/' => false]];
-        $result = FiftyOneDegreesRobotsTxt::check_path_allowed($dict, 'anybot', '/public/page');
-        $this->assertNull($result, 'No matching prefix → allow');
-    }
-
-    public function testCheckPathAllowedQueryStringStripped() {
-        $dict = ['*' => ['/page' => false]];
-        $result = FiftyOneDegreesRobotsTxt::check_path_allowed($dict, 'anybot', '/page?foo=bar');
-        $this->assertFalse($result, 'Query string should be stripped before matching');
-    }
-
-    public function testCheckPathAllowedFallsBackToWildcard() {
-        $dict = ['*' => ['/' => false]];
-        $result = FiftyOneDegreesRobotsTxt::check_path_allowed($dict, 'UnknownBot', '/anything');
-        $this->assertFalse($result, 'Unknown UA falls back to * rules');
-    }
-
-    public function testCheckPathAllowedSpecificUaTakesPrecedenceOverWildcard() {
-        // googlebot has no rule for /public/, but * disallows /
-        // Since googlebot section exists, do NOT fall back to *
-        $dict = ['googlebot' => ['/admin/' => false], '*' => ['/' => false]];
-        $result = FiftyOneDegreesRobotsTxt::check_path_allowed($dict, 'Googlebot', '/public/page');
-        $this->assertNull($result, 'Specific UA section used; no matching rule → allow, do not fall back to *');
-    }
-
-    public function testCheckPathAllowedEmptyDictReturnsNull() {
-        $result = FiftyOneDegreesRobotsTxt::check_path_allowed([], 'anybot', '/page');
-        $this->assertNull($result);
-    }
-
-    public function testEnforceEmptyDictAllowsEveryone() {
-        $this->mockGuardsPassed();
-        $this->mockOptions([
-            Options::ROBOTS_ENFORCE => 'on',
-            Options::ROBOTS_ALLOWED_CATEGORIES => array_diff(self::ALL_TEST_CATEGORIES, ['Search']),
-            Options::ROBOTS_PLAINTEXT_CACHE => '',
-        ]);
-        Patchwork\redefine('Pipeline::get', function ($engine, $prop) {
-            if ($prop === 'iscrawler') return true;
-            if ($prop === 'crawlerusage') return ['Search'];
-            return null;
-        });
-        $redirected = false;
-        Functions\when('wp_redirect')->alias(function () use (&$redirected) {
-            $redirected = true;
-        });
-        FiftyOneDegreesRobotsTxt::enforce_crawler_redirect();
-        $this->assertFalse($redirected, 'No robots.txt cache → no enforcement');
-    }
-
-    public function testEnforceCategoryDeniedButUaNotInDictAllows() {
-        $this->mockGuardsPassed();
-        // Cache has rules only for a different UA, not for the requesting crawler
-        $this->mockOptions([
-            Options::ROBOTS_ENFORCE => 'on',
-            Options::ROBOTS_ALLOWED_CATEGORIES => array_diff(self::ALL_TEST_CATEGORIES, ['Search']),
-            Options::ROBOTS_REDIRECT_URL => 'https://example.com/denied',
-            Options::ROBOTS_PLAINTEXT_CACHE => "User-agent: SpecificBot\nDisallow: /\n",
-        ]);
-        Patchwork\redefine('Pipeline::get', function ($engine, $prop) {
-            if ($prop === 'iscrawler') return true;
-            if ($prop === 'crawlerusage') return ['Search'];
-            return null;
-        });
-        Patchwork\redefine(
-            'FiftyOneDegreesCloudMetadata::supports_crawler_usage',
-            Patchwork\always(true)
-        );
-        $_SERVER['REQUEST_URI'] = '/page';
-        unset($_SERVER['HTTP_USER_AGENT']);
-        Functions\when('sanitize_text_field')->returnArg();
-        Functions\when('wp_unslash')->returnArg();
-
-        $redirected = false;
-        Functions\when('wp_redirect')->alias(function () use (&$redirected) {
-            $redirected = true;
-        });
-        FiftyOneDegreesRobotsTxt::enforce_crawler_redirect();
-        $this->assertFalse($redirected, 'UA not in robots dict');
-    }
-
-    public function testEnforceCategoryDeniedButPathExplicitlyAllowedDoesNotRedirect() {
+    public function testEnforceCategoryDeniedRedirects() {
         $this->mockGuardsPassed();
         $this->mockOptions([
             Options::ROBOTS_ENFORCE => 'on',
             Options::ROBOTS_ALLOWED_CATEGORIES => array_diff(self::ALL_TEST_CATEGORIES, ['Search']),
             Options::ROBOTS_REDIRECT_URL => 'https://example.com/denied',
-            Options::ROBOTS_PLAINTEXT_CACHE => "User-agent: *\nAllow: /open/\nDisallow: /\n",
-        ]);
-        Patchwork\redefine('Pipeline::get', function ($engine, $prop) {
-            if ($prop === 'iscrawler') return true;
-            if ($prop === 'crawlerusage') return ['Search'];
-            return null;
-        });
-        Patchwork\redefine(
-            'FiftyOneDegreesCloudMetadata::supports_crawler_usage',
-            Patchwork\always(true)
-        );
-        $_SERVER['REQUEST_URI'] = '/open/page';
-        Functions\when('sanitize_text_field')->returnArg();
-        Functions\when('wp_unslash')->returnArg();
-
-        $redirected = false;
-        Functions\when('wp_redirect')->alias(function () use (&$redirected) {
-            $redirected = true;
-        });
-        FiftyOneDegreesRobotsTxt::enforce_crawler_redirect();
-        $this->assertFalse($redirected, 'Path explicitly Allowed');
-    }
-
-    public function testEnforceCategoryDeniedAndPathDeniedRedirects() {
-        $this->mockGuardsPassed();
-        $this->mockOptions([
-            Options::ROBOTS_ENFORCE => 'on',
-            Options::ROBOTS_ALLOWED_CATEGORIES => array_diff(self::ALL_TEST_CATEGORIES, ['Search']),
-            Options::ROBOTS_REDIRECT_URL => 'https://example.com/denied',
-            Options::ROBOTS_PLAINTEXT_CACHE => "User-agent: *\nDisallow: /\n",
         ]);
         Patchwork\redefine('Pipeline::get', function ($engine, $prop) {
             if ($prop === 'iscrawler') return true;
@@ -1740,43 +1187,12 @@ class RobotsTxtTests extends TestCase {
         $this->assertEquals('https://example.com/denied', $redirectedTo);
     }
 
-    public function testEnforceCustomTopAllowOverridesPreventsRedirect() {
+    public function testEnforceEmptyCrawlerUsageAllows() {
         $this->mockGuardsPassed();
         $this->mockOptions([
             Options::ROBOTS_ENFORCE => 'on',
             Options::ROBOTS_ALLOWED_CATEGORIES => array_diff(self::ALL_TEST_CATEGORIES, ['Search']),
             Options::ROBOTS_REDIRECT_URL => 'https://example.com/denied',
-            Options::ROBOTS_PLAINTEXT_CACHE => "User-agent: *\nDisallow: /\n",
-            Options::ROBOTS_CUSTOM_TOP => "User-agent: *\nAllow: /allowed-section/\n",
-        ]);
-        Patchwork\redefine('Pipeline::get', function ($engine, $prop) {
-            if ($prop === 'iscrawler') return true;
-            if ($prop === 'crawlerusage') return ['Search'];
-            return null;
-        });
-        Patchwork\redefine(
-            'FiftyOneDegreesCloudMetadata::supports_crawler_usage',
-            Patchwork\always(true)
-        );
-        $_SERVER['REQUEST_URI'] = '/allowed-section/page';
-        Functions\when('sanitize_text_field')->returnArg();
-        Functions\when('wp_unslash')->returnArg();
-
-        $redirected = false;
-        Functions\when('wp_redirect')->alias(function () use (&$redirected) {
-            $redirected = true;
-        });
-        FiftyOneDegreesRobotsTxt::enforce_crawler_redirect();
-        $this->assertFalse($redirected, 'Custom top Allow override → not redirected');
-    }
-
-    public function testEnforceEmptyCrawlerUsageChecksDict() {
-        $this->mockGuardsPassed();
-        $this->mockOptions([
-            Options::ROBOTS_ENFORCE => 'on',
-            Options::ROBOTS_ALLOWED_CATEGORIES => array_diff(self::ALL_TEST_CATEGORIES, ['Search']),
-            Options::ROBOTS_REDIRECT_URL => 'https://example.com/denied',
-            Options::ROBOTS_PLAINTEXT_CACHE => "User-agent: *\nAllow: /\n",
         ]);
         Patchwork\redefine('Pipeline::get', function ($engine, $prop) {
             if ($prop === 'iscrawler') return true;
@@ -1787,22 +1203,15 @@ class RobotsTxtTests extends TestCase {
             'FiftyOneDegreesCloudMetadata::supports_crawler_usage',
             Patchwork\always(true)
         );
-        Patchwork\redefine('exit', Patchwork\always(null));
-        $_SERVER['REQUEST_URI'] = '/some-page';
-        Functions\when('sanitize_text_field')->returnArg();
-        Functions\when('wp_unslash')->returnArg();
-        Functions\when('home_url')->justReturn('https://example.com/some-page');
-        Functions\when('trailingslashit')->alias(function ($u) {
-            return rtrim($u, '/') . '/';
-        });
 
         $redirected = false;
         Functions\when('wp_redirect')->alias(function () use (&$redirected) {
             $redirected = true;
         });
         FiftyOneDegreesRobotsTxt::enforce_crawler_redirect();
-        $this->assertFalse($redirected, 'Empty Categories and allow rule -> not redirected');
+        $this->assertFalse($redirected, 'Empty crawler_usage → no basis to deny → not redirected');
     }
+
 
     public function testStandardTdlsConfigLoadsFromFile() {
         FiftyOneDegreesStandardTdls::reset();
@@ -1822,88 +1231,75 @@ class RobotsTxtTests extends TestCase {
 
     public function testStandardTdlsGetByIdReturnsEntry() {
         $this->mockStandardTdlsConfig([
-            ['id' => 'socw', 'label' => 'SOCW', 'description' => 'Test', 'url' => 'https://m4ow.uk/socw/1.txt'],
+            ['id' => 'socw', 'label' => 'SOCW', 'description' => 'Test', 'macro' => 'MOW-SOCW'],
         ]);
         $entry = FiftyOneDegreesStandardTdls::get_by_id('socw');
         $this->assertNotNull($entry);
         $this->assertEquals('socw', $entry['id']);
-        $this->assertEquals('https://m4ow.uk/socw/1.txt', $entry['url']);
+        $this->assertEquals('MOW-SOCW', $entry['macro']);
     }
 
     public function testStandardTdlsGetByIdReturnsNullForUnknownId() {
         $this->mockStandardTdlsConfig([
-            ['id' => 'socw', 'label' => 'SOCW', 'description' => '', 'url' => 'https://m4ow.uk/socw/1.txt'],
+            ['id' => 'socw', 'label' => 'SOCW', 'description' => '', 'macro' => 'MOW-SOCW'],
         ]);
         $result = FiftyOneDegreesStandardTdls::get_by_id('nonexistent');
         $this->assertNull($result);
     }
 
-    public function testGetEffectiveTdlUrlsSelectedIdResolvesToCurrentUrl() {
+    /** Selected standard-TDL id resolves to the macro from config. */
+    public function testGetEffectiveTdlValuesSelectedIdResolvesToConfigMacro() {
         $this->mockOptions([
             Options::ROBOTS_STANDARD_TDL_SELECTED => ['socw'],
-            Options::ROBOTS_STANDARD_TDL_URLS => ['socw' => 'https://m4ow.uk/socw/3.txt'],
             Options::ROBOTS_CUSTOM_TDL => [],
         ]);
         $this->mockStandardTdlsConfig([
-            ['id' => 'socw', 'label' => 'SOCW', 'description' => '', 'url' => 'https://m4ow.uk/socw/1.txt'],
+            ['id' => 'socw', 'label' => 'SOCW', 'description' => '', 'macro' => 'MOW-SOCW'],
         ]);
-        $result = FiftyOneDegreesRobotsTxt::get_effective_tdl_urls();
-        $this->assertEquals(['https://m4ow.uk/socw/3.txt'], $result);
+        $result = FiftyOneDegreesRobotsTxt::get_effective_tdl_values();
+        $this->assertEquals(['MOW-SOCW'], $result);
     }
 
-    public function testGetEffectiveTdlUrlsFallsBackToConfigUrlWhenOptionMissing() {
-        $this->mockOptions([
-            Options::ROBOTS_STANDARD_TDL_SELECTED => ['socw'],
-            Options::ROBOTS_STANDARD_TDL_URLS => [],
-            Options::ROBOTS_CUSTOM_TDL => [],
-        ]);
-        $this->mockStandardTdlsConfig([
-            ['id' => 'socw', 'label' => 'SOCW', 'description' => '', 'url' => 'https://m4ow.uk/socw/1.txt'],
-        ]);
-        $result = FiftyOneDegreesRobotsTxt::get_effective_tdl_urls();
-        $this->assertEquals(['https://m4ow.uk/socw/1.txt'], $result);
-    }
-
-    public function testGetEffectiveTdlUrlsSkipsUnknownId() {
+    /** Unknown selected ids are silently skipped. */
+    public function testGetEffectiveTdlValuesSkipsUnknownId() {
         $this->mockOptions([
             Options::ROBOTS_STANDARD_TDL_SELECTED => ['does-not-exist'],
-            Options::ROBOTS_STANDARD_TDL_URLS => [],
             Options::ROBOTS_CUSTOM_TDL => [],
         ]);
         $this->mockStandardTdlsConfig([]);
-        $result = FiftyOneDegreesRobotsTxt::get_effective_tdl_urls();
+        $result = FiftyOneDegreesRobotsTxt::get_effective_tdl_values();
         $this->assertSame([], $result);
     }
 
-    public function testGetEffectiveTdlUrlsMergesCustomUrls() {
+    /** Standard-TDL macros and custom URLs are merged into one list. */
+    public function testGetEffectiveTdlValuesMergesCustomUrls() {
         $this->mockOptions([
             Options::ROBOTS_STANDARD_TDL_SELECTED => ['socw'],
-            Options::ROBOTS_STANDARD_TDL_URLS => ['socw' => 'https://m4ow.uk/socw/2.txt'],
             Options::ROBOTS_CUSTOM_TDL => ['https://example.com/terms/v1'],
         ]);
         $this->mockStandardTdlsConfig([
-            ['id' => 'socw', 'label' => 'SOCW', 'description' => '', 'url' => 'https://m4ow.uk/socw/1.txt'],
+            ['id' => 'socw', 'label' => 'SOCW', 'description' => '', 'macro' => 'MOW-SOCW'],
         ]);
-        $result = FiftyOneDegreesRobotsTxt::get_effective_tdl_urls();
-        $this->assertContains('https://m4ow.uk/socw/2.txt', $result);
+        $result = FiftyOneDegreesRobotsTxt::get_effective_tdl_values();
+        $this->assertContains('MOW-SOCW', $result);
         $this->assertContains('https://example.com/terms/v1', $result);
         $this->assertCount(2, $result);
     }
 
-    public function testGetEffectiveTdlUrlsEmptySelectionsAndNoCustomReturnsEmpty() {
+    /** No selections and no custom entries → empty list. */
+    public function testGetEffectiveTdlValuesEmptySelectionsAndNoCustomReturnsEmpty() {
         $this->mockOptions([
             Options::ROBOTS_STANDARD_TDL_SELECTED => [],
-            Options::ROBOTS_STANDARD_TDL_URLS => [],
             Options::ROBOTS_CUSTOM_TDL => [],
         ]);
         $this->mockStandardTdlsConfig([]);
-        $result = FiftyOneDegreesRobotsTxt::get_effective_tdl_urls();
+        $result = FiftyOneDegreesRobotsTxt::get_effective_tdl_values();
         $this->assertSame([], $result);
     }
 
     public function testSanitizeStandardTdlSelectedAcceptsValidId() {
         $this->mockStandardTdlsConfig([
-            ['id' => 'socw', 'label' => 'SOCW', 'description' => '', 'url' => 'https://m4ow.uk/socw/1.txt'],
+            ['id' => 'socw', 'label' => 'SOCW', 'description' => '', 'macro' => 'MOW-SOCW'],
         ]);
         $result = FiftyoneService::sanitize_standard_tdl_selected(['socw']);
         $this->assertSame(['socw'], $result);
@@ -1911,7 +1307,7 @@ class RobotsTxtTests extends TestCase {
 
     public function testSanitizeStandardTdlSelectedRejectsUnknownId() {
         $this->mockStandardTdlsConfig([
-            ['id' => 'socw', 'label' => 'SOCW', 'description' => '', 'url' => 'https://m4ow.uk/socw/1.txt'],
+            ['id' => 'socw', 'label' => 'SOCW', 'description' => '', 'macro' => 'MOW-SOCW'],
         ]);
         $result = FiftyoneService::sanitize_standard_tdl_selected(['socw', 'invalid-id']);
         $this->assertSame(['socw'], $result);
@@ -1919,7 +1315,7 @@ class RobotsTxtTests extends TestCase {
 
     public function testSanitizeStandardTdlSelectedRejectsNonArray() {
         $this->mockStandardTdlsConfig([
-            ['id' => 'socw', 'label' => 'SOCW', 'description' => '', 'url' => 'https://m4ow.uk/socw/1.txt'],
+            ['id' => 'socw', 'label' => 'SOCW', 'description' => '', 'macro' => 'MOW-SOCW'],
         ]);
         $result = FiftyoneService::sanitize_standard_tdl_selected('socw');
         $this->assertSame([], $result);
@@ -1927,7 +1323,7 @@ class RobotsTxtTests extends TestCase {
 
     public function testSanitizeStandardTdlSelectedDeduplicates() {
         $this->mockStandardTdlsConfig([
-            ['id' => 'socw', 'label' => 'SOCW', 'description' => '', 'url' => 'https://m4ow.uk/socw/1.txt'],
+            ['id' => 'socw', 'label' => 'SOCW', 'description' => '', 'macro' => 'MOW-SOCW'],
         ]);
         $result = FiftyoneService::sanitize_standard_tdl_selected(['socw', 'socw']);
         $this->assertSame(['socw'], $result);

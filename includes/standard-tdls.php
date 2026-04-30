@@ -4,9 +4,9 @@
  * Loads and exposes standard TDL (Terms Document Locator) entries from
  * config/robots-standard-tdls.json.
  *
- * Each entry has: id, label, description, url (initial/fallback version).
- * The live current URL per entry is stored separately in wp_options under
- * Options::ROBOTS_STANDARD_TDL_URLS and is updated by the daily cron.
+ * Each entry has: id, label, description, macro. The macro is sent to
+ * 51Degrees Cloud as-is in the robotstxt.tdl= parameter; cloud resolves
+ * it to the current canonical URL.
  */
 class FiftyOneDegreesStandardTdls {
 
@@ -52,14 +52,14 @@ class FiftyOneDegreesStandardTdls {
             if (!is_array($item)) {
                 continue;
             }
-            if (empty($item['id']) || empty($item['url'])) {
+            if (empty($item['id']) || empty($item['macro'])) {
                 continue;
             }
             $entries[] = [
                 'id'          => (string) $item['id'],
                 'label'       => isset($item['label'])       ? (string) $item['label']       : (string) $item['id'],
                 'description' => isset($item['description']) ? (string) $item['description'] : '',
-                'url'         => (string) $item['url'],
+                'macro'       => (string) $item['macro'],
             ];
         }
 

@@ -16,14 +16,10 @@ $custom_bottom      = get_option(Options::ROBOTS_CUSTOM_BOTTOM, '');
 $saved_allowed      = get_option(Options::ROBOTS_ALLOWED_CATEGORIES, null);
 $default_denied     = FiftyOneDegreesRobotsTxt::DEFAULT_DENIED_CATEGORIES;
 $standard_selected  = get_option(Options::ROBOTS_STANDARD_TDL_SELECTED, []);
-$standard_urls      = get_option(Options::ROBOTS_STANDARD_TDL_URLS, []);
 $custom_tdl         = get_option(Options::ROBOTS_CUSTOM_TDL, []);
 $standard_tdls      = FiftyOneDegreesStandardTdls::load();
 if (!is_array($standard_selected)) {
     $standard_selected = [];
-}
-if (!is_array($standard_urls)) {
-    $standard_urls = [];
 }
 if (!is_array($custom_tdl)) {
     $custom_tdl = [];
@@ -168,10 +164,7 @@ $supports_robots_txt = FiftyOneDegreesCloudMetadata::supports_robots_txt();
                         <p class="description"><?php echo wp_kses_post(FiftyOneDegreesStrings::get('robots.field.tdl_standard_section_description')); ?></p>
                         <br>
                         <?php foreach ($standard_tdls as $tdl_entry): ?>
-                            <?php
-                            $entry_id  = $tdl_entry['id'];
-                            $entry_url = isset($standard_urls[$entry_id]) ? $standard_urls[$entry_id] : $tdl_entry['url'];
-                            ?>
+                            <?php $entry_id = $tdl_entry['id']; ?>
                             <label style="display:block; margin-bottom: 12px;">
                                 <input type="checkbox"
                                     name="<?php echo esc_attr(Options::ROBOTS_STANDARD_TDL_SELECTED); ?>[]"
@@ -181,7 +174,6 @@ $supports_robots_txt = FiftyOneDegreesCloudMetadata::supports_robots_txt();
                                 <?php if (!empty($tdl_entry['description'])): ?>
                                     <span class="description" style="display:block; margin-left: 24px; margin-top: 2px;"><?php echo esc_html($tdl_entry['description']); ?></span>
                                 <?php endif; ?>
-                                <span class="description" style="display:block; margin-left: 24px; margin-top: 2px;"><?php echo esc_url($entry_url); ?></span>
                             </label>
                         <?php endforeach; ?>
                         <hr style="margin: 15px 0;">

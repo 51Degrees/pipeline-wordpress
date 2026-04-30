@@ -190,7 +190,6 @@ class FiftyoneService {
         add_option(Options::ROBOTS_CUSTOM_BOTTOM, '');
         add_option(Options::ROBOTS_STANDARD_TDL_SELECTED, array());
         add_option(Options::ROBOTS_CUSTOM_TDL, array());
-        add_option(Options::ROBOTS_STANDARD_TDL_URLS, array());
         add_option(Options::ROBOTS_PLAINTEXT_CACHE, '');
         add_option(Options::ROBOTS_ANNOTATEDTEXT_CACHE, '');
         add_option(Options::PIPELINE_ENABLE, 'on');
@@ -254,7 +253,6 @@ class FiftyoneService {
             Options::ROBOTS_GROUP_KEY,
             Options::ROBOTS_CUSTOM_TDL,
             ['sanitize_callback' => ['FiftyoneService', 'sanitize_tdl']]);
-        // ROBOTS_STANDARD_TDL_URLS: NOT registered — written only by cron via update_option
         register_setting(Options::GROUP_KEY, Options::PIPELINE_ENABLE);
     }
 

@@ -194,13 +194,6 @@ class Options
     const ROBOTS_STANDARD_TDL_SELECTED = "fiftyonedegrees_robots_standard_tdl_selected";
 
     /**
-     * Key used to store the live current URL for each standard TDL entry.
-     * Stored as an associative array: id => current_url.
-     * Auto-managed by the daily cron; not registered via register_setting.
-     */
-    const ROBOTS_STANDARD_TDL_URLS = "fiftyonedegrees_robots_standard_tdl_urls";
-
-    /**
      * Key used to store user-entered custom TDL URLs.
      * Stored as an indexed array of URL strings.
      */
