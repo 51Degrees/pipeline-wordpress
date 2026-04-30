@@ -1,21 +1,28 @@
 <?php
 
 /**
- * Loads and exposes UI string resources from languages/robots-strings.yaml.
+ * Loads and exposes UI string resources from the languages/*-strings.yaml files.
  *
  * Usage:
  *   FiftyOneDegreesStrings::get('robots.page.title')
  *   FiftyOneDegreesStrings::get('robots.notice.cloud_api_error', esc_html($error))
  *
- * For locale overrides, place a robots-strings.{locale}.yaml file next to the
- * base file (e.g. languages/robots-strings.fr_FR.yaml). The plugin loads the
- * locale file when WordPress uses that language, falling back to the base file.
+ * For locale overrides, place a {file}.{locale}.yaml file next to the base
+ * file (e.g. languages/robots-strings.fr_FR.yaml). Each *-strings file is
+ * localised independently — translating one file does not require copying
+ * the others; missing locale files fall back to the English base.
  *
  * Keys use dot notation with up to three levels: section.subsection.key.
  * Values that contain HTML are safe to output via wp_kses_post(); plain-text
  * values should be output via esc_html().
  */
 class FiftyOneDegreesStrings {
+
+    // File order matters: common loads first, feature files override on collision
+    // via array_replace_recursive. Top-level namespaces (common:, robots:,
+    // suspicious:) are unique per file by convention — feature files must NOT
+    // add a `common:` namespace or they'll silently override common-strings.
+    private const FILES = ['common-strings', 'robots-strings', 'suspicious-strings'];
 
     /** @var array<string,mixed>|null */
     private static $data = null;
@@ -48,17 +55,22 @@ class FiftyOneDegreesStrings {
             ? FIFTYONEDEGREES_PLUGIN_DIR
             : dirname(__DIR__) . DIRECTORY_SEPARATOR;
 
-        if (function_exists('get_locale')) {
-            $locale = get_locale();
-            if ($locale && $locale !== 'en_US' && $locale !== 'en') {
-                $locale_file = $dir . 'languages' . DIRECTORY_SEPARATOR . 'robots-strings.' . $locale . '.yaml';
-                if (is_readable($locale_file)) {
-                    return self::parse_yaml($locale_file);
+        $base       = $dir . 'languages' . DIRECTORY_SEPARATOR;
+        $locale     = function_exists('get_locale') ? get_locale() : '';
+        $use_locale = $locale !== '' && $locale !== 'en_US' && $locale !== 'en';
+
+        $merged = [];
+        foreach (self::FILES as $name) {
+            $file = $base . $name . '.yaml';
+            if ($use_locale) {
+                $candidate = $base . $name . '.' . $locale . '.yaml';
+                if (is_readable($candidate)) {
+                    $file = $candidate;
                 }
             }
+            $merged = array_replace_recursive($merged, self::parse_yaml($file));
         }
-
-        return self::parse_yaml($dir . 'languages' . DIRECTORY_SEPARATOR . 'robots-strings.yaml');
+        return $merged;
     }
 
     /** @return array<string,mixed> */

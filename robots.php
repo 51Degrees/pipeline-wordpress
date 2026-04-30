@@ -123,7 +123,7 @@ $supports_robots_txt = FiftyOneDegreesCloudMetadata::supports_robots_txt();
                     <?php
                     fiftyonedegrees_render_page_picker(
                         Options::ROBOTS_REDIRECT_URL,
-                        FiftyOneDegreesStrings::get('robots.field.redirect_url_page_picker_placeholder')
+                        FiftyOneDegreesStrings::get('common.page_picker.placeholder')
                     );
                     ?>
                 </td>

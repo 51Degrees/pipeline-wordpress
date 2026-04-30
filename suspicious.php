@@ -18,6 +18,7 @@
 
 if (!defined('ABSPATH')) { exit; }
 
+require_once __DIR__ . '/includes/fiftyone-strings.php';
 require_once __DIR__ . '/includes/page-picker.php';
 
 $cachedPipeline = get_option(Options::PIPELINE);
@@ -26,18 +27,18 @@ $suspicious_enabled = get_option(Options::SUSPICIOUS_ENABLE, 'off');
 if ($suspicious_enabled === 'on') {
     if (isset($cachedPipeline['error'])) {
         echo '<p></p><span class="fod-pipeline-status warn"><b>' .
-            esc_html__('Your 51Degrees Resource Key isn\'t working. Check it on the Setup tab. Until this is fixed, tracking runs in basic mode (see below).', '51D') .
+            esc_html(FiftyOneDegreesStrings::get('suspicious.notice.resource_key_warning')) .
             '</b></span>';
     }
 
     $engine_datakey = SuspiciousActivity::id_engine_datakey();
     if ($engine_datakey !== null) {
         echo '<p></p><span class="fod-pipeline-status good"><b>' .
-            esc_html__('Advanced tracking active. Visitors are identified individually even when they share a network.', '51D') .
+            esc_html(FiftyOneDegreesStrings::get('suspicious.notice.advanced_active')) .
             '</b></span>';
     } else {
         echo '<p></p><span class="fod-pipeline-status warn"><b>' .
-            esc_html__('Basic tracking is active. Visitors who look identical to the site are grouped and blocked together if any one of them triggers the limit.', '51D') .
+            esc_html(FiftyOneDegreesStrings::get('suspicious.notice.basic_active')) .
             '</b></span>';
     }
 }
@@ -52,7 +53,7 @@ if ($suspicious_enabled === 'on') {
         <tbody>
             <tr>
                 <th scope="row">
-                    <?php esc_html_e('Enable', '51D'); ?>
+                    <?php echo esc_html(FiftyOneDegreesStrings::get('suspicious.field.enable_label')); ?>
                 </th>
                 <td>
                     <input type="hidden" name="<?php echo esc_attr(Options::SUSPICIOUS_ENABLE); ?>" value="off">
@@ -62,14 +63,14 @@ if ($suspicious_enabled === 'on') {
                            value="on"
                            <?php checked(get_option(Options::SUSPICIOUS_ENABLE), 'on'); ?>>
                     <label for="<?php echo esc_attr(Options::SUSPICIOUS_ENABLE); ?>">
-                        <?php esc_html_e('Enable suspicious activity detection', '51D'); ?>
+                        <?php echo esc_html(FiftyOneDegreesStrings::get('suspicious.field.enable_checkbox')); ?>
                     </label>
                 </td>
             </tr>
             <tr>
                 <th scope="row">
                     <label for="<?php echo esc_attr(Options::SUSPICIOUS_REDIRECT_URL); ?>">
-                        <?php esc_html_e('Redirect URL', '51D'); ?>
+                        <?php echo esc_html(FiftyOneDegreesStrings::get('suspicious.field.redirect_url_label')); ?>
                     </label>
                 </th>
                 <td>
@@ -81,7 +82,7 @@ if ($suspicious_enabled === 'on') {
                     <?php
                     fiftyonedegrees_render_page_picker(
                         Options::SUSPICIOUS_REDIRECT_URL,
-                        __('-- Select a page --', '51D')
+                        FiftyOneDegreesStrings::get('common.page_picker.placeholder')
                     );
                     ?>
                 </td>
@@ -89,7 +90,7 @@ if ($suspicious_enabled === 'on') {
             <tr>
                 <th scope="row">
                     <label for="<?php echo esc_attr(Options::SUSPICIOUS_REQUESTS); ?>">
-                        <?php esc_html_e('Number of requests', '51D'); ?>
+                        <?php echo esc_html(FiftyOneDegreesStrings::get('suspicious.field.requests_label')); ?>
                     </label>
                 </th>
                 <td>
@@ -104,7 +105,7 @@ if ($suspicious_enabled === 'on') {
             <tr>
                 <th scope="row">
                     <label for="<?php echo esc_attr(Options::SUSPICIOUS_WINDOW); ?>">
-                        <?php esc_html_e('Within seconds', '51D'); ?>
+                        <?php echo esc_html(FiftyOneDegreesStrings::get('suspicious.field.window_label')); ?>
                     </label>
                 </th>
                 <td>
@@ -120,6 +121,6 @@ if ($suspicious_enabled === 'on') {
         </tbody>
     </table>
 
-    <?php submit_button(esc_html__('Save Changes', '51D')); ?>
+    <?php submit_button(FiftyOneDegreesStrings::get('suspicious.button.save')); ?>
 
 </form>

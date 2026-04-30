@@ -1,0 +1,30 @@
+# 51Degrees Suspicious-Activity Feature — String Resources
+#
+# Edit this file to customise labels and messages shown on the
+# Suspicious-Activity admin settings page.
+#
+# Localisation: copy this file as suspicious-strings.{locale}.yaml
+# (e.g. suspicious-strings.fr_FR.yaml) alongside this one and translate
+# the values. The plugin loads the locale-specific file automatically
+# when WordPress is set to that language, falling back to this file.
+# Each *-strings file is localised independently — translating one file
+# does not require copying the others.
+#
+# Value syntax: see languages/robots-strings.yaml header.
+
+suspicious:
+
+  notice:
+    resource_key_warning: 'Your 51Degrees Resource Key isn''t working. Check it on the Setup tab. Until this is fixed, tracking runs in basic mode (see below).'
+    advanced_active: 'Advanced tracking active. Visitors are identified individually even when they share a network.'
+    basic_active: 'Basic tracking is active. Visitors who look identical to the site are grouped and blocked together if any one of them triggers the limit.'
+
+  field:
+    enable_label: 'Enable'
+    enable_checkbox: 'Enable suspicious activity detection'
+    redirect_url_label: 'Redirect URL'
+    requests_label: 'Number of requests'
+    window_label: 'Within seconds'
+
+  button:
+    save: 'Save Changes'
