@@ -6,6 +6,7 @@ require_once __DIR__ . '/includes/cloud-metadata.php';
 require_once __DIR__ . '/includes/standard-tdls.php';
 require_once __DIR__ . '/includes/robots-txt.php';
 require_once __DIR__ . '/includes/fiftyone-strings.php';
+require_once __DIR__ . '/includes/page-picker.php';
 
 $robots_enable      = get_option(Options::ROBOTS_ENABLE, 'off');
 $robots_enforce     = get_option(Options::ROBOTS_ENFORCE, 'off');
@@ -117,8 +118,14 @@ $supports_robots_txt = FiftyOneDegreesCloudMetadata::supports_robots_txt();
             <tr valign="top">
                 <th scope="row"><label for="<?php echo Options::ROBOTS_REDIRECT_URL; ?>"><?php echo esc_html(FiftyOneDegreesStrings::get('robots.field.redirect_url_label')); ?></label></th>
                 <td>
-                    <input type="url" name="<?php echo Options::ROBOTS_REDIRECT_URL; ?>" value="<?php echo esc_attr($redirect_url); ?>" class="regular-text" placeholder="<?php echo esc_attr(FiftyOneDegreesStrings::get('robots.field.redirect_url_placeholder')); ?>" />
+                    <input type="url" name="<?php echo Options::ROBOTS_REDIRECT_URL; ?>" id="<?php echo esc_attr(Options::ROBOTS_REDIRECT_URL); ?>" value="<?php echo esc_attr($redirect_url); ?>" class="regular-text" placeholder="<?php echo esc_attr(FiftyOneDegreesStrings::get('robots.field.redirect_url_placeholder')); ?>" />
                     <p class="description"><?php echo esc_html(FiftyOneDegreesStrings::get('robots.field.redirect_url_description')); ?></p>
+                    <?php
+                    fiftyonedegrees_render_page_picker(
+                        Options::ROBOTS_REDIRECT_URL,
+                        FiftyOneDegreesStrings::get('robots.field.redirect_url_page_picker_placeholder')
+                    );
+                    ?>
                 </td>
             </tr>
 

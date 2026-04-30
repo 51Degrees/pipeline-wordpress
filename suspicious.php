@@ -18,6 +18,8 @@
 
 if (!defined('ABSPATH')) { exit; }
 
+require_once __DIR__ . '/includes/page-picker.php';
+
 $cachedPipeline = get_option(Options::PIPELINE);
 $suspicious_enabled = get_option(Options::SUSPICIOUS_ENABLE, 'off');
 
@@ -77,32 +79,11 @@ if ($suspicious_enabled === 'on') {
                            value="<?php echo esc_attr(get_option(Options::SUSPICIOUS_REDIRECT_URL)); ?>"
                            class="regular-text">
                     <?php
-                    $pages = get_pages();
-                    if (!empty($pages)) {
-                        echo '<p>';
-                        echo '<select id="suspicious-page-select">';
-                        echo '<option value="">' . esc_html__('-- Select a page --', '51D') . '</option>';
-                        foreach ($pages as $page) {
-                            echo '<option value="' . esc_url(get_permalink($page->ID)) . '">'
-                                . esc_html($page->post_title) . '</option>';
-                        }
-                        echo '</select>';
-                        echo '</p>';
-                    }
+                    fiftyonedegrees_render_page_picker(
+                        Options::SUSPICIOUS_REDIRECT_URL,
+                        __('-- Select a page --', '51D')
+                    );
                     ?>
-                    <script>
-                    (function() {
-                        var sel = document.getElementById('suspicious-page-select');
-                        if (sel) {
-                            sel.addEventListener('change', function() {
-                                if (this.value) {
-                                    document.getElementById('<?php echo esc_js(Options::SUSPICIOUS_REDIRECT_URL); ?>').value = this.value;
-                                    this.selectedIndex = 0;
-                                }
-                            });
-                        }
-                    })();
-                    </script>
                 </td>
             </tr>
             <tr>

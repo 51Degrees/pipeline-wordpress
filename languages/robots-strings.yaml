@@ -62,6 +62,7 @@ robots:
     redirect_url_label: 'Redirect URL'
     redirect_url_placeholder: 'https://example.com/bot-landing'
     redirect_url_description: 'URL to redirect detected bots to (302 redirect). Leave empty to deny access without redirect.'
+    redirect_url_page_picker_placeholder: '-- Select a page --'
     custom_top_label: 'Custom Top Entries'
     custom_top_placeholder: 'User-agent: *'
     custom_top_description: 'Custom robots.txt entries prepended before the 51Degrees section.'
