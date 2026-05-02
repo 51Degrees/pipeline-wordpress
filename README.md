@@ -10,7 +10,7 @@ based on your user’s location.
 Using real-time data, our plugin can optimize your website for users,
 based on device type and location. Upgrade your analytic reporting with a
 click of a button. Install from the
-[WordPress plugin manager](https://wordpress.org/plugins/fiftyonedegrees/)
+[WordPress plugin manager](https://wordpress.org/plugins/51degrees/)
 by searching for `51Degrees`.
 
 # After Activation
