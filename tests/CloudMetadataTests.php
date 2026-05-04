@@ -135,7 +135,6 @@ class CloudMetadataTests extends TestCase {
                     'robotstxt' => [
                         'Properties' => [
                             ['Name' => 'PlainText'],
-                            ['Name' => 'AnnotatedText'],
                         ],
                     ],
                 ],

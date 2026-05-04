@@ -191,7 +191,6 @@ class FiftyoneService {
         add_option(Options::ROBOTS_STANDARD_TDL_SELECTED, array());
         add_option(Options::ROBOTS_CUSTOM_TDL, array());
         add_option(Options::ROBOTS_PLAINTEXT_CACHE, '');
-        add_option(Options::ROBOTS_ANNOTATEDTEXT_CACHE, '');
         add_option(Options::PIPELINE_ENABLE, 'on');
 
         // Register the new settings with wordpress.
@@ -317,38 +316,6 @@ class FiftyoneService {
             'callback' => array('Pipeline','getJSON'),
             'permission_callback' => '__return_true'
         ));
-        register_rest_route('fiftyonedegrees/v4', 'annotated-robots', array(
-            'methods' => 'GET',
-            'args' => array(),
-            'callback' => array($this, 'fiftyonedegrees_annotated_robots_callback'),
-            'permission_callback' => '__return_true'
-        ));
-    }
-
-    /**
-     * REST callback for GET /wp-json/fiftyonedegrees/v4/annotated-robots.
-     * Serves the cached annotated robots.txt as a plain-text file download.
-     * Returns a 404 JSON response when the cache is empty.
-     *
-     * @return WP_REST_Response|void
-     */
-    function fiftyonedegrees_annotated_robots_callback() {
-        $cache = get_option(Options::ROBOTS_ANNOTATEDTEXT_CACHE, '');
-        if (empty($cache)) {
-            return new WP_REST_Response(
-                'Annotated robots.txt not yet generated. Click Save and Generate on the Robots.txt settings page.',
-                404
-            );
-        }
-        $content = FiftyOneDegreesRobotsTxt::generate_robots_txt_content(
-            get_option('blog_public'),
-            true
-        );
-        nocache_headers();
-        header('Content-Type: text/plain; charset=utf-8');
-        header('Content-Disposition: attachment; filename="robots-annotated.txt"');
-        echo $content;
-        exit;
     }
 
     /**

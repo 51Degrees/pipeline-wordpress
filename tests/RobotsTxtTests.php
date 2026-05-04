@@ -448,7 +448,7 @@ class RobotsTxtTests extends TestCase {
             'FiftyOneDegreesRobotsTxt::do_cloud_request',
             function (string $url) use (&$capturedUrl) {
                 $capturedUrl = $url;
-                return json_encode(['robotstxt' => ['plaintext' => '', 'annotatedtext' => '']]);
+                return json_encode(['robotstxt' => ['plaintext' => '']]);
             }
         );
         Functions\when('delete_transient')->justReturn(true);
@@ -476,7 +476,7 @@ class RobotsTxtTests extends TestCase {
             'FiftyOneDegreesRobotsTxt::do_cloud_request',
             function (string $url) use (&$capturedUrl) {
                 $capturedUrl = $url;
-                return json_encode(['robotstxt' => ['plaintext' => '', 'annotatedtext' => '']]);
+                return json_encode(['robotstxt' => ['plaintext' => '']]);
             }
         );
         Functions\when('delete_transient')->justReturn(true);
@@ -502,7 +502,6 @@ class RobotsTxtTests extends TestCase {
             Patchwork\always(json_encode([
                 'robotstxt' => [
                     'plaintext' => "User-agent: *\nDisallow: /\n",
-                    'annotatedtext' => "# Annotated\nUser-agent: *\nDisallow: /\n",
                 ],
             ]))
         );
@@ -518,9 +517,7 @@ class RobotsTxtTests extends TestCase {
 
         $this->assertTrue($result);
         $this->assertArrayHasKey(Options::ROBOTS_PLAINTEXT_CACHE, $updated);
-        $this->assertArrayHasKey(Options::ROBOTS_ANNOTATEDTEXT_CACHE, $updated);
         $this->assertStringContainsString('User-agent: *', $updated[Options::ROBOTS_PLAINTEXT_CACHE]);
-        $this->assertStringContainsString('Annotated', $updated[Options::ROBOTS_ANNOTATEDTEXT_CACHE]);
     }
 
     public function testFetchFromCloudPreservesCacheOnCloudRequestException() {
@@ -550,7 +547,6 @@ class RobotsTxtTests extends TestCase {
 
         $this->assertFalse($result);
         $this->assertArrayNotHasKey(Options::ROBOTS_PLAINTEXT_CACHE, $updated);
-        $this->assertArrayNotHasKey(Options::ROBOTS_ANNOTATEDTEXT_CACHE, $updated);
     }
 
     public function testFetchFromCloudWritesLastRefreshSuccessOption() {
@@ -564,7 +560,7 @@ class RobotsTxtTests extends TestCase {
         );
         Patchwork\redefine(
             'FiftyOneDegreesRobotsTxt::do_cloud_request',
-            Patchwork\always(json_encode(['robotstxt' => ['plaintext' => '', 'annotatedtext' => '']]))
+            Patchwork\always(json_encode(['robotstxt' => ['plaintext' => '']]))
         );
         Functions\when('delete_transient')->justReturn(true);
 
@@ -642,7 +638,6 @@ class RobotsTxtTests extends TestCase {
 
         $this->assertFalse($result);
         $this->assertArrayNotHasKey(Options::ROBOTS_PLAINTEXT_CACHE, $updated);
-        $this->assertArrayNotHasKey(Options::ROBOTS_ANNOTATEDTEXT_CACHE, $updated);
     }
 
     public function testFetchFromCloudPreservesCacheOnInvalidJson() {
@@ -716,7 +711,7 @@ class RobotsTxtTests extends TestCase {
             'FiftyOneDegreesRobotsTxt::do_cloud_request',
             function (string $url) use (&$capturedUrl) {
                 $capturedUrl = $url;
-                return json_encode(['robotstxt' => ['plaintext' => '', 'annotatedtext' => '']]);
+                return json_encode(['robotstxt' => ['plaintext' => '']]);
             }
         );
         Functions\when('delete_transient')->justReturn(true);
@@ -744,7 +739,7 @@ class RobotsTxtTests extends TestCase {
             'FiftyOneDegreesRobotsTxt::do_cloud_request',
             function (string $url) use (&$capturedUrl) {
                 $capturedUrl = $url;
-                return json_encode(['robotstxt' => ['plaintext' => '', 'annotatedtext' => '']]);
+                return json_encode(['robotstxt' => ['plaintext' => '']]);
             }
         );
         Functions\when('delete_transient')->justReturn(true);
@@ -774,7 +769,7 @@ class RobotsTxtTests extends TestCase {
             'FiftyOneDegreesRobotsTxt::do_cloud_request',
             function (string $url) use (&$capturedUrl) {
                 $capturedUrl = $url;
-                return json_encode(['robotstxt' => ['plaintext' => '', 'annotatedtext' => '']]);
+                return json_encode(['robotstxt' => ['plaintext' => '']]);
             }
         );
         Functions\when('delete_transient')->justReturn(true);
@@ -944,138 +939,6 @@ class RobotsTxtTests extends TestCase {
         );
     }
 
-    public function testAnnotatedRobotsEndpointReturns404WhenCacheEmpty() {
-        $this->mockOptions([Options::ROBOTS_ANNOTATEDTEXT_CACHE => '']);
-        $service = new FiftyoneService();
-        $result = $service->fiftyonedegrees_annotated_robots_callback();
-        $this->assertInstanceOf('WP_REST_Response', $result);
-        $this->assertEquals(404, $result->get_status());
-    }
-
-    public function testAnnotatedRobotsEndpointServesContentWhenCacheNonEmpty() {
-        $content = "# Annotated\nUser-agent: Googlebot\nDisallow: /\n";
-        $this->mockOptions([
-            Options::ROBOTS_ANNOTATEDTEXT_CACHE => $content,
-            Options::ROBOTS_ALLOWED_CATEGORIES => self::ALL_TEST_CATEGORIES,
-        ]);
-        Functions\when('nocache_headers')->justReturn(null);
-        Patchwork\redefine('header', Patchwork\always(null));
-        Patchwork\redefine('exit', Patchwork\always(null));
-
-        $service = new FiftyoneService();
-        ob_start();
-        $service->fiftyonedegrees_annotated_robots_callback();
-        $output = ob_get_clean();
-
-        $this->assertEquals($content, $output);
-    }
-
-    public function testAnnotatedRobotsEndpointDoesNotReturnResponseWhenCacheNonEmpty() {
-        $content = "User-agent: *\nDisallow: /\n";
-        $this->mockOptions([
-            Options::ROBOTS_ANNOTATEDTEXT_CACHE => $content,
-            Options::ROBOTS_ALLOWED_CATEGORIES => self::ALL_TEST_CATEGORIES,
-        ]);
-        Functions\when('nocache_headers')->justReturn(null);
-        Patchwork\redefine('header', Patchwork\always(null));
-        Patchwork\redefine('exit', Patchwork\always(null));
-
-        $service = new FiftyoneService();
-        ob_start();
-        $result = $service->fiftyonedegrees_annotated_robots_callback();
-        ob_end_clean();
-
-        $this->assertNull($result, 'Callback should not return a response when serving content directly');
-    }
-
-    public function testAnnotatedRobotsCallbackPrependsCustomTop() {
-        $annotated = "# N: SomeBot\nUser-agent: somebot\nAllow: /\n";
-        $this->mockOptions([
-            Options::ROBOTS_ANNOTATEDTEXT_CACHE => $annotated,
-            Options::ROBOTS_CUSTOM_TOP => "User-agent: MyBot\nDisallow: /private/",
-        ]);
-        Functions\when('nocache_headers')->justReturn(null);
-        Patchwork\redefine('header', Patchwork\always(null));
-        Patchwork\redefine('exit', Patchwork\always(null));
-
-        $service = new FiftyoneService();
-        ob_start();
-        $service->fiftyonedegrees_annotated_robots_callback();
-        $output = ob_get_clean();
-
-        $customTopPos = strpos($output, 'MyBot');
-        $annotatedPos = strpos($output, '# N: SomeBot');
-        $this->assertNotFalse($customTopPos);
-        $this->assertLessThan($annotatedPos, $customTopPos);
-    }
-
-    public function testAnnotatedRobotsCallbackAppendsCustomBottom() {
-        $annotated = "# N: SomeBot\nUser-agent: somebot\nAllow: /\n";
-        $this->mockOptions([
-            Options::ROBOTS_ANNOTATEDTEXT_CACHE => $annotated,
-            Options::ROBOTS_CUSTOM_BOTTOM => "Sitemap: https://example.com/sitemap.xml",
-        ]);
-        Functions\when('nocache_headers')->justReturn(null);
-        Patchwork\redefine('header', Patchwork\always(null));
-        Patchwork\redefine('exit', Patchwork\always(null));
-
-        $service = new FiftyoneService();
-        ob_start();
-        $service->fiftyonedegrees_annotated_robots_callback();
-        $output = ob_get_clean();
-
-        $annotatedPos = strpos($output, '# N: SomeBot');
-        $bottomPos = strpos($output, 'Sitemap:');
-        $this->assertNotFalse($bottomPos);
-        $this->assertLessThan($bottomPos, $annotatedPos);
-    }
-
-    public function testAnnotatedRobotsCallbackWithNoTDLsServesAnnotatedCacheDirectly() {
-        $annotated = "# N: SomeBot\nUser-agent: somebot\nAllow: /\n";
-        $this->mockOptions([
-            Options::ROBOTS_ANNOTATEDTEXT_CACHE => $annotated,
-            Options::ROBOTS_ALLOWED_CATEGORIES => self::ALL_TEST_CATEGORIES,
-            Options::ROBOTS_STANDARD_TDL_SELECTED => [],
-            Options::ROBOTS_CUSTOM_TDL => [],
-        ]);
-        Functions\when('nocache_headers')->justReturn(null);
-        Patchwork\redefine('header', Patchwork\always(null));
-        Patchwork\redefine('exit', Patchwork\always(null));
-
-        $service = new FiftyoneService();
-        ob_start();
-        $service->fiftyonedegrees_annotated_robots_callback();
-        $output = ob_get_clean();
-
-        $this->assertEquals($annotated, $output);
-    }
-
-    public function testAnnotatedRobotsCallbackFullAssembly() {
-        $annotated = "# N: SomeBot\nUser-agent: somebot\nAllow: /\n";
-        $this->mockOptions([
-            Options::ROBOTS_ANNOTATEDTEXT_CACHE => $annotated,
-            Options::ROBOTS_CUSTOM_TOP => "User-agent: *\nAllow: /",
-            Options::ROBOTS_ALLOWED_CATEGORIES => array_diff(self::ALL_TEST_CATEGORIES, ['Archiving']),
-            Options::ROBOTS_CUSTOM_TDL => ['https://example.com/tdl/1.txt'],
-            Options::ROBOTS_CUSTOM_BOTTOM => "Sitemap: https://example.com/sitemap.xml",
-        ]);
-        Functions\when('nocache_headers')->justReturn(null);
-        Patchwork\redefine('header', Patchwork\always(null));
-        Patchwork\redefine('exit', Patchwork\always(null));
-
-        $service = new FiftyoneService();
-        ob_start();
-        $service->fiftyonedegrees_annotated_robots_callback();
-        $output = ob_get_clean();
-
-        $topPos = strpos($output, 'Allow: /');
-        $annotatedPos = strpos($output, '# N: SomeBot');
-        $bottomPos = strpos($output, 'Sitemap:');
-
-        $this->assertLessThan($annotatedPos, $topPos);
-        $this->assertLessThan($bottomPos, $annotatedPos);
-    }
-
     public function testEmptyRedirectUrlServesBotDeniedPage() {
         $this->mockGuardsPassed();
         $this->mockOptions([
@@ -1167,7 +1030,6 @@ class RobotsTxtTests extends TestCase {
         // Programmatic cache/URL-map fields must NOT be registered at all
         $programmaticFields = [
             Options::ROBOTS_PLAINTEXT_CACHE,
-            Options::ROBOTS_ANNOTATEDTEXT_CACHE,
         ];
         foreach ($programmaticFields as $opt) {
             foreach ($registered as [$group, $option]) {
@@ -1436,7 +1298,7 @@ class RobotsTxtTests extends TestCase {
             'fiftyone\pipeline\cloudrequestengine\HttpClient::makeCloudRequest',
             function (string $type, string $url, ?string $content, ?string $originHeader) use (&$capturedUrl): string {
                 $capturedUrl = $url;
-                return json_encode(['robotstxt' => ['plaintext' => '', 'annotatedtext' => '']]);
+                return json_encode(['robotstxt' => ['plaintext' => '']]);
             }
         );
         Functions\when('delete_transient')->justReturn(true);
@@ -1463,7 +1325,7 @@ class RobotsTxtTests extends TestCase {
             'fiftyone\pipeline\cloudrequestengine\HttpClient::makeCloudRequest',
             function (string $type, string $url, ?string $content, ?string $originHeader) use (&$capturedUrl): string {
                 $capturedUrl = $url;
-                return json_encode(['robotstxt' => ['plaintext' => '', 'annotatedtext' => '']]);
+                return json_encode(['robotstxt' => ['plaintext' => '']]);
             }
         );
         Functions\when('delete_transient')->justReturn(true);

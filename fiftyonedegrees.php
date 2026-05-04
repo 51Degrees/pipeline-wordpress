@@ -173,7 +173,6 @@ add_action('plugin_loaded', 'load_fiftyonedegrees');
 
 function fiftyonedegrees_activate() {
     add_option(Options::ROBOTS_PLAINTEXT_CACHE, '');
-    add_option(Options::ROBOTS_ANNOTATEDTEXT_CACHE, '');
 
     if (!wp_next_scheduled('fiftyonedegrees_refresh_robots_txt')) {
         wp_schedule_event(time(), 'daily', 'fiftyonedegrees_refresh_robots_txt');

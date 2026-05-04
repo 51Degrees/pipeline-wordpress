@@ -125,7 +125,7 @@ class FiftyOneDegreesCloudMetadata {
 
     public static function supports_robots_txt() {
         $props = self::fetch_accessible_properties();
-        return in_array('PlainText', $props) || in_array('AnnotatedText', $props);
+        return in_array('PlainText', $props);
     }
 
     private static function get_crawler_usage_transient_key() {

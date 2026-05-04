@@ -169,11 +169,9 @@ class FiftyOneDegreesRobotsTxt {
         }
 
         $plaintext = isset($data['robotstxt']['plaintext']) ? $data['robotstxt']['plaintext'] : '';
-        $annotatedtext = isset($data['robotstxt']['annotatedtext']) ? $data['robotstxt']['annotatedtext'] : '';
 
         delete_transient('fiftyonedegrees_robots_cloud_error');
         update_option(Options::ROBOTS_PLAINTEXT_CACHE, $plaintext);
-        update_option(Options::ROBOTS_ANNOTATEDTEXT_CACHE, $annotatedtext);
         self::record_last_refresh('success', 'Updated', null);
 
         return true;
@@ -188,12 +186,11 @@ class FiftyOneDegreesRobotsTxt {
         return $httpClient->makeCloudRequest('GET', $url, null, null);
     }
 
-    public static function generate_robots_txt_content($public, $annotated = false) {
+    public static function generate_robots_txt_content($public) {
         $result = '';
         $custom_top = get_option(Options::ROBOTS_CUSTOM_TOP, '');
         $custom_bottom = get_option(Options::ROBOTS_CUSTOM_BOTTOM, '');
-        $cache_key = $annotated ? Options::ROBOTS_ANNOTATEDTEXT_CACHE : Options::ROBOTS_PLAINTEXT_CACHE;
-        $cache = get_option($cache_key, '');
+        $cache = get_option(Options::ROBOTS_PLAINTEXT_CACHE, '');
 
         if (!empty($custom_top)) {
             $result .= rtrim($custom_top) . "\n\n";

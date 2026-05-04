@@ -277,13 +277,5 @@ $plaintext_cache      = get_option(Options::ROBOTS_PLAINTEXT_CACHE, '');
 
     <p>
         <a href="<?php echo esc_url(home_url('/robots.txt')); ?>" target="_blank"><?php echo esc_html(FiftyOneDegreesStrings::get('robots.links.view')); ?></a>
-        &nbsp;&nbsp;|&nbsp;&nbsp;
-        <?php
-        $annotated_cache = get_option(Options::ROBOTS_ANNOTATEDTEXT_CACHE, '');
-        if (!empty($annotated_cache)): ?>
-            <a href="<?php echo esc_url(rest_url('fiftyonedegrees/v4/annotated-robots')); ?>"><?php echo esc_html(FiftyOneDegreesStrings::get('robots.links.download')); ?></a>
-        <?php else: ?>
-            <em><?php echo esc_html(FiftyOneDegreesStrings::get('robots.links.not_generated')); ?></em>
-        <?php endif; ?>
     </p>
 </div>

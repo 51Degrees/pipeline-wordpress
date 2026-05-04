@@ -27,7 +27,7 @@ robots:
     # (HTML) Shown when the resource key has IsCrawler but not CrawlerUsage.
     no_crawler_usage: '<strong>Note:</strong> Your Resource Key includes <code>IsCrawler</code> but not <code>CrawlerUsage</code>. Without <code>CrawlerUsage</code>, category selections have no effect — enforcement falls back to path-based rules only. Upgrade your key at <a href="https://configure.51degrees.com/" target="_blank">configure.51degrees.com</a> for category-based enforcement.'
     # (HTML) Shown when the resource key lacks RobotsTxt properties.
-    no_robots_txt: '<strong>Note:</strong> Your Resource Key does not include RobotsTxt properties (<code>PlainText</code> or <code>AnnotatedText</code>). Robots.txt generation will use local rules only. Upgrade your key at <a href="https://configure.51degrees.com/" target="_blank">configure.51degrees.com</a>'
+    no_robots_txt: '<strong>Note:</strong> Your Resource Key does not include the RobotsTxt <code>PlainText</code> property. Robots.txt generation will use local rules only. Upgrade your key at <a href="https://configure.51degrees.com/" target="_blank">configure.51degrees.com</a>'
     # Plain text. Shown after a successful Save and Generate action.
     generate_success: 'Robots.txt successfully generated from the 51Degrees Cloud API and cached.'
     # (HTML) Shown when the Cloud API call fails. %s is replaced by the error detail.
@@ -89,9 +89,6 @@ robots:
 
   links:
     view: 'View robots.txt'
-    download: 'Download annotated robots.txt'
-    # Plain text shown when no annotated file has been generated yet.
-    not_generated: 'Annotated robots.txt not yet generated. Click "Save and Generate" to fetch it from the Cloud.'
 
   bot_denied:
     # HTML page title and body for the access-denied response served to blocked crawlers.

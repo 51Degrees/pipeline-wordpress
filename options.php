@@ -236,11 +236,6 @@ class Options
     const ROBOTS_PLAINTEXT_CACHE = "fiftyonedegrees_robots_plaintext_cache";
 
     /**
-     * Key used to cache the cloud-generated annotated robots.txt content.
-     */
-    const ROBOTS_ANNOTATEDTEXT_CACHE = "fiftyonedegrees_robots_annotatedtext_cache";
-
-    /**
      * Durable record of the last cloud refresh attempt for robots.txt.
      * Shape: ['status' => 'success'|'error', 'timestamp' => int,
      *        'message' => string, 'http_status' => ?int].
