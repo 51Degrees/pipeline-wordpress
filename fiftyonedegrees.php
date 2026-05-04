@@ -1,8 +1,8 @@
 <?php
 /**
- *  Plugin Name: 51Degrees - Optimize by Device & Location
+ *  Plugin Name: 51Degrees
  *  Plugin URI:  https://51degrees.com/
- *  Description: Optimize your website for a range of devices and personalize your content based on your user’s location.
+ *  Description: Device detection and location-aware content for WordPress, with cloud-driven robots.txt management for AI/search crawlers and suspicious-activity protection against abusive traffic.
  *  Version:     1.0.11
  *  Author:      51Degrees
  *  Author URI:  https://51degrees.com/

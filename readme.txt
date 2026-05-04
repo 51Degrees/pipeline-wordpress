@@ -1,4 +1,4 @@
-=== 51Degrees - Optimize by Device & Location===
+=== 51Degrees ===
 
 Contributors: 51Degrees
 Donate link: https://51degrees.com/
