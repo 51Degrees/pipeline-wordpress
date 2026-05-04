@@ -35,6 +35,12 @@ class PipelineTests extends TestCase {
         Pipeline::reset();
         parent::set_up();
         Brain\Monkey\setUp();
+        // Stub the upstream header() call — output-buffer state from the prior
+        // test suite makes header() throw "headers already sent" otherwise.
+        Patchwork\redefine(
+            'fiftyone\pipeline\core\Utils::setResponseHeader',
+            Patchwork\always(null)
+        );
         $_SESSION = null;
         $this->serverBackup = $_SERVER;
         $this->getBackup = $_GET;
