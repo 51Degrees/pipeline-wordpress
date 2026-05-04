@@ -17,6 +17,7 @@
 */
 
 require_once(__DIR__ . "/../includes/fiftyone-service.php");
+require_once(__DIR__ . "/../includes/cloud-metadata.php");
 require_once(__DIR__ . "/TestFlowElement.php");
 
 use fiftyone\pipeline\core\PipelineBuilder;
@@ -406,6 +407,49 @@ class HookTests extends TestCase {
             Options::PIPELINE_ENABLE, 'on', 'off');
 
         $this->assertArrayNotHasKey(Options::PIPELINE_ENABLE, $updated);
+    }
+
+    public function testResourceKeyUpdateDoesNotClobberCachedPipelineOnCloudFailure() {
+        Functions\when('get_option')->alias(function($arg, $default = null) {
+            if ($arg === Options::PIPELINE) return HookTests::$pipeline;
+            return $default;
+        });
+        $updated = [];
+        Functions\when('update_option')->alias(function($key, $value) use (&$updated) {
+            $updated[$key] = $value;
+            return true;
+        });
+        $deleted = [];
+        Functions\when('delete_option')->alias(function ($key) use (&$deleted) {
+            $deleted[] = $key;
+            return true;
+        });
+        Functions\when('set_transient')->justReturn(true);
+        Functions\when('delete_transient')->justReturn(true);
+
+        Patchwork\redefine(
+            'Pipeline::make_pipeline',
+            Patchwork\always([
+                'pipeline' => null,
+                'available_engines' => null,
+                'error' => 'Cloud unreachable: simulated',
+            ])
+        );
+
+        $service = new FiftyoneService();
+        $service->fiftyonedegrees_update_option(
+            Options::RESOURCE_KEY, 'old-key', 'new-key');
+
+        $this->assertArrayNotHasKey(
+            Options::PIPELINE,
+            $updated,
+            'Error pipeline must not overwrite the cached pipeline'
+        );
+        $this->assertContains(
+            Options::ROBOTS_LAST_REFRESH,
+            $deleted,
+            'Stale last-refresh against the previous key must be cleared'
+        );
     }
 
     /**

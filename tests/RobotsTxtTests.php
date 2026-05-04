@@ -553,6 +553,98 @@ class RobotsTxtTests extends TestCase {
         $this->assertArrayNotHasKey(Options::ROBOTS_ANNOTATEDTEXT_CACHE, $updated);
     }
 
+    public function testFetchFromCloudWritesLastRefreshSuccessOption() {
+        $this->mockOptions([
+            Options::RESOURCE_KEY => 'test-key',
+            Options::ROBOTS_ALLOWED_CATEGORIES => self::ALL_TEST_CATEGORIES,
+        ]);
+        Patchwork\redefine(
+            'FiftyOneDegreesCloudMetadata::fetch_crawler_usage_values',
+            Patchwork\always([])
+        );
+        Patchwork\redefine(
+            'FiftyOneDegreesRobotsTxt::do_cloud_request',
+            Patchwork\always(json_encode(['robotstxt' => ['plaintext' => '', 'annotatedtext' => '']]))
+        );
+        Functions\when('delete_transient')->justReturn(true);
+
+        $updated = [];
+        Functions\when('update_option')->alias(function ($key, $value) use (&$updated) {
+            $updated[$key] = $value;
+            return true;
+        });
+
+        FiftyOneDegreesRobotsTxt::fetch_from_cloud();
+
+        $this->assertArrayHasKey(Options::ROBOTS_LAST_REFRESH, $updated);
+        $record = $updated[Options::ROBOTS_LAST_REFRESH];
+        $this->assertSame('success', $record['status']);
+        $this->assertIsInt($record['timestamp']);
+        $this->assertNull($record['http_status']);
+    }
+
+    public function testFetchFromCloudWritesLastRefreshErrorOptionOnException() {
+        $this->mockOptions([
+            Options::RESOURCE_KEY => 'test-key',
+            Options::ROBOTS_ALLOWED_CATEGORIES => self::ALL_TEST_CATEGORIES,
+        ]);
+        Patchwork\redefine(
+            'FiftyOneDegreesCloudMetadata::fetch_crawler_usage_values',
+            Patchwork\always([])
+        );
+        Patchwork\redefine(
+            'FiftyOneDegreesRobotsTxt::do_cloud_request',
+            function (string $url) {
+                throw new \fiftyone\pipeline\cloudrequestengine\CloudRequestException('Cloud rejected', 400, []);
+            }
+        );
+        Functions\when('set_transient')->justReturn(true);
+
+        $updated = [];
+        Functions\when('update_option')->alias(function ($key, $value) use (&$updated) {
+            $updated[$key] = $value;
+            return true;
+        });
+
+        FiftyOneDegreesRobotsTxt::fetch_from_cloud();
+
+        $this->assertArrayHasKey(Options::ROBOTS_LAST_REFRESH, $updated);
+        $record = $updated[Options::ROBOTS_LAST_REFRESH];
+        $this->assertSame('error', $record['status']);
+        $this->assertSame(400, $record['http_status']);
+        $this->assertStringContainsString('Cloud rejected', $record['message']);
+    }
+
+    public function testFetchFromCloudReturnsFalseWhenRobotsTxtSectionAbsent() {
+        $this->mockOptions([
+            Options::RESOURCE_KEY => 'test-key',
+            Options::ROBOTS_ALLOWED_CATEGORIES => self::ALL_TEST_CATEGORIES,
+        ]);
+        Patchwork\redefine(
+            'FiftyOneDegreesCloudMetadata::fetch_crawler_usage_values',
+            Patchwork\always([])
+        );
+        // Valid JSON, no `robotstxt` section — engine not advertised by the key.
+        Patchwork\redefine(
+            'FiftyOneDegreesRobotsTxt::do_cloud_request',
+            Patchwork\always(json_encode(['device' => ['ismobile' => true]]))
+        );
+        Functions\when('set_transient')->justReturn(true);
+        Functions\when('delete_transient')->justReturn(true);
+
+        $updated = [];
+        Functions\when('update_option')->alias(function ($key, $value) use (&$updated) {
+            $updated[$key] = $value;
+            return true;
+        });
+
+        $result = FiftyOneDegreesRobotsTxt::fetch_from_cloud();
+
+        $this->assertFalse($result);
+        $this->assertArrayNotHasKey(Options::ROBOTS_PLAINTEXT_CACHE, $updated);
+        $this->assertArrayNotHasKey(Options::ROBOTS_ANNOTATEDTEXT_CACHE, $updated);
+    }
+
     public function testFetchFromCloudPreservesCacheOnInvalidJson() {
         $this->mockOptions([
             Options::RESOURCE_KEY => 'test-key',
@@ -1381,6 +1473,70 @@ class RobotsTxtTests extends TestCase {
 
         $this->assertNotNull($capturedUrl);
         $this->assertStringNotContainsString('client-ip', $capturedUrl);
+    }
+
+    public function testEnforceCrawlerRedirectFailsOpenWhenPipelineDataNull() {
+        $this->mockGuardsPassed();
+        $this->mockOptions([
+            Options::ROBOTS_ENFORCE => 'on',
+            Options::ROBOTS_ALLOWED_CATEGORIES => array_diff(self::ALL_TEST_CATEGORIES, ['Search']),
+            Options::ROBOTS_REDIRECT_URL => 'https://example.com/denied',
+        ]);
+        Pipeline::reset();
+
+        $redirected = false;
+        Functions\when('wp_redirect')->alias(function () use (&$redirected) {
+            $redirected = true;
+        });
+
+        ob_start();
+        FiftyOneDegreesRobotsTxt::enforce_crawler_redirect();
+        $output = ob_get_clean();
+
+        $this->assertFalse($redirected, 'Cloud failure must not trigger a redirect');
+        $this->assertSame('', $output, 'Cloud failure must not produce output');
+    }
+
+    public function testEnforceCrawlerRedirectFailsOpenWhenCrawlerUsageMetadataUnavailable() {
+        $this->mockGuardsPassed();
+        $this->mockOptions([
+            Options::ROBOTS_ENFORCE => 'on',
+            Options::ROBOTS_ALLOWED_CATEGORIES => array_diff(self::ALL_TEST_CATEGORIES, ['Search']),
+            Options::ROBOTS_REDIRECT_URL => 'https://example.com/denied',
+        ]);
+        Patchwork\redefine('Pipeline::get', function ($engine, $prop) {
+            if ($prop === 'iscrawler') return true;
+            return null;
+        });
+        Patchwork\redefine(
+            'FiftyOneDegreesCloudMetadata::supports_crawler_usage',
+            Patchwork\always(false)
+        );
+
+        $redirected = false;
+        Functions\when('wp_redirect')->alias(function () use (&$redirected) {
+            $redirected = true;
+        });
+
+        FiftyOneDegreesRobotsTxt::enforce_crawler_redirect();
+
+        $this->assertFalse($redirected);
+    }
+
+    public function testGenerateRobotsTxtServesPreviousCacheWhenCloudErrorTransientSet() {
+        $previousCache = "User-agent: *\nDisallow: /private/\n";
+        $this->mockOptions([
+            Options::ROBOTS_ENABLE => 'on',
+            Options::ROBOTS_PLAINTEXT_CACHE => $previousCache,
+            Options::ROBOTS_ALLOWED_CATEGORIES => self::ALL_TEST_CATEGORIES,
+        ]);
+        Functions\when('get_transient')->alias(function ($key) {
+            return $key === 'fiftyonedegrees_robots_cloud_error' ? 'cloud is down' : false;
+        });
+
+        $result = FiftyOneDegreesRobotsTxt::generate_robots_txt('', true);
+
+        $this->assertStringContainsString('Disallow: /private/', $result);
     }
 
     public function testRefreshCronLogsOnFetchFailure() {

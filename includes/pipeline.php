@@ -143,59 +143,54 @@ class Pipeline
                 return;
             }
 
-            // Get pipeline and available engines from cache
-            $pipeline = $cachedPipeline['pipeline'];
-            $engines = $cachedPipeline['available_engines'];
-
-            // Create flowData object in the pipeline.
-            $flowData = $pipeline->createFlowData();
-
-            // Set evidence from web request.
-            $flowData->evidence->setFromWebRequest();
-
-            $resolvedIp = ClientIpResolver::resolve();
-            if ($resolvedIp !== '') {
-                $flowData->evidence->set('query.client-ip', $resolvedIp);
-            }
-
-            // Suspicious activity detection relies on IdProbLic/IdProbGlobal;
-            // the cloud requires query.id.usage for those to be populated.
-            if (get_option(Options::SUSPICIOUS_ENABLE, 'off') === 'on') {
-                $flowData->evidence->set('query.id.usage', 'non-marketing');
-            }
-
-            // Process flowData with evidence supplied
+            // Wrap the entire pipeline-processing block in a single
+            // try/catch so any failure (createFlowData, evidence setup,
+            // process(), setResponseHeader, getProperties) leaves
+            // Pipeline::$data null without leaking exceptions to the
+            // public traffic path.
             try {
+                $pipeline = $cachedPipeline['pipeline'];
+                $engines = $cachedPipeline['available_engines'];
+
+                $flowData = $pipeline->createFlowData();
+                $flowData->evidence->setFromWebRequest();
+
+                $resolvedIp = ClientIpResolver::resolve();
+                if ($resolvedIp !== '') {
+                    $flowData->evidence->set('query.client-ip', $resolvedIp);
+                }
+
+                // Suspicious activity detection relies on IdProbLic/IdProbGlobal;
+                // the cloud requires query.id.usage for those to be populated.
+                if (get_option(Options::SUSPICIOUS_ENABLE, 'off') === 'on') {
+                    $flowData->evidence->set('query.id.usage', 'non-marketing');
+                }
+
                 $flowData->process();
+
+                // https://51degrees.com/blog/user-agent-client-hints
+                Utils::setResponseHeader($flowData);
+
+                $properties = [];
+                foreach ($engines as $engine) {
+                    $properties[$engine] =
+                        $pipeline->getElement($engine)->getProperties();
+                }
+
+                Pipeline::$data = [
+                    'flowData' => $flowData,
+                    'properties' => $properties,
+                    'errors' => $flowData->errors,
+                    'createdAt' => time()
+                ];
             } catch (\Throwable $e) {
                 error_log(
-                    'Error occurred during 51Degrees pipeline processing: '
+                    'Error during 51Degrees pipeline initialization or processing: '
                     . $e->getMessage()
                 );
 
                 return;
             }
-
-            // Some browsers require that extra HTTP headers are explicitly
-            // requested. So set whatever headers are required by the browser
-            // in order to return the evidence needed by the pipeline.
-            // More info on this can be found at
-            // https://51degrees.com/blog/user-agent-client-hints
-            Utils::setResponseHeader($flowData);
-
-            // Get properties for each engine from pipeline.
-            $properties = [];
-            foreach ($engines as $engine) {
-                $properties[$engine] =
-                    $pipeline->getElement($engine)->getProperties();
-            }
-
-            Pipeline::$data = [
-                'flowData' => $flowData,
-                'properties' => $properties,
-                'errors' => $flowData->errors,
-                'createdAt' => time()
-            ];
 
             // If session cache is enabled then store the result in it.
             if (session_status() == PHP_SESSION_ACTIVE) {

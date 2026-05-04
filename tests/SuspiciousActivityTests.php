@@ -441,6 +441,34 @@ class SuspiciousActivityTests extends TestCase
         self::assertCount(4, $this->transients[$key]);
     }
 
+    public function testRateLimitingActiveWhenPipelineDataNull()
+    {
+        $this->options[Options::SUSPICIOUS_ENABLE] = 'on';
+        $this->options[Options::SUSPICIOUS_REQUESTS] = 5;
+        Pipeline::reset();
+
+        $did = SuspiciousActivity::get_51did();
+        self::assertSame(64, strlen($did), 'Expected SHA-256 IP+UA fallback identity');
+
+        $key = SuspiciousActivity::build_transient_key($did);
+        $now = microtime(true);
+        $this->transients[$key] = [$now - 4, $now - 3, $now - 2, $now - 1];
+
+        Functions\expect('wp_safe_redirect')
+            ->once()
+            ->with('http://example.com/blocked/', 302)
+            ->andReturnUsing(function () {
+                throw new ExitException('redirect');
+            });
+
+        try {
+            SuspiciousActivity::check_and_maybe_redirect();
+            self::fail('Expected ExitException — rate-limit redirect must fire even with cloud down');
+        } catch (ExitException $e) {
+            self::assertEquals('redirect', $e->getMessage());
+        }
+    }
+
     /**
      * Test that the redirect fires when the request count equals the
      * configured threshold (>= semantics).

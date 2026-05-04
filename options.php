@@ -241,6 +241,15 @@ class Options
     const ROBOTS_ANNOTATEDTEXT_CACHE = "fiftyonedegrees_robots_annotatedtext_cache";
 
     /**
+     * Durable record of the last cloud refresh attempt for robots.txt.
+     * Shape: ['status' => 'success'|'error', 'timestamp' => int,
+     *        'message' => string, 'http_status' => ?int].
+     * Survives the daily cron's 60-second error transient so admins
+     * see a stale-cache indicator next time they open the admin page.
+     */
+    const ROBOTS_LAST_REFRESH = "fiftyonedegrees_robots_last_refresh";
+
+    /**
      * Key used to store whether the 51Degrees pipeline (device detection) is enabled.
      */
     const PIPELINE_ENABLE = "fiftyonedegrees_pipeline_enable";

@@ -76,6 +76,27 @@ class FiftyOneDegreesRobotsTxt {
         }
     }
 
+    /**
+     * Records a durable last-refresh outcome — survives the daily
+     * cron's 60-second error transient so admins see a stale-cache
+     * indicator on the next admin-page load.
+     */
+    private static function record_last_refresh($status, $message, $http_status = null) {
+        update_option(Options::ROBOTS_LAST_REFRESH, [
+            'status' => $status,
+            'timestamp' => time(),
+            'message' => $message,
+            'http_status' => $http_status,
+        ]);
+    }
+
+    private static function http_status_from_exception(\Throwable $e) {
+        if ($e instanceof CloudRequestException) {
+            return $e->httpStatusCode;
+        }
+        return null;
+    }
+
     public static function fetch_from_cloud() {
         $resource_key = get_option(Options::RESOURCE_KEY, '');
         if (empty($resource_key)) {
@@ -112,6 +133,7 @@ class FiftyOneDegreesRobotsTxt {
         } catch (\Throwable $e) {
             error_log('51Degrees robots.txt Cloud API request failed: ' . $e->getMessage());
             set_transient('fiftyonedegrees_robots_cloud_error', $e->getMessage(), 60);
+            self::record_last_refresh('error', $e->getMessage(), self::http_status_from_exception($e));
             return false;
         }
 
@@ -120,14 +142,29 @@ class FiftyOneDegreesRobotsTxt {
         } catch (\Throwable $e) {
             error_log('51Degrees robots.txt Cloud API request failed: ' . $e->getMessage());
             set_transient('fiftyonedegrees_robots_cloud_error', $e->getMessage(), 60);
+            self::record_last_refresh('error', $e->getMessage(), self::http_status_from_exception($e));
             return false;
         }
 
         $data = json_decode($body, true);
 
         if (!is_array($data)) {
-            error_log('51Degrees robots.txt Cloud API: invalid JSON response');
-            set_transient('fiftyonedegrees_robots_cloud_error', 'Invalid JSON response', 60);
+            $msg = 'Invalid JSON response';
+            error_log('51Degrees robots.txt Cloud API: ' . $msg);
+            set_transient('fiftyonedegrees_robots_cloud_error', $msg, 60);
+            self::record_last_refresh('error', $msg, null);
+            return false;
+        }
+
+        // Discriminator: presence of the `robotstxt` section means the
+        // engine ran server-side. Empty plaintext from a present section
+        // is a legitimate "no Disallow lines" robots.txt; absence of the
+        // section means the engine isn't advertised by the resource key.
+        if (!isset($data['robotstxt'])) {
+            $msg = 'Cloud response did not include robots.txt content — check resource key permissions';
+            error_log('51Degrees robots.txt Cloud API: ' . $msg);
+            set_transient('fiftyonedegrees_robots_cloud_error', $msg, 60);
+            self::record_last_refresh('error', $msg, null);
             return false;
         }
 
@@ -137,6 +174,7 @@ class FiftyOneDegreesRobotsTxt {
         delete_transient('fiftyonedegrees_robots_cloud_error');
         update_option(Options::ROBOTS_PLAINTEXT_CACHE, $plaintext);
         update_option(Options::ROBOTS_ANNOTATEDTEXT_CACHE, $annotatedtext);
+        self::record_last_refresh('success', 'Updated', null);
 
         return true;
     }

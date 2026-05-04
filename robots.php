@@ -25,37 +25,67 @@ if (!is_array($custom_tdl)) {
     $custom_tdl = [];
 }
 
-FiftyOneDegreesCloudMetadata::invalidate_crawler_usage();
+$supports_crawler       = FiftyOneDegreesCloudMetadata::supports_crawler();
+$supports_crawler_usage = FiftyOneDegreesCloudMetadata::supports_crawler_usage();
+$supports_robots_txt    = FiftyOneDegreesCloudMetadata::supports_robots_txt();
+
+// Only invalidate + fetch fresh categories when the resource key
+// advertises CrawlerUsage AND the failure-backoff isn't already
+// active. Otherwise the page eats two cloud timeouts on every load
+// when cloud is down.
+$crawler_usage_fail_active = is_array(get_transient('fiftyonedegrees_crawler_usage_fail'));
+if ($supports_crawler_usage && !$crawler_usage_fail_active) {
+    FiftyOneDegreesCloudMetadata::invalidate_crawler_usage();
+}
 $crawler_categories = FiftyOneDegreesCloudMetadata::fetch_crawler_usage_values();
 
-$supports_crawler = FiftyOneDegreesCloudMetadata::supports_crawler();
-$supports_crawler_usage = FiftyOneDegreesCloudMetadata::supports_crawler_usage();
-$supports_robots_txt = FiftyOneDegreesCloudMetadata::supports_robots_txt();
+$cloud_failure_signal = FiftyOneDegreesCloudMetadata::get_failure_signal();
+$last_refresh         = get_option(Options::ROBOTS_LAST_REFRESH, null);
+$plaintext_cache      = get_option(Options::ROBOTS_PLAINTEXT_CACHE, '');
 ?>
 
 <div class="wrap">
     <h2><?php echo esc_html(FiftyOneDegreesStrings::get('robots.page.title')); ?></h2>
     <p><?php echo esc_html(FiftyOneDegreesStrings::get('robots.page.description')); ?></p>
-    <?php if (!$supports_crawler): ?>
-        <div class="notice notice-warning">
-            <p><?php echo wp_kses_post(FiftyOneDegreesStrings::get('robots.notice.no_crawler')); ?></p>
-        </div>
-    <?php elseif (!$supports_crawler_usage): ?>
-        <div class="notice notice-info">
-            <p><?php echo wp_kses_post(FiftyOneDegreesStrings::get('robots.notice.no_crawler_usage')); ?></p>
-        </div>
-    <?php endif; ?>
-
-    <?php if (!$supports_robots_txt): ?>
-        <div class="notice notice-info">
-            <p><?php echo wp_kses_post(FiftyOneDegreesStrings::get('robots.notice.no_robots_txt')); ?></p>
-        </div>
-    <?php endif; ?>
-
-    <?php if (empty($crawler_categories) && $supports_crawler_usage): ?>
+    <?php if ($cloud_failure_signal !== null): ?>
+        <?php
+        $http_status   = isset($cloud_failure_signal['http_status']) ? $cloud_failure_signal['http_status'] : null;
+        $cache_suffix  = !empty($plaintext_cache)
+            ? ' ' . FiftyOneDegreesStrings::get('robots.notice.cached_state_suffix')
+            : '';
+        // http_status > 0 (cloud responded with non-2xx) and http_status === null
+        // (cloud responded 200 but body was unparseable) both mean "cloud was
+        // reached, response not usable" — cloud_rejected. Only http_status === 0
+        // is "cloud unreachable" (network/timeout).
+        $notice_key    = ($http_status === 0)
+            ? 'robots.notice.cloud_unreachable'
+            : 'robots.notice.cloud_rejected';
+        ?>
         <div class="notice notice-error">
-            <p><?php echo wp_kses_post(FiftyOneDegreesStrings::get('robots.notice.categories_fetch_failed')); ?></p>
+            <p><?php echo wp_kses_post(FiftyOneDegreesStrings::get($notice_key) . $cache_suffix); ?></p>
         </div>
+    <?php else: ?>
+        <?php if (!$supports_crawler): ?>
+            <div class="notice notice-warning">
+                <p><?php echo wp_kses_post(FiftyOneDegreesStrings::get('robots.notice.no_crawler')); ?></p>
+            </div>
+        <?php elseif (!$supports_crawler_usage): ?>
+            <div class="notice notice-info">
+                <p><?php echo wp_kses_post(FiftyOneDegreesStrings::get('robots.notice.no_crawler_usage')); ?></p>
+            </div>
+        <?php endif; ?>
+
+        <?php if (!$supports_robots_txt): ?>
+            <div class="notice notice-info">
+                <p><?php echo wp_kses_post(FiftyOneDegreesStrings::get('robots.notice.no_robots_txt')); ?></p>
+            </div>
+        <?php endif; ?>
+
+        <?php if (empty($crawler_categories) && $supports_crawler_usage): ?>
+            <div class="notice notice-error">
+                <p><?php echo wp_kses_post(FiftyOneDegreesStrings::get('robots.notice.categories_fetch_failed')); ?></p>
+            </div>
+        <?php endif; ?>
     <?php endif; ?>
 
     <?php
@@ -69,12 +99,33 @@ $supports_robots_txt = FiftyOneDegreesCloudMetadata::supports_robots_txt();
     <?php endif; ?>
 
     <?php
+    // Suppress the transient cloud-error notice when a metadata-failure
+    // signal is already being rendered — same root cause, one notice.
     $robots_cloud_error = get_transient('fiftyonedegrees_robots_cloud_error');
-    if ($robots_cloud_error !== false): ?>
+    if ($robots_cloud_error !== false && $cloud_failure_signal === null): ?>
         <div class="notice notice-error">
             <p><?php echo wp_kses_post(FiftyOneDegreesStrings::get('robots.notice.cloud_api_error', esc_html($robots_cloud_error))); ?></p>
         </div>
     <?php endif; ?>
+
+    <?php if (is_array($last_refresh) && isset($last_refresh['status'])):
+        if ($last_refresh['status'] === 'error'): ?>
+            <div class="notice notice-warning">
+                <p><?php echo wp_kses_post(FiftyOneDegreesStrings::get(
+                    'robots.notice.last_refresh_error',
+                    esc_html(isset($last_refresh['message']) ? $last_refresh['message'] : ''),
+                    esc_html(isset($last_refresh['timestamp']) ? gmdate('Y-m-d H:i:s', $last_refresh['timestamp']) . ' UTC' : '')
+                )); ?></p>
+            </div>
+        <?php elseif ($last_refresh['status'] === 'success'): ?>
+            <p class="description">
+                <?php echo esc_html(FiftyOneDegreesStrings::get(
+                    'robots.notice.last_refresh_success',
+                    isset($last_refresh['timestamp']) ? gmdate('Y-m-d H:i:s', $last_refresh['timestamp']) . ' UTC' : ''
+                )); ?>
+            </p>
+        <?php endif;
+    endif; ?>
 
     <?php if (file_exists(ABSPATH . 'robots.txt')): ?>
         <div class="notice notice-error">

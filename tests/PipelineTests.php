@@ -252,6 +252,46 @@ class PipelineTests extends TestCase {
         );
     }
 
+    public function testProcess_BroadenedTryCatchSwallowsSetResponseHeaderException() {
+        $mock_pipeline = (new PipelineBuilder())
+            ->add(new TestFlowElement())
+            ->build();
+        $pipeline = [
+            'pipeline' => $mock_pipeline,
+            'available_engines' => ['testElement'],
+            'error' => null,
+        ];
+
+        Functions\when('get_option')->alias(function ($name, $default = null) use ($pipeline) {
+            if ($name === Options::PIPELINE) return $pipeline;
+            if ($name === Options::SUSPICIOUS_ENABLE) return 'off';
+            return $default;
+        });
+
+        // Override the set_up's null-stub so setResponseHeader throws.
+        Patchwork\redefine(
+            'fiftyone\pipeline\core\Utils::setResponseHeader',
+            function () {
+                throw new \RuntimeException('Simulated setResponseHeader failure');
+            }
+        );
+
+        $capture = tmpfile();
+        $saved = ini_set('error_log', stream_get_meta_data($capture)['uri']);
+
+        Pipeline::reset();
+        // Must not throw — broadened try/catch catches it.
+        Pipeline::process();
+
+        ini_set('error_log', $saved);
+
+        $this->assertNull(Pipeline::$data);
+        $logContents = stream_get_contents($capture);
+        $this->assertStringContainsString('Simulated setResponseHeader failure', $logContents);
+
+        fclose($capture);
+    }
+
     /**
      * Test that the process method returns the expected result.
      */

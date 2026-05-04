@@ -62,12 +62,12 @@ class FiftyOneDegreesCloudMetadata {
 
         try {
             $body = self::do_cloud_request($url);
-        } catch (CloudRequestException $e) {
+        } catch (\Throwable $e) {
             usleep(150000);
             try {
                 $body = self::do_cloud_request($url);
-            } catch (CloudRequestException $e) {
-                self::cache_failure();
+            } catch (\Throwable $e) {
+                self::cache_failure($e);
                 return [];
             }
         }
@@ -94,15 +94,23 @@ class FiftyOneDegreesCloudMetadata {
         return $properties;
     }
 
-    private static function cache_failure() {
+    private static function cache_failure(?\Throwable $e = null) {
         $failData = get_transient(self::get_failure_key());
         $attempts = 1;
         if (is_array($failData) && isset($failData['n'])) {
             $attempts = $failData['n'] + 1;
         }
 
+        $http_status = ($e instanceof CloudRequestException) ? $e->httpStatusCode : ($e !== null ? 0 : null);
+        $message = $e !== null ? $e->getMessage() : 'Invalid response from cloud metadata endpoint';
+
         $ttl = min(60 * pow(2, $attempts - 1), 3600);
-        set_transient(self::get_failure_key(), ['n' => $attempts], $ttl);
+        set_transient(self::get_failure_key(), [
+            'n' => $attempts,
+            'http_status' => $http_status,
+            'message' => $message,
+            'last_attempt' => time(),
+        ], $ttl);
     }
 
     public static function supports_crawler() {
@@ -138,6 +146,26 @@ class FiftyOneDegreesCloudMetadata {
         self::invalidate_crawler_usage();
     }
 
+    /**
+     * Returns the most recent failure record from either backoff
+     * transient (accessible-properties or crawler-usage), or null if
+     * neither is active. Shape:
+     *   ['n' => int, 'http_status' => ?int, 'message' => string, 'last_attempt' => int]
+     * Used by the admin page to discriminate cloud-rejected (http_status > 0)
+     * from cloud-unreachable (http_status === 0).
+     */
+    public static function get_failure_signal() {
+        $failData = get_transient(self::get_failure_key());
+        if (is_array($failData) && isset($failData['n'])) {
+            return $failData;
+        }
+        $crawlerFailData = get_transient(self::get_crawler_usage_failure_key());
+        if (is_array($crawlerFailData) && isset($crawlerFailData['n'])) {
+            return $crawlerFailData;
+        }
+        return null;
+    }
+
     public static function fetch_crawler_usage_values() {
         $transient = get_transient(self::get_crawler_usage_transient_key());
         if ($transient !== false) {
@@ -153,12 +181,12 @@ class FiftyOneDegreesCloudMetadata {
 
         try {
             $body = self::do_cloud_request($url);
-        } catch (CloudRequestException $e) {
+        } catch (\Throwable $e) {
             usleep(150000);
             try {
                 $body = self::do_cloud_request($url);
-            } catch (CloudRequestException $e) {
-                self::cache_crawler_usage_failure();
+            } catch (\Throwable $e) {
+                self::cache_crawler_usage_failure($e);
                 return [];
             }
         }
@@ -183,14 +211,22 @@ class FiftyOneDegreesCloudMetadata {
         return $values;
     }
 
-    private static function cache_crawler_usage_failure() {
+    private static function cache_crawler_usage_failure(?\Throwable $e = null) {
         $failData = get_transient(self::get_crawler_usage_failure_key());
         $attempts = 1;
         if (is_array($failData) && isset($failData['n'])) {
             $attempts = $failData['n'] + 1;
         }
 
+        $http_status = ($e instanceof CloudRequestException) ? $e->httpStatusCode : ($e !== null ? 0 : null);
+        $message = $e !== null ? $e->getMessage() : 'Invalid response from cloud crawler-usage endpoint';
+
         $ttl = min(60 * pow(2, $attempts - 1), 3600);
-        set_transient(self::get_crawler_usage_failure_key(), ['n' => $attempts], $ttl);
+        set_transient(self::get_crawler_usage_failure_key(), [
+            'n' => $attempts,
+            'http_status' => $http_status,
+            'message' => $message,
+            'last_attempt' => time(),
+        ], $ttl);
     }
 }

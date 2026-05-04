@@ -429,9 +429,16 @@ class FiftyoneService {
             // Invalidate cloud metadata transient
             FiftyOneDegreesCloudMetadata::invalidate_all();
 
+            // Stale "last refresh failed" against the previous key would
+            // mislead — clear so the next refresh attempt seeds fresh state.
+            delete_option(Options::ROBOTS_LAST_REFRESH);
+
             $pipeline = Pipeline::make_pipeline($new_value);
 
-            if ($pipeline) {
+            // Don't overwrite a previously-good cached pipeline with an
+            // error pipeline (cloud blip during save). Recovers
+            // automatically on next save when cloud is back.
+            if ($pipeline && !isset($pipeline['error'])) {
                 update_option(
                     Options::PIPELINE,
                     $pipeline);

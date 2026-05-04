@@ -267,6 +267,76 @@ class CloudMetadataTests extends TestCase {
         $this->assertStringContainsString('client-ip=1.2.3.4', $capturedUrl);
     }
 
+    public function testCacheFailureRecordsHttpStatusFromException() {
+        $attempts = [];
+        Functions\when('get_transient')->justReturn(false);
+        Patchwork\redefine(
+            'FiftyOneDegreesCloudMetadata::do_cloud_request',
+            function (string $url) {
+                throw new \fiftyone\pipeline\cloudrequestengine\CloudRequestException(
+                    "'AQRb…' is not a valid Resource Key", 400, []);
+            }
+        );
+        Functions\when('set_transient')->alias(function ($key, $value, $ttl) use (&$attempts) {
+            if ($key === 'fiftyonedegrees_crawler_usage_fail') {
+                $attempts[] = $value;
+            }
+            return true;
+        });
+        Functions\when('delete_transient')->justReturn(true);
+
+        FiftyOneDegreesCloudMetadata::invalidate_crawler_usage();
+        FiftyOneDegreesCloudMetadata::fetch_crawler_usage_values();
+
+        $this->assertNotEmpty($attempts);
+        $this->assertSame(400, $attempts[0]['http_status']);
+        $this->assertStringContainsString('not a valid Resource Key', $attempts[0]['message']);
+        $this->assertIsInt($attempts[0]['last_attempt']);
+    }
+
+    public function testCacheFailureRecordsZeroStatusOnNetworkException() {
+        $attempts = [];
+        Functions\when('get_transient')->justReturn(false);
+        Patchwork\redefine(
+            'FiftyOneDegreesCloudMetadata::do_cloud_request',
+            function (string $url) {
+                throw new \fiftyone\pipeline\cloudrequestengine\CloudRequestException(
+                    'Connection timed out', 0, []);
+            }
+        );
+        Functions\when('set_transient')->alias(function ($key, $value, $ttl) use (&$attempts) {
+            if ($key === 'fiftyonedegrees_crawler_usage_fail') {
+                $attempts[] = $value;
+            }
+            return true;
+        });
+        Functions\when('delete_transient')->justReturn(true);
+
+        FiftyOneDegreesCloudMetadata::invalidate_crawler_usage();
+        FiftyOneDegreesCloudMetadata::fetch_crawler_usage_values();
+
+        $this->assertNotEmpty($attempts);
+        $this->assertSame(0, $attempts[0]['http_status']);
+    }
+
+    public function testGetFailureSignalReturnsCrawlerUsageRecord() {
+        Functions\when('get_transient')->alias(function ($key) {
+            if ($key === 'fiftyonedegrees_crawler_usage_fail') {
+                return ['n' => 1, 'http_status' => 400, 'message' => 'bad', 'last_attempt' => 12345];
+            }
+            return false;
+        });
+
+        $signal = FiftyOneDegreesCloudMetadata::get_failure_signal();
+        $this->assertSame(400, $signal['http_status']);
+        $this->assertSame('bad', $signal['message']);
+    }
+
+    public function testGetFailureSignalReturnsNullWhenNoFailureActive() {
+        Functions\when('get_transient')->justReturn(false);
+        $this->assertNull(FiftyOneDegreesCloudMetadata::get_failure_signal());
+    }
+
     public function testDoCloudRequestOmitsClientIpWhenRemoteAddrAbsent() {
         unset($_SERVER['REMOTE_ADDR']);
         Functions\when('get_transient')->justReturn(false);
