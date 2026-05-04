@@ -22,10 +22,14 @@
     <?php
 
         $cachedPipeline = get_option(Options::PIPELINE);
+        $validationError = get_option(Options::PIPELINE_VALIDATION_ERROR, '');
 
         if (isset($cachedPipeline['error'])) {
             echo '<p></p><span class="fod-pipeline-status error"><b>' .
                 esc_html($cachedPipeline['error']) . '</b></span>';
+        } elseif (!empty($validationError)) {
+            echo '<p></p><span class="fod-pipeline-status error"><b>' .
+                esc_html($validationError) . '</b></span>';
         }
 
         if (isset($cachedPipeline['pipeline'])) {

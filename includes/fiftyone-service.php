@@ -429,20 +429,10 @@ class FiftyoneService {
             // Invalidate cloud metadata transient
             FiftyOneDegreesCloudMetadata::invalidate_all();
 
-            // Stale "last refresh failed" against the previous key would
-            // mislead — clear so the next refresh attempt seeds fresh state.
+            // Stale against the previous key — clear.
             delete_option(Options::ROBOTS_LAST_REFRESH);
 
-            $pipeline = Pipeline::make_pipeline($new_value);
-
-            // Don't overwrite a previously-good cached pipeline with an
-            // error pipeline (cloud blip during save). Recovers
-            // automatically on next save when cloud is back.
-            if ($pipeline && !isset($pipeline['error'])) {
-                update_option(
-                    Options::PIPELINE,
-                    $pipeline);
-            }
+            self::build_and_save_pipeline($new_value);
 
             if ($old_value !== $new_value) {
                 update_option(Options::RESOURCE_KEY_UPDATED, true);
@@ -497,10 +487,22 @@ class FiftyoneService {
     function fiftyonedegrees_add_option($option, $value)
     {
         if ($option === Options::RESOURCE_KEY && $value) {
-            $pipeline = Pipeline::make_pipeline($value);
-            if ($pipeline) {
-                update_option(Options::PIPELINE, $pipeline);
-            }
+            self::build_and_save_pipeline($value);
+        }
+    }
+
+    // On error: leave PIPELINE alone, record error string for setup.php.
+    private static function build_and_save_pipeline($resource_key) {
+        $pipeline = Pipeline::make_pipeline($resource_key);
+
+        if ($pipeline && !isset($pipeline['error'])) {
+            update_option(Options::PIPELINE, $pipeline);
+            delete_option(Options::PIPELINE_VALIDATION_ERROR);
+            return;
+        }
+
+        if (is_array($pipeline) && isset($pipeline['error']) && $pipeline['error'] !== '') {
+            update_option(Options::PIPELINE_VALIDATION_ERROR, (string) $pipeline['error']);
         }
     }
 
@@ -560,10 +562,7 @@ class FiftyoneService {
                     unset($_SESSION["fiftyonedegrees_data"]);
                     update_option(Options::SESSION_INVALIDATED, time());
                 }
-                $pipeline = Pipeline::make_pipeline($resource_key);
-                if ($pipeline) {
-                    update_option(Options::PIPELINE, $pipeline);
-                }
+                self::build_and_save_pipeline($resource_key);
             }
         }
     }

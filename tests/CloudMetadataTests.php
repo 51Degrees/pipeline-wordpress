@@ -319,6 +319,64 @@ class CloudMetadataTests extends TestCase {
         $this->assertSame(0, $attempts[0]['http_status']);
     }
 
+    public function testFetchAccessiblePropertiesRecordsHttpStatusFromException() {
+        $attempts = [];
+        Functions\when('get_transient')->justReturn(false);
+        Functions\when('get_option')->alias(function ($key, $default = '') {
+            return $key === Options::RESOURCE_KEY ? 'some-key' : $default;
+        });
+        Patchwork\redefine(
+            'FiftyOneDegreesCloudMetadata::do_cloud_request',
+            function (string $url) {
+                throw new \fiftyone\pipeline\cloudrequestengine\CloudRequestException(
+                    "'AQRb…' is not a valid Resource Key", 401, []);
+            }
+        );
+        Functions\when('set_transient')->alias(function ($key, $value, $ttl) use (&$attempts) {
+            if ($key === 'fiftyonedegrees_metadata_fail') {
+                $attempts[] = $value;
+            }
+            return true;
+        });
+        Functions\when('delete_transient')->justReturn(true);
+
+        FiftyOneDegreesCloudMetadata::invalidate();
+        FiftyOneDegreesCloudMetadata::fetch_accessible_properties();
+
+        $this->assertNotEmpty($attempts);
+        $this->assertSame(401, $attempts[0]['http_status']);
+        $this->assertStringContainsString('not a valid Resource Key', $attempts[0]['message']);
+        $this->assertIsInt($attempts[0]['last_attempt']);
+    }
+
+    public function testFetchAccessiblePropertiesRecordsZeroStatusOnNetworkException() {
+        $attempts = [];
+        Functions\when('get_transient')->justReturn(false);
+        Functions\when('get_option')->alias(function ($key, $default = '') {
+            return $key === Options::RESOURCE_KEY ? 'some-key' : $default;
+        });
+        Patchwork\redefine(
+            'FiftyOneDegreesCloudMetadata::do_cloud_request',
+            function (string $url) {
+                throw new \fiftyone\pipeline\cloudrequestengine\CloudRequestException(
+                    'Connection timed out', 0, []);
+            }
+        );
+        Functions\when('set_transient')->alias(function ($key, $value, $ttl) use (&$attempts) {
+            if ($key === 'fiftyonedegrees_metadata_fail') {
+                $attempts[] = $value;
+            }
+            return true;
+        });
+        Functions\when('delete_transient')->justReturn(true);
+
+        FiftyOneDegreesCloudMetadata::invalidate();
+        FiftyOneDegreesCloudMetadata::fetch_accessible_properties();
+
+        $this->assertNotEmpty($attempts);
+        $this->assertSame(0, $attempts[0]['http_status']);
+    }
+
     public function testGetFailureSignalReturnsCrawlerUsageRecord() {
         Functions\when('get_transient')->alias(function ($key) {
             if ($key === 'fiftyonedegrees_crawler_usage_fail') {

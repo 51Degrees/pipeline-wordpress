@@ -279,17 +279,18 @@ class PipelineTests extends TestCase {
         $capture = tmpfile();
         $saved = ini_set('error_log', stream_get_meta_data($capture)['uri']);
 
-        Pipeline::reset();
-        // Must not throw — broadened try/catch catches it.
-        Pipeline::process();
+        try {
+            Pipeline::reset();
+            // Must not throw — broadened try/catch catches it.
+            Pipeline::process();
 
-        ini_set('error_log', $saved);
-
-        $this->assertNull(Pipeline::$data);
-        $logContents = stream_get_contents($capture);
-        $this->assertStringContainsString('Simulated setResponseHeader failure', $logContents);
-
-        fclose($capture);
+            $this->assertNull(Pipeline::$data);
+            $logContents = stream_get_contents($capture);
+            $this->assertStringContainsString('Simulated setResponseHeader failure', $logContents);
+        } finally {
+            ini_set('error_log', $saved);
+            fclose($capture);
+        }
     }
 
     /**
@@ -539,26 +540,34 @@ class PipelineTests extends TestCase {
         Functions\when('get_site_url')->justReturn('http://localhost');
         Functions\when('rest_url')->justReturn('http://localhost/wp-json/fiftyonedegrees/v4/json');
 
-        $resourceKey = 'XXXXXXXXXXXXXX';
+        $mock_pipeline = (new PipelineBuilder())
+            ->add(new TestFlowElement())
+            ->build();
+        $built = [
+            'pipeline' => $mock_pipeline,
+            'available_engines' => ['testElement'],
+            'error' => null,
+        ];
+        Patchwork\redefine('Pipeline::make_pipeline', Patchwork\always($built));
 
-        Functions\expect('get_option')
-            ->once()
-            ->with(Options::RESOURCE_KEY)
-            ->andReturn($resourceKey);
+        Functions\when('get_option')->alias(function ($name, $default = null) {
+            return $name === Options::RESOURCE_KEY ? 'XXXXXXXXXXXXXX' : $default;
+        });
 
-        $capturedPipeline = null;
-        Functions\expect('update_option')
-            ->once()
-            ->with(Options::PIPELINE, \Mockery::on(function ($pipeline) use (&$capturedPipeline) {
-                $capturedPipeline = $pipeline;
-                return is_array($pipeline);
-            }));
+        $captured = null;
+        Functions\when('update_option')->alias(function ($key, $value) use (&$captured) {
+            if ($key === Options::PIPELINE) {
+                $captured = $value;
+            }
+            return true;
+        });
+        Functions\when('delete_option')->justReturn(true);
 
         $service = new FiftyoneService();
         $service->fiftyonedegrees_updated_option('permalink_structure', '/%postname%/', '');
 
-        $this->assertNotNull($capturedPipeline);
-        $this->assertArrayHasKey('pipeline', $capturedPipeline);
+        $this->assertNotNull($captured);
+        $this->assertArrayHasKey('pipeline', $captured);
     }
 
     /**

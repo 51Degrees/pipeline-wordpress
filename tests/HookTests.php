@@ -450,6 +450,45 @@ class HookTests extends TestCase {
             $deleted,
             'Stale last-refresh against the previous key must be cleared'
         );
+        $this->assertArrayHasKey(
+            Options::PIPELINE_VALIDATION_ERROR,
+            $updated,
+            'Validation error message must be surfaced to setup.php'
+        );
+        $this->assertSame(
+            'Cloud unreachable: simulated',
+            $updated[Options::PIPELINE_VALIDATION_ERROR]
+        );
+    }
+
+    public function testResourceKeyUpdateClearsValidationErrorOnSuccessfulBuild() {
+        Functions\when('get_option')->alias(function($arg, $default = null) {
+            return $default;
+        });
+        $updated = [];
+        Functions\when('update_option')->alias(function($key, $value) use (&$updated) {
+            $updated[$key] = $value;
+            return true;
+        });
+        $deleted = [];
+        Functions\when('delete_option')->alias(function ($key) use (&$deleted) {
+            $deleted[] = $key;
+            return true;
+        });
+        Functions\when('set_transient')->justReturn(true);
+        Functions\when('delete_transient')->justReturn(true);
+
+        Patchwork\redefine(
+            'Pipeline::make_pipeline',
+            Patchwork\always(HookTests::$pipeline)
+        );
+
+        $service = new FiftyoneService();
+        $service->fiftyonedegrees_update_option(
+            Options::RESOURCE_KEY, 'old-key', 'new-key');
+
+        $this->assertArrayHasKey(Options::PIPELINE, $updated);
+        $this->assertContains(Options::PIPELINE_VALIDATION_ERROR, $deleted);
     }
 
     /**

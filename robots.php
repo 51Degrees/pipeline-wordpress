@@ -109,7 +109,8 @@ $plaintext_cache      = get_option(Options::ROBOTS_PLAINTEXT_CACHE, '');
     <?php endif; ?>
 
     <?php if (is_array($last_refresh) && isset($last_refresh['status'])):
-        if ($last_refresh['status'] === 'error'): ?>
+        // Error-state deduped against $cloud_failure_signal; success still useful.
+        if ($last_refresh['status'] === 'error' && $cloud_failure_signal === null): ?>
             <div class="notice notice-warning">
                 <p><?php echo wp_kses_post(FiftyOneDegreesStrings::get(
                     'robots.notice.last_refresh_error',

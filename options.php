@@ -249,6 +249,10 @@ class Options
      */
     const ROBOTS_LAST_REFRESH = "fiftyonedegrees_robots_last_refresh";
 
+    // Last make_pipeline() error message; stored separately from
+    // Options::PIPELINE so a good cached pipeline is preserved.
+    const PIPELINE_VALIDATION_ERROR = "fiftyonedegrees_pipeline_validation_error";
+
     /**
      * Key used to store whether the 51Degrees pipeline (device detection) is enabled.
      */
