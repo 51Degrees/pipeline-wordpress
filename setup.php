@@ -48,9 +48,7 @@
 
     <p>
         To get started visit
-        <a href="https://configure.51degrees.com/" target="_blank">
-            https://configure.51degrees.com/
-        </a>
+        <a href="https://configure.51degrees.com/zHPMyDk6" target="_blank">the Configurator</a>
         to get a 51Degrees Resource Key for the device detection properties you
         want to get access to.
         </br>
