@@ -16,7 +16,8 @@
     "require": {
         "php": ">=7.4",
         "51degrees/fiftyone.pipeline.cloudrequestengine": "4.*",
-        "google/apiclient": "^2.10"
+        "google/apiclient": "^2.10",
+        "ext-json": "*"
     },
     "scripts": {
         "pre-autoload-dump": "Google\\Task\\Composer::cleanup"

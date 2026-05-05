@@ -27,7 +27,8 @@ class Options
      * Options group key for this plugin's options.
      */
     const GROUP_KEY = "fiftyonedegrees_options";
-    
+    const ROBOTS_GROUP_KEY = "fiftyonedegrees_options_robots";
+
     /**
      * Key for storing the constructed pipeline.
      */
@@ -50,7 +51,6 @@ class Options
      * Value is stored as an int as returned by time().
      */
     const SESSION_INVALIDATED = "fiftyonedegrees_session_invalidated";
-    
 
     /**
      * Key for storing whether or not Google Analytics tracking is
@@ -160,5 +160,97 @@ class Options
      * Google Analytics.
      */
     const GA_AUTH_DATE = "fiftyonedegrees_ga_auth_date";
+
+    /**
+     * Options group key for suspicious activity detection settings.
+     */
+    const SUSPICIOUS_GROUP_KEY = "fiftyonedegrees_suspicious_options";
+
+    /**
+     * Key for storing whether suspicious activity detection is enabled.
+     * Value is 'on' or 'off'.
+     */
+    const SUSPICIOUS_ENABLE = "fiftyonedegrees_suspicious_enable";
+
+    /**
+     * Key for storing the URL to redirect suspicious visitors to.
+     */
+    const SUSPICIOUS_REDIRECT_URL = "fiftyonedegrees_suspicious_redirect_url";
+
+    /**
+     * Key for storing the number of requests that triggers a redirect.
+     */
+    const SUSPICIOUS_REQUESTS = "fiftyonedegrees_suspicious_requests";
+
+    /**
+     * Key for storing the time window (in seconds) for counting requests.
+     */
+    const SUSPICIOUS_WINDOW = "fiftyonedegrees_suspicious_window";
+
+    /**
+     * Key used to store selected standard TDL IDs.
+     * Stored as an array of string IDs matching entries in config/robots-standard-tdls.json.
+     */
+    const ROBOTS_STANDARD_TDL_SELECTED = "fiftyonedegrees_robots_standard_tdl_selected";
+
+    /**
+     * Key used to store user-entered custom TDL URLs.
+     * Stored as an indexed array of URL strings.
+     */
+    const ROBOTS_CUSTOM_TDL = "fiftyonedegrees_robots_custom_tdl";
+
+    /**
+     * Key used to store whether robots.txt hosting is enabled.
+     */
+    const ROBOTS_ENABLE = "fiftyonedegrees_robots_enable";
+
+    /**
+     * Key used to store whether crawler enforcement (302 redirects) is enabled.
+     */
+    const ROBOTS_ENFORCE = "fiftyonedegrees_robots_enforce";
+
+    /**
+     * Key used to store the redirect URL for bot enforcement.
+     */
+    const ROBOTS_REDIRECT_URL = "fiftyonedegrees_robots_redirect_url";
+
+    /**
+     * Key used to store custom top entries for robots.txt.
+     */
+    const ROBOTS_CUSTOM_TOP = "fiftyonedegrees_robots_custom_top";
+
+    /**
+     * Key used to store custom bottom entries for robots.txt.
+     */
+    const ROBOTS_CUSTOM_BOTTOM = "fiftyonedegrees_robots_custom_bottom";
+
+    /**
+     * Key used to store allowed crawler categories for robots.txt enforcement.
+     * When never saved (null), defaults apply: deny Index, Train, Input; allow all others.
+     */
+    const ROBOTS_ALLOWED_CATEGORIES = "fiftyonedegrees_robots_allowed_categories";
+
+    /**
+     * Key used to cache the cloud-generated plain-text robots.txt content.
+     */
+    const ROBOTS_PLAINTEXT_CACHE = "fiftyonedegrees_robots_plaintext_cache";
+
+    /**
+     * Durable record of the last cloud refresh attempt for robots.txt.
+     * Shape: ['status' => 'success'|'error', 'timestamp' => int,
+     *        'message' => string, 'http_status' => ?int].
+     * Survives the daily cron's 60-second error transient so admins
+     * see a stale-cache indicator next time they open the admin page.
+     */
+    const ROBOTS_LAST_REFRESH = "fiftyonedegrees_robots_last_refresh";
+
+    // Last make_pipeline() error message; stored separately from
+    // Options::PIPELINE so a good cached pipeline is preserved.
+    const PIPELINE_VALIDATION_ERROR = "fiftyonedegrees_pipeline_validation_error";
+
+    /**
+     * Key used to store whether the 51Degrees pipeline (device detection) is enabled.
+     */
+    const PIPELINE_ENABLE = "fiftyonedegrees_pipeline_enable";
 }
 ?>

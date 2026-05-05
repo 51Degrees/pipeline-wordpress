@@ -1,8 +1,8 @@
 <?php
 /**
- *  Plugin Name: 51Degrees - Optimize by Device & Location
+ *  Plugin Name: 51Degrees
  *  Plugin URI:  https://51degrees.com/
- *  Description: Optimize your website for a range of devices and personalize your content based on your user’s location.
+ *  Description: Device detection and location-aware content for WordPress, with cloud-driven robots.txt management for AI/search crawlers and suspicious-activity protection against abusive traffic.
  *  Version:     1.0.11
  *  Author:      51Degrees
  *  Author URI:  https://51degrees.com/
@@ -26,6 +26,7 @@
  */
 
 require_once __DIR__ . '/pipeline.php';
+require_once __DIR__ . '/standard-tdls.php';
 
 class FiftyoneService {
 
@@ -103,6 +104,16 @@ class FiftyoneService {
             array($this, 'fiftyonedegrees_add_option'),
             10,
             2);
+
+        // Trigger Cloud robots.txt regeneration after robots settings are saved.
+        add_action(
+            'admin_init',
+            array($this, 'fiftyonedegrees_re_generate_robots'));
+
+        // Show admin notice when pipeline was auto-enabled.
+        add_action(
+            'admin_notices',
+            array($this, 'fiftyonedegrees_pipeline_autoenable_notice'));
     }
     
     /**
@@ -150,6 +161,10 @@ class FiftyoneService {
      */
     static function fiftyonedegrees_init() {
 
+        if (get_option(Options::PIPELINE_ENABLE, 'on') === 'off') {
+            return;
+        }
+
         // Error logging happens inside process().
         Pipeline::process();
 
@@ -167,10 +182,125 @@ class FiftyoneService {
         // cloud services.
         add_option(Options::RESOURCE_KEY);
 
+        // Robots.txt settings
+        add_option(Options::ROBOTS_ENABLE, 'off');
+        add_option(Options::ROBOTS_ENFORCE, 'off');
+        add_option(Options::ROBOTS_REDIRECT_URL, '');
+        add_option(Options::ROBOTS_CUSTOM_TOP, '');
+        add_option(Options::ROBOTS_CUSTOM_BOTTOM, '');
+        add_option(Options::ROBOTS_STANDARD_TDL_SELECTED, array());
+        add_option(Options::ROBOTS_CUSTOM_TDL, array());
+        add_option(Options::ROBOTS_PLAINTEXT_CACHE, '');
+        add_option(Options::PIPELINE_ENABLE, 'on');
+
         // Register the new settings with wordpress.
         register_setting(
             Options::GROUP_KEY,
             Options::RESOURCE_KEY);
+
+        // Suspicious activity detection settings.
+        add_option(Options::SUSPICIOUS_ENABLE, 'off');
+        add_option(Options::SUSPICIOUS_REDIRECT_URL, '');
+        add_option(Options::SUSPICIOUS_REQUESTS, 5);
+        add_option(Options::SUSPICIOUS_WINDOW, 30);
+
+        register_setting(Options::SUSPICIOUS_GROUP_KEY, Options::SUSPICIOUS_ENABLE, [
+            'type' => 'string',
+            'sanitize_callback' => function ($v) { return $v === 'on' ? 'on' : 'off'; },
+            'default' => 'off',
+        ]);
+        register_setting(Options::SUSPICIOUS_GROUP_KEY, Options::SUSPICIOUS_REDIRECT_URL, [
+            'type' => 'string',
+            'sanitize_callback' => 'esc_url_raw',
+            'default' => '',
+        ]);
+        register_setting(Options::SUSPICIOUS_GROUP_KEY, Options::SUSPICIOUS_REQUESTS, [
+            'type' => 'integer',
+            'sanitize_callback' => function ($v) { return max(1, (int) $v); },
+            'default' => 5,
+        ]);
+        register_setting(Options::SUSPICIOUS_GROUP_KEY, Options::SUSPICIOUS_WINDOW, [
+            'type' => 'integer',
+            'sanitize_callback' => function ($v) { return max(1, min(3600, (int) $v)); },
+            'default' => 30,
+        ]);
+
+        register_setting(Options::ROBOTS_GROUP_KEY, Options::ROBOTS_ENABLE);
+        register_setting(Options::ROBOTS_GROUP_KEY, Options::ROBOTS_ENFORCE);
+        register_setting(
+            Options::ROBOTS_GROUP_KEY,
+            Options::ROBOTS_REDIRECT_URL,
+            ['sanitize_callback' => ['FiftyoneService', 'sanitize_robots_redirect_url']]);
+        register_setting(
+            Options::ROBOTS_GROUP_KEY,
+            Options::ROBOTS_CUSTOM_TOP,
+            ['sanitize_callback' => ['FiftyoneService', 'sanitize_robots_textarea']]);
+        register_setting(
+            Options::ROBOTS_GROUP_KEY,
+            Options::ROBOTS_CUSTOM_BOTTOM,
+            ['sanitize_callback' => ['FiftyoneService', 'sanitize_robots_textarea']]);
+        register_setting(
+            Options::ROBOTS_GROUP_KEY,
+            Options::ROBOTS_ALLOWED_CATEGORIES,
+            ['sanitize_callback' => ['FiftyoneService', 'sanitize_categories']]);
+
+        register_setting(
+            Options::ROBOTS_GROUP_KEY,
+            Options::ROBOTS_STANDARD_TDL_SELECTED,
+            ['sanitize_callback' => ['FiftyoneService', 'sanitize_standard_tdl_selected']]);
+        register_setting(
+            Options::ROBOTS_GROUP_KEY,
+            Options::ROBOTS_CUSTOM_TDL,
+            ['sanitize_callback' => ['FiftyoneService', 'sanitize_tdl']]);
+        register_setting(Options::GROUP_KEY, Options::PIPELINE_ENABLE);
+    }
+
+    static function sanitize_robots_textarea($value) {
+        return sanitize_textarea_field($value);
+    }
+
+    static function sanitize_robots_redirect_url($value) {
+        return esc_url_raw($value);
+    }
+
+    static function sanitize_standard_tdl_selected($value) {
+        if (!is_array($value)) {
+            return [];
+        }
+        $valid_ids = array_column(FiftyOneDegreesStandardTdls::load(), 'id');
+        return array_values(array_unique(array_intersect($value, $valid_ids)));
+    }
+
+    static function sanitize_categories($value) {
+        if (!is_array($value)) {
+            return [];
+        }
+        $available = FiftyOneDegreesCloudMetadata::fetch_crawler_usage_values();
+        $valid = array_keys($available);
+        if (empty($valid)) {
+            $valid = ['Index', 'Train', 'Input', 'Search', 'Monitor',
+                       'Archiving', 'Preview', 'Security', 'Analytics',
+                       'Feed', 'Discovery'];
+        }
+        return array_values(array_intersect($value, $valid));
+    }
+
+    static function sanitize_tdl($value) {
+        if (is_string($value)) {
+            $lines = explode("\n", $value);
+        } elseif (is_array($value)) {
+            $lines = $value;
+        } else {
+            return [];
+        }
+        $clean = [];
+        foreach ($lines as $url) {
+            $url = esc_url_raw(trim($url));
+            if (!empty($url)) {
+                $clean[] = $url;
+            }
+        }
+        return array_values(array_unique($clean));
     }
 
     /**
@@ -263,13 +393,13 @@ class FiftyoneService {
                     time());
             }
 
-            $pipeline = Pipeline::make_pipeline($new_value);
+            // Invalidate cloud metadata transient
+            FiftyOneDegreesCloudMetadata::invalidate_all();
 
-            if ($pipeline) {
-                update_option(
-                    Options::PIPELINE,
-                    $pipeline);
-            }
+            // Stale against the previous key — clear.
+            delete_option(Options::ROBOTS_LAST_REFRESH);
+
+            self::build_and_save_pipeline($new_value);
 
             if ($old_value !== $new_value) {
                 update_option(Options::RESOURCE_KEY_UPDATED, true);
@@ -281,6 +411,10 @@ class FiftyoneService {
             
         }
 
+        if ($option === Options::SUSPICIOUS_ENABLE && $new_value === 'on' && $old_value !== 'on') {
+            update_option(Options::SESSION_INVALIDATED, time());
+        }
+
         if ($option === Options::GA_TRACKING_ID &&
             $old_value !== $new_value) {
             update_option(Options::GA_ID_UPDATED, true);
@@ -290,6 +424,22 @@ class FiftyoneService {
         if ($option === Options::GA_SEND_PAGE_VIEW_VAL &&
             $old_value !== $new_value) {
             update_option(Options::GA_SEND_PAGE_VIEW_UPDATED, true);
+        }
+
+        if ($option === Options::ROBOTS_ENFORCE &&
+            $new_value === 'on' &&
+            get_option(Options::PIPELINE_ENABLE, 'on') !== 'on') {
+            update_option(Options::PIPELINE_ENABLE, 'on');
+            set_transient(
+                'fiftyonedegrees_pipeline_auto_enabled',
+                'Robots Enforce',
+                30);
+        }
+
+        if ($option === Options::PIPELINE_ENABLE &&
+            $new_value === 'off' &&
+            get_option(Options::ROBOTS_ENFORCE, 'off') === 'on') {
+            update_option(Options::ROBOTS_ENFORCE, 'off');
         }
     }
 
@@ -304,11 +454,63 @@ class FiftyoneService {
     function fiftyonedegrees_add_option($option, $value)
     {
         if ($option === Options::RESOURCE_KEY && $value) {
-            $pipeline = Pipeline::make_pipeline($value);
-            if ($pipeline) {
-                update_option(Options::PIPELINE, $pipeline);
-            }
+            self::build_and_save_pipeline($value);
         }
+    }
+
+    // On error: leave PIPELINE alone, record error string for setup.php.
+    private static function build_and_save_pipeline($resource_key) {
+        $pipeline = Pipeline::make_pipeline($resource_key);
+
+        if ($pipeline && !isset($pipeline['error'])) {
+            update_option(Options::PIPELINE, $pipeline);
+            delete_option(Options::PIPELINE_VALIDATION_ERROR);
+            return;
+        }
+
+        if (is_array($pipeline) && isset($pipeline['error']) && $pipeline['error'] !== '') {
+            update_option(Options::PIPELINE_VALIDATION_ERROR, (string) $pipeline['error']);
+        }
+    }
+
+    /**
+     * Called on admin_init. When returning to the robots settings page after a
+     * settings save (WordPress adds settings-updated=true to the URL), triggers
+     * an immediate Cloud API call to refresh the cached robots.txt content.
+     *
+     * @return void
+     */
+    function fiftyonedegrees_re_generate_robots() {
+        if (!isset($_GET['settings-updated'])) {
+            return;
+        }
+        $page = isset($_GET['page']) ? sanitize_text_field(wp_unslash($_GET['page'])) : '';
+        $tab  = isset($_GET['tab'])  ? sanitize_text_field(wp_unslash($_GET['tab']))  : '';
+        if ($page !== '51Degrees' || $tab !== 'robots') {
+            return;
+        }
+        $success = FiftyOneDegreesRobotsTxt::fetch_from_cloud();
+        if ($success) {
+            set_transient('fiftyonedegrees_robots_generate_success', true, 30);
+        }
+    }
+
+    /**
+     * Displays an admin notice when device detection was automatically enabled
+     * because a dependent feature (e.g. Robots Enforce) requires it.
+     *
+     * @return void
+     */
+    function fiftyonedegrees_pipeline_autoenable_notice() {
+        $feature = get_transient('fiftyonedegrees_pipeline_auto_enabled');
+        if ($feature === false) {
+            return;
+        }
+        delete_transient('fiftyonedegrees_pipeline_auto_enabled');
+        echo '<div class="notice notice-warning is-dismissible"><p>' .
+            '<strong>51Degrees:</strong> Device detection was automatically ' .
+            'enabled because ' . esc_html($feature) . ' requires it.' .
+            '</p></div>';
     }
 
     /**
@@ -327,10 +529,7 @@ class FiftyoneService {
                     unset($_SESSION["fiftyonedegrees_data"]);
                     update_option(Options::SESSION_INVALIDATED, time());
                 }
-                $pipeline = Pipeline::make_pipeline($resource_key);
-                if ($pipeline) {
-                    update_option(Options::PIPELINE, $pipeline);
-                }
+                self::build_and_save_pipeline($resource_key);
             }
         }
     }

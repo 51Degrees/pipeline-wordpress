@@ -1,8 +1,8 @@
 <?php
 /**
- *  Plugin Name: 51Degrees - Optimize by Device & Location
+ *  Plugin Name: 51Degrees
  *  Plugin URI:  https://51degrees.com/
- *  Description: Optimize your website for a range of devices and personalize your content based on your user’s location.
+ *  Description: Device detection and location-aware content for WordPress, with cloud-driven robots.txt management for AI/search crawlers and suspicious-activity protection against abusive traffic.
  *  Version:     1.0.11
  *  Author:      51Degrees
  *  Author URI:  https://51degrees.com/
@@ -126,6 +126,7 @@ class Fiftyonedegrees {
         require_once __DIR__ . '/includes/ga-service.php';
         require_once __DIR__ . '/includes/ga-tracking-gtag.php';
         require_once __DIR__ . '/options.php';
+        require_once __DIR__ . '/includes/suspicious-activity.php';
         
         // Include Custom_Dimensions class
         if (!class_exists('Fiftyonedegrees_Custom_Dimensions')) {
@@ -154,6 +155,12 @@ class Fiftyonedegrees {
 
 // ====================== active - inactive - delete hooks =========================
 
+require_once(__DIR__ . '/options.php');
+require_once(__DIR__ . '/includes/cloud-metadata.php');
+require_once(__DIR__ . '/includes/standard-tdls.php');
+require_once(__DIR__ . '/includes/robots-txt.php');
+FiftyOneDegreesRobotsTxt::init();
+
 // Activate Plugin
 /**
  * Create instance of fiftyonedegrees class.
@@ -164,11 +171,20 @@ function load_fiftyonedegrees() {
 
 add_action('plugin_loaded', 'load_fiftyonedegrees');
 
+function fiftyonedegrees_activate() {
+    add_option(Options::ROBOTS_PLAINTEXT_CACHE, '');
+
+    if (!wp_next_scheduled('fiftyonedegrees_refresh_robots_txt')) {
+        wp_schedule_event(time(), 'daily', 'fiftyonedegrees_refresh_robots_txt');
+    }
+}
+register_activation_hook(__FILE__, 'fiftyonedegrees_activate');
+
 register_deactivation_hook(__FILE__, 'fiftyonedegrees_deactivate'); //in-active
 register_uninstall_hook(__FILE__, 'fiftyonedegrees_deactivate'); // delete
 
 function fiftyonedegrees_deactivate() {
-
+    wp_clear_scheduled_hook('fiftyonedegrees_refresh_robots_txt');
     Fiftyonedegrees::get_instance()->delete_options();
     delete_option(Options::RESOURCE_KEY);
     delete_option(Options::PIPELINE);

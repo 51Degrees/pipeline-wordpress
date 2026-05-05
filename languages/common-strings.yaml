@@ -1,0 +1,10 @@
+# 51Degrees Plugin — Cross-Feature Shared String Resources
+#
+# Strings used by more than one admin tab. Per-file locale fallback applies
+# (common-strings.{locale}.yaml overrides this file when WordPress runs in
+# that locale).
+
+common:
+
+  page_picker:
+    placeholder: '-- Select a page --'

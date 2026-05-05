@@ -48,6 +48,32 @@ you can find all the Custom Dimensions available with Resource Key.
 Device Data Properties as Custom Dimensions.
 
 
+## Dynamic Robots.txt with Crawler Detection
+
+Use the `Robots.txt` tab in `Settings > 51Degrees` to manage your site's
+`robots.txt` from the admin UI. The plugin fetches a robots.txt body from the
+51Degrees Cloud based on the AI / search / analytics crawler categories you
+allow or disallow, optionally bookended with your own custom top and bottom
+sections. The cached body is refreshed daily and re-served by WordPress at
+`/robots.txt`.
+
+When `Enforce` is enabled, requests identified as crawlers via 51Degrees
+device detection are redirected to a configurable URL (or shown a default
+"access denied" page) when their crawler category is not on the allow list.
+This requires a Resource Key with the `IsCrawler` and `CrawlerUsage`
+properties; without `CrawlerUsage`, enforcement falls back to path-based
+rules from the generated robots.txt.
+
+## Suspicious Activity Detection
+
+The `Suspicious` tab in `Settings > 51Degrees` lets you redirect visitors
+that exceed a request threshold within a sliding time window. Configure the
+maximum requests, window length (seconds), and the redirect URL — the plugin
+tracks per-IP request counts and redirects offenders once the threshold is
+crossed. Useful as a low-friction first line of defence against scraping and
+brute-force traffic.
+
+
 ## Developer information and advanced features
 
 ### Value replacement

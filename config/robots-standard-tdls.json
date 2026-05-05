@@ -1,0 +1,8 @@
+[
+  {
+    "id": "socw",
+    "label": "MOW Search Only Terms Web (SOCW)",
+    "description": "Defines terms for search-only crawler access. Resolved server-side by 51Degrees Cloud.",
+    "macro": "MOW-SOCW"
+  }
+]
