@@ -91,10 +91,8 @@ class Pipeline
         // via a direct HTTP call in FiftyOneDegreesRobotsTxt::fetch_from_cloud()
         // and the CloudEngine library accesses the response key without isset(),
         // causing a fatal warning when robotstxt data is absent from the response.
+        $engines = array_values(array_filter($engines, fn($e) => $e !== 'robotstxt'));
         foreach ($engines as $engine) {
-            if ($engine === 'robotstxt') {
-                continue;
-            }
             $cloudEngine = new CloudEngine();
             $cloudEngine->dataKey = $engine;
             $builder->add($cloudEngine);
