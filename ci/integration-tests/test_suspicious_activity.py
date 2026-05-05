@@ -10,6 +10,7 @@ import time
 
 import pytest
 import requests
+from selenium.webdriver.support.ui import WebDriverWait
 
 from conftest import WORDPRESS_URL, ADMIN_USER, ADMIN_PASS
 
@@ -214,16 +215,21 @@ class TestAdminLockoutPrevention:
             browser.find_element('id', 'user_login').send_keys(ADMIN_USER)
             browser.find_element('id', 'user_pass').send_keys(ADMIN_PASS)
             browser.find_element('id', 'wp-submit').click()
-            time.sleep(2)
+            # Wait for login to complete rather than using a fixed sleep.
+            WebDriverWait(browser, 10).until(
+                lambda d: '/wp-login.php' not in d.current_url
+            )
 
             # Trip the counter on the frontend
             for _ in range(4):
                 browser.get(base + '/')
                 time.sleep(0.3)
 
+            # Wait for the last redirect to settle before navigating to admin.
+            time.sleep(1)
+
             # Navigate to admin — should NOT be redirected
             browser.get(base + '/wp-admin/')
-            time.sleep(1)
 
             assert '/wp-admin' in browser.current_url, (
                 f'Admin was redirected to {browser.current_url}'
