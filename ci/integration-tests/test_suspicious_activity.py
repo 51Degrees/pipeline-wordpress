@@ -221,12 +221,18 @@ class TestAdminLockoutPrevention:
                 browser.get(base + '/')
                 time.sleep(0.3)
 
-            # Navigate to admin — should NOT be redirected
+            # Navigate to admin — should NOT be redirected to the
+            # suspicious-activity blocked page. WP's own auth_redirect (e.g.
+            # `reauth=1` on a stale cookie scheme) is a separate concern and
+            # doesn't indicate a lockout by our feature.
             browser.get(base + '/wp-admin/')
             time.sleep(1)
 
-            assert '/wp-admin' in browser.current_url, (
-                f'Admin was redirected to {browser.current_url}'
+            assert permalink not in browser.current_url, (
+                f'Admin was locked out by suspicious-activity to {browser.current_url}'
+            )
+            assert 'blocked-admin' not in browser.current_url, (
+                f'Admin was locked out by suspicious-activity to {browser.current_url}'
             )
         finally:
             save_suspicious_settings(session)
