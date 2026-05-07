@@ -58,8 +58,8 @@ $plaintext_cache      = get_option(Options::ROBOTS_PLAINTEXT_CACHE, '');
         // reached, response not usable" — cloud_rejected. Only http_status === 0
         // is "cloud unreachable" (network/timeout).
         $notice_key    = ($http_status === 0)
-            ? 'robots.notice.cloud_unreachable'
-            : 'robots.notice.cloud_rejected';
+            ? 'common.cloud.unreachable'
+            : 'common.cloud.rejected';
         ?>
         <div class="notice notice-error">
             <p><?php echo wp_kses_post(FiftyOneDegreesStrings::get($notice_key) . $cache_suffix); ?></p>

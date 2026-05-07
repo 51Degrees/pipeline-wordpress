@@ -18,11 +18,13 @@
 
 use fiftyone\pipeline\cloudrequestengine\CloudEngine;
 use fiftyone\pipeline\cloudrequestengine\CloudRequestEngine;
+use fiftyone\pipeline\cloudrequestengine\CloudRequestException;
 use fiftyone\pipeline\core\PipelineBuilder;
 use fiftyone\pipeline\core\Utils;
 
 require_once __DIR__ . '/../options.php';
 require_once __DIR__ . '/client-ip.php';
+require_once __DIR__ . '/fiftyone-strings.php';
 
 class Pipeline
 {
@@ -74,12 +76,15 @@ class Pipeline
             // Get engines available with the Resource Key
             $engines = array_keys($cloud->getEngineProperties());
         } catch (\Throwable $e) {
-            $error = $e->getMessage();
+            error_log(
+                '51Degrees pipeline build failed (' . get_class($e) . '): '
+                . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine()
+            );
 
             return [
                 'pipeline' => null,
                 'available_engines' => null,
-                'error' => $error
+                'error' => self::user_facing_pipeline_error($e),
             ];
         }
 
@@ -106,6 +111,15 @@ class Pipeline
             'available_engines' => $engines,
             'error' => $error
         ];
+    }
+
+    private static function user_facing_pipeline_error(\Throwable $e): string
+    {
+        $unreachable = $e instanceof \TypeError
+            || ($e instanceof CloudRequestException && $e->httpStatusCode === 0);
+        $key = $unreachable ? 'common.cloud.unreachable' : 'common.cloud.rejected';
+
+        return strip_tags(FiftyOneDegreesStrings::get($key));
     }
 
     /**

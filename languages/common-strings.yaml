@@ -8,3 +8,9 @@ common:
 
   page_picker:
     placeholder: '-- Select a page --'
+
+  cloud:
+    # (HTML) Shown when the cloud responded with a non-2xx status (e.g. 400 errors-envelope, 401 expired key, 5xx).
+    rejected: '<strong>51Degrees Cloud rejected the request.</strong> Check your resource key and subscription at <a href="https://configure.51degrees.com/" target="_blank">configure.51degrees.com</a>.'
+    # (HTML) Shown when the cloud is unreachable (network failure / timeout).
+    unreachable: '<strong>51Degrees Cloud unreachable.</strong> The plugin will retry automatically.'
