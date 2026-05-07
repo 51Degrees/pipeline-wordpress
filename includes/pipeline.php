@@ -37,13 +37,6 @@ class Pipeline
     public static $data;
 
     /**
-     * Transient that holds the most recent pipeline runtime failure
-     * (build-time or per-request). Read by the Setup admin tab so the
-     * site owner sees a real diagnostic instead of a silent error_log line.
-     */
-    const RUNTIME_ERROR_TRANSIENT = 'fiftyonedegrees_pipeline_runtime_error';
-
-    /**
      * Resets the processed data to null. This is primarily used in tests
      * to simulate a fresh web request.
      */
@@ -53,8 +46,8 @@ class Pipeline
     }
 
     /**
-     * Records a runtime failure: writes a rich line to error_log AND
-     * stores a structured snapshot in a transient for the admin UI.
+     * Records a runtime failure to the PHP error log with a rich,
+     * single-line context block followed by the stack trace.
      */
     public static function record_runtime_error(
         string $context,
@@ -88,42 +81,6 @@ class Pipeline
             PHP_EOL,
             $trace
         ));
-
-        if (function_exists('set_transient')) {
-            set_transient(self::RUNTIME_ERROR_TRANSIENT, [
-                'context'   => $context,
-                'class'     => $class,
-                'message'   => $message,
-                'file'      => $file,
-                'line'      => $line,
-                'code'      => $code,
-                'trace'     => $trace,
-                'occurred'  => time(),
-            ], DAY_IN_SECONDS);
-        }
-    }
-
-    /**
-     * Returns the most recent runtime failure record, or null.
-     */
-    public static function get_runtime_error(): ?array
-    {
-        if (!function_exists('get_transient')) {
-            return null;
-        }
-        $rec = get_transient(self::RUNTIME_ERROR_TRANSIENT);
-
-        return is_array($rec) ? $rec : null;
-    }
-
-    /**
-     * Clears the most recent runtime failure record.
-     */
-    public static function clear_runtime_error(): void
-    {
-        if (function_exists('delete_transient')) {
-            delete_transient(self::RUNTIME_ERROR_TRANSIENT);
-        }
     }
 
     /**
