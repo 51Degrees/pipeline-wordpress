@@ -9,7 +9,6 @@ require_once __DIR__ . '/standard-tdls.php';
 use fiftyone\pipeline\cloudrequestengine\CloudRequestEngine;
 use fiftyone\pipeline\cloudrequestengine\CloudRequestException;
 use fiftyone\pipeline\cloudrequestengine\Constants;
-use fiftyone\pipeline\cloudrequestengine\HttpClient;
 
 class FiftyOneDegreesRobotsTxt {
 
@@ -182,7 +181,7 @@ class FiftyOneDegreesRobotsTxt {
         if (!empty($ip)) {
             $url .= (strpos($url, '?') !== false ? '&' : '?') . 'client-ip=' . urlencode($ip);
         }
-        $httpClient = new HttpClient();
+        $httpClient = new FiftyOneDegreesWpHttpClient();
         return $httpClient->makeCloudRequest('GET', $url, null, null);
     }
 
