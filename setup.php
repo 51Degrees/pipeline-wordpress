@@ -30,28 +30,7 @@
         } elseif (!empty($validationError)) {
             echo '<p></p><span class="fod-pipeline-status error"><b>' .
                 esc_html($validationError) . '</b></span>';
-        }
-
-        $runtimeError = Pipeline::get_runtime_error();
-        if ($runtimeError !== null) {
-            echo '<p></p><span class="fod-pipeline-status error"><b>'
-                . esc_html($runtimeError['context']) . '</b><br>'
-                . esc_html($runtimeError['class']) . ': '
-                . esc_html($runtimeError['message']);
-            if (!empty($runtimeError['file'])) {
-                echo '<br><small>at ' . esc_html($runtimeError['file'])
-                    . ':' . (int) $runtimeError['line'] . '</small>';
-            }
-            echo '<br><small>occurred ' . esc_html(human_time_diff((int) $runtimeError['occurred']))
-                . ' ago</small>';
-            if (!empty($runtimeError['trace'])) {
-                echo '<details><summary>Stack trace</summary><pre style="white-space:pre-wrap;font-size:11px;">'
-                    . esc_html($runtimeError['trace']) . '</pre></details>';
-            }
-            echo '</span>';
-        }
-
-        if (isset($cachedPipeline['pipeline'])) {
+        } elseif (isset($cachedPipeline['pipeline'])) {
             echo '<p></p><span class="fod-pipeline-status good"><b>This ' .
                 'Resource Key is valid and allows access to the custom ' .
                 'properties selected in the following categories: ' .
