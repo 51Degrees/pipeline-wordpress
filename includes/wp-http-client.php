@@ -39,6 +39,14 @@ class FiftyOneDegreesWpHttpClient extends HttpClient
 {
     public function makeCloudRequest(string $type, string $url, ?string $content, ?string $originHeader): string
     {
+        // Outside of a loaded WordPress (CI / unit tests, CLI scripts) the WP
+        // HTTP API isn't available — fall back to the parent's curl/stream
+        // path. Tests that mock HttpClient::makeCloudRequest via Patchwork
+        // continue to work because the dispatched parent call hits the mock.
+        if (!function_exists('wp_remote_request')) {
+            return parent::makeCloudRequest($type, $url, $content, $originHeader);
+        }
+
         $args = [
             'method'  => strtoupper($type),
             'timeout' => 10,
