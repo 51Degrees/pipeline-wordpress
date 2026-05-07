@@ -4,7 +4,8 @@ require_once __DIR__ . '/../options.php';
 
 use fiftyone\pipeline\cloudrequestengine\CloudRequestException;
 use fiftyone\pipeline\cloudrequestengine\Constants;
-use fiftyone\pipeline\cloudrequestengine\HttpClient;
+
+require_once __DIR__ . '/wp-http-client.php';
 
 class FiftyOneDegreesCloudMetadata {
 
@@ -25,7 +26,7 @@ class FiftyOneDegreesCloudMetadata {
         if (!empty($ip)) {
             $url .= (strpos($url, '?') !== false ? '&' : '?') . 'client-ip=' . urlencode($ip);
         }
-        $httpClient = new HttpClient();
+        $httpClient = new FiftyOneDegreesWpHttpClient();
         return $httpClient->makeCloudRequest('GET', $url, null, null);
     }
 

@@ -33,6 +33,7 @@ class PipelineTests extends TestCase {
 
     public function set_up() {
         Pipeline::reset();
+        FiftyOneDegreesStrings::reset();
         parent::set_up();
         Brain\Monkey\setUp();
         // Stub the upstream header() call — output-buffer state from the prior
@@ -101,10 +102,7 @@ class PipelineTests extends TestCase {
         $this->assertArrayHasKey('device', Pipeline::$data['flowData']->pipeline->flowElementsList["cloud"]->flowElementProperties);
     }
 
-    /**
-     * Test that an invalid Resource Key results in an error being added to the
-     * pipeline result and process() handling it gracefully.
-     */
+    /** Test that an invalid Resource Key surfaces the friendly cloud-rejected message and the raw SDK detail goes to the PHP error log. */
     public function testMakePipeline_InValidResourceKey() {
 
         //A fake get_site_url() that always return 'http://localhost/testsite'
@@ -112,13 +110,23 @@ class PipelineTests extends TestCase {
         Functions\when('rest_url')->justReturn('http://localhost/testsite/wp-json/fiftyonedegrees/v4/json');
 
         $resourceKey = "XXXXXXXXXXXXXX";
+
+        $capture = tmpfile();
+        $saved = ini_set('error_log', stream_get_meta_data($capture)['uri']);
+
         $result = Pipeline::make_pipeline($resourceKey);
+
+        ini_set('error_log', $saved);
 
         // make_pipeline should catch the error and return it in the result
         $this->assertNull($result['pipeline']);
         $this->assertNull($result['available_engines']);
         $this->assertNotNull($result['error']);
-        $this->assertStringContainsString('XXXXXXXXXXXXXX', $result['error']);
+        $this->assertStringNotContainsString('XXXXXXXXXXXXXX', $result['error']);
+        $this->assertStringContainsString('Cloud', $result['error']);
+        $logContents = stream_get_contents($capture);
+        $this->assertStringContainsString('XXXXXXXXXXXXXX', $logContents);
+        fclose($capture);
 
         Functions\expect('get_option')
             ->once()
@@ -152,6 +160,67 @@ class PipelineTests extends TestCase {
         $this->assertNull($result['available_engines']);
         $this->assertNotNull($result['error']);
         $this->assertIsString($result['error']);
+    }
+
+    /**
+     * Test that a TypeError from the SDK is translated to the friendly
+     * cloud-unreachable message and the raw exception is logged.
+     */
+    public function testMakePipeline_TypeErrorBecomesUnreachableMessage()
+    {
+        Functions\when('get_site_url')->justReturn('http://localhost/testsite');
+        Functions\when('rest_url')->justReturn('http://localhost/testsite/wp-json/fiftyonedegrees/v4/json');
+
+        Patchwork\redefine(
+            'fiftyone\pipeline\cloudrequestengine\HttpClient::makeCloudRequest',
+            function () {
+                throw new \TypeError(
+                    'HttpClient::validateResponse(): Argument #1 ($cloudResponse) '
+                    . 'must be of type string, bool given, called in /home/x/HttpClient.php on line 61'
+                );
+            }
+        );
+
+        $capture = tmpfile();
+        $saved = ini_set('error_log', stream_get_meta_data($capture)['uri']);
+
+        $result = Pipeline::make_pipeline('TEST_KEY');
+
+        ini_set('error_log', $saved);
+
+        $this->assertNull($result['pipeline']);
+        $this->assertIsString($result['error']);
+        $this->assertStringNotContainsString('HttpClient', $result['error']);
+        $this->assertStringNotContainsString('validateResponse', $result['error']);
+        $this->assertStringNotContainsString('/home/', $result['error']);
+        $this->assertStringContainsString('Cloud unreachable', $result['error']);
+
+        $logContents = stream_get_contents($capture);
+        $this->assertStringContainsString('TypeError', $logContents);
+        $this->assertStringContainsString('validateResponse', $logContents);
+        fclose($capture);
+    }
+
+    /** Test that a CloudRequestException with non-zero httpStatusCode is translated to the friendly cloud-rejected message. */
+    public function testMakePipeline_CloudRejectedBecomesRejectedMessage()
+    {
+        Functions\when('get_site_url')->justReturn('http://localhost/testsite');
+        Functions\when('rest_url')->justReturn('http://localhost/testsite/wp-json/fiftyonedegrees/v4/json');
+
+        Patchwork\redefine(
+            'fiftyone\pipeline\cloudrequestengine\HttpClient::makeCloudRequest',
+            function () {
+                throw new \fiftyone\pipeline\cloudrequestengine\CloudRequestException(
+                    'Cloud Service: invalid resource key', 403, []
+                );
+            }
+        );
+
+        $result = Pipeline::make_pipeline('BAD_KEY');
+
+        $this->assertNull($result['pipeline']);
+        $this->assertStringContainsString('Cloud rejected', $result['error']);
+        $this->assertStringContainsString('configure.51degrees.com', $result['error']);
     }
 
     /**

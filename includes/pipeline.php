@@ -18,11 +18,14 @@
 
 use fiftyone\pipeline\cloudrequestengine\CloudEngine;
 use fiftyone\pipeline\cloudrequestengine\CloudRequestEngine;
+use fiftyone\pipeline\cloudrequestengine\CloudRequestException;
 use fiftyone\pipeline\core\PipelineBuilder;
 use fiftyone\pipeline\core\Utils;
 
 require_once __DIR__ . '/../options.php';
 require_once __DIR__ . '/client-ip.php';
+require_once __DIR__ . '/fiftyone-strings.php';
+require_once __DIR__ . '/wp-http-client.php';
 
 class Pipeline
 {
@@ -34,12 +37,93 @@ class Pipeline
     public static $data;
 
     /**
+     * Transient that holds the most recent pipeline runtime failure
+     * (build-time or per-request). Read by the Setup admin tab so the
+     * site owner sees a real diagnostic instead of a silent error_log line.
+     */
+    const RUNTIME_ERROR_TRANSIENT = 'fiftyonedegrees_pipeline_runtime_error';
+
+    /**
      * Resets the processed data to null. This is primarily used in tests
      * to simulate a fresh web request.
      */
     public static function reset()
     {
         Pipeline::$data = null;
+    }
+
+    /**
+     * Records a runtime failure: writes a rich line to error_log AND
+     * stores a structured snapshot in a transient for the admin UI.
+     */
+    public static function record_runtime_error(
+        string $context,
+        ?\Throwable $e = null,
+        ?string $fallbackMessage = null
+    ): void {
+        if ($e !== null) {
+            $class   = get_class($e);
+            $message = $e->getMessage();
+            $file    = $e->getFile();
+            $line    = $e->getLine();
+            $code    = $e->getCode();
+            $trace   = $e->getTraceAsString();
+        } else {
+            $class   = 'N/A';
+            $message = (string) $fallbackMessage;
+            $file    = '';
+            $line    = 0;
+            $code    = 0;
+            $trace   = (new \Exception())->getTraceAsString();
+        }
+
+        error_log(sprintf(
+            '[51Degrees] %s | %s: %s @ %s:%d (code=%s)%s%s',
+            $context,
+            $class,
+            $message,
+            $file,
+            $line,
+            (string) $code,
+            PHP_EOL,
+            $trace
+        ));
+
+        if (function_exists('set_transient')) {
+            set_transient(self::RUNTIME_ERROR_TRANSIENT, [
+                'context'   => $context,
+                'class'     => $class,
+                'message'   => $message,
+                'file'      => $file,
+                'line'      => $line,
+                'code'      => $code,
+                'trace'     => $trace,
+                'occurred'  => time(),
+            ], DAY_IN_SECONDS);
+        }
+    }
+
+    /**
+     * Returns the most recent runtime failure record, or null.
+     */
+    public static function get_runtime_error(): ?array
+    {
+        if (!function_exists('get_transient')) {
+            return null;
+        }
+        $rec = get_transient(self::RUNTIME_ERROR_TRANSIENT);
+
+        return is_array($rec) ? $rec : null;
+    }
+
+    /**
+     * Clears the most recent runtime failure record.
+     */
+    public static function clear_runtime_error(): void
+    {
+        if (function_exists('delete_transient')) {
+            delete_transient(self::RUNTIME_ERROR_TRANSIENT);
+        }
     }
 
     /**
@@ -70,16 +154,22 @@ class Pipeline
         $error = null;
 
         try {
-            $cloud = new CloudRequestEngine(['resourceKey' => $resourceKey]);
+            $cloud = new CloudRequestEngine([
+                'resourceKey' => $resourceKey,
+                'httpClient'  => new FiftyOneDegreesWpHttpClient(),
+            ]);
             // Get engines available with the Resource Key
             $engines = array_keys($cloud->getEngineProperties());
         } catch (\Throwable $e) {
-            $error = $e->getMessage();
+            Pipeline::record_runtime_error(
+                'Pipeline build failed while contacting the 51Degrees cloud (resource key save).',
+                $e
+            );
 
             return [
                 'pipeline' => null,
                 'available_engines' => null,
-                'error' => $error
+                'error' => self::user_facing_pipeline_error($e),
             ];
         }
 
@@ -106,6 +196,15 @@ class Pipeline
             'available_engines' => $engines,
             'error' => $error
         ];
+    }
+
+    private static function user_facing_pipeline_error(\Throwable $e): string
+    {
+        $unreachable = $e instanceof \TypeError
+            || ($e instanceof CloudRequestException && $e->httpStatusCode === 0);
+        $key = $unreachable ? 'common.cloud.unreachable' : 'common.cloud.rejected';
+
+        return strip_tags(FiftyOneDegreesStrings::get($key));
     }
 
     /**
@@ -141,8 +240,11 @@ class Pipeline
             }
 
             if (isset($cachedPipeline['error'])) {
-                error_log('Error occurred while initializing the 51Degrees ' .
-                    "plugin: '" . $cachedPipeline['error'] . "'");
+                Pipeline::record_runtime_error(
+                    'Pipeline build failed at activation/save time.',
+                    null,
+                    $cachedPipeline['error']
+                );
 
                 return;
             }
@@ -188,9 +290,9 @@ class Pipeline
                     'createdAt' => time()
                 ];
             } catch (\Throwable $e) {
-                error_log(
-                    'Error during 51Degrees pipeline initialization or processing: '
-                    . $e->getMessage()
+                Pipeline::record_runtime_error(
+                    'Pipeline processing failed for an incoming request.',
+                    $e
                 );
 
                 return;
@@ -229,12 +331,25 @@ class Pipeline
 
         $flowData = $data['flowData'];
 
-        if ($flowData->{$engine}->{$key}->hasValue ?? false) {
-            return $flowData->{$engine}->{$key}->value;
-        }
-
-        if ($flowData->{$engine}->{$key}->noValueMessage ?? false) {
-            error_log($flowData->{$engine}->{$key}->noValueMessage);
+        // Wrap the property dereference: AspectData::__get() throws (via
+        // MissingPropertyService) when the resource key doesn't include the
+        // requested property, which would otherwise short-circuit the
+        // ?? false defences and bubble a fatal up to the renderer.
+        try {
+            $property = $flowData->{$engine}->{$key};
+            if ($property->hasValue ?? false) {
+                return $property->value;
+            }
+            if ($property->noValueMessage ?? false) {
+                error_log($property->noValueMessage);
+            }
+        } catch (\Throwable $e) {
+            error_log(sprintf(
+                "[51Degrees] Pipeline::get('%s', '%s') no value: %s",
+                $engine,
+                $key,
+                $e->getMessage()
+            ));
         }
 
         return null;
