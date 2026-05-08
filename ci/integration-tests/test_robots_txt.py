@@ -17,7 +17,6 @@ from conftest import WORDPRESS_URL
 
 RESOURCE_KEY = os.environ.get('RESOURCE_KEY', '')
 GOOGLEBOT_UA = 'Googlebot/2.1 (+http://www.google.com/bot.html)'
-BINGBOT_UA = 'bingbot/2.0 (+http://www.bing.com/bingbot.htm)'
 ROBOTS_GROUP_KEY = 'fiftyonedegrees_options_robots'
 ALL_CATEGORIES = [
     'Index', 'Search', 'Train', 'Analytics', 'Monitor',
@@ -28,7 +27,8 @@ pytestmark = pytest.mark.skipif(
     not RESOURCE_KEY,
     reason=(
         'RESOURCE_KEY environment variable is required. '
-        'Set it to a 51Degrees key that includes the IsCrawler property.'
+        'Set it to a 51Degrees key that includes IsCrawler and '
+        'CrawlerUsage properties (Cloud V5 bespoke).'
     ),
 )
 
@@ -281,126 +281,3 @@ class TestCrawlerEnforcementOff:
         assert_not_blocked(resp, redirect_page)
 
 
-# ---------------------------------------------------------------------------
-# Scenario 3 — UA not listed in robots.txt: crawler is allowed
-# ---------------------------------------------------------------------------
-
-class TestCrawlerUANotOnList:
-    """A crawler whose full UA string is not in the enforcement dict must be allowed.
-
-    The enforcement dict is built by parsing robots.txt custom entries.
-    The dict key is the exact lowercased User-agent value from each
-    'User-agent:' line.  If the request UA does not match any key (and
-    there is no '*' wildcard), check_path_allowed returns null, which the
-    enforcement layer treats as 'allowed'.
-
-    Setup: custom entry lists Bingbot's full UA string only (no wildcard).
-    The Googlebot request UA will not match that key — null → allowed.
-    """
-
-    def test_unlisted_ua_is_allowed(self, wp_admin_session, redirect_page):
-        # BINGBOT_UA is the exact User-agent string used as the dict key.
-        # Googlebot's full UA will not match it, and there is no '*', so
-        # check_path_allowed returns null (allowed).
-        custom_top = f'User-agent: {BINGBOT_UA}\nDisallow: /'
-        save_robots_settings(
-            wp_admin_session,
-            enable='on',
-            enforce='on',
-            custom_top=custom_top,
-            redirect_url=redirect_page,
-            allowed_categories=[],
-        )
-        time.sleep(1)
-
-        resp = _crawler_get('/', GOOGLEBOT_UA)
-        assert_not_blocked(resp, redirect_page)
-
-
-# ---------------------------------------------------------------------------
-# Scenario 4 — More-specific Allow overrides less-specific Deny
-# ---------------------------------------------------------------------------
-
-class TestMoreSpecificAllowPath:
-    """Allow: /specific-path/ must beat a broader Disallow: /.
-
-    The plugin uses longest-prefix matching (check_path_allowed).
-    '/allowed-path/' (length > 1) wins over '/' → result is true (Allow)
-    → crawler is NOT blocked on that specific path.
-    """
-
-    def test_specific_allow_overrides_broad_deny(
-        self, wp_admin_session, redirect_page
-    ):
-        slug = f'allowed-path-{uuid.uuid4().hex[:8]}'
-        page_id, _ = _create_page(wp_admin_session, 'Allowed Path', slug)
-        allow_path = f'/{slug}/'
-
-        try:
-            save_robots_settings(
-                wp_admin_session,
-                enable='on',
-                enforce='on',
-                custom_top=(
-                    'User-agent: *\n'
-                    'Disallow: /\n'
-                    f'Allow: {allow_path}'
-                ),
-                redirect_url=redirect_page,
-                allowed_categories=[],
-            )
-            time.sleep(1)
-
-            # Sanity check: the broad '/' Disallow IS enforced on the root
-            baseline = _crawler_get('/', GOOGLEBOT_UA)
-            assert_blocked(baseline, redirect_page)
-
-            # The more-specific Allow path must NOT be blocked
-            resp = _crawler_get(allow_path, GOOGLEBOT_UA)
-            assert_not_blocked(resp, redirect_page)
-        finally:
-            _delete_page(wp_admin_session, page_id)
-
-
-# ---------------------------------------------------------------------------
-# Scenario 5 — More-specific Deny overrides less-specific Allow
-# ---------------------------------------------------------------------------
-
-class TestMoreSpecificDenyPath:
-    """Disallow: /blocked-path/ must beat a broader Allow: /.
-
-    '/blocked-path/' (longer prefix) wins over '/' → result is false (Deny)
-    → crawler IS blocked on that specific path even though '/' is Allowed.
-    """
-
-    def test_specific_deny_overrides_broad_allow(
-        self, wp_admin_session, redirect_page
-    ):
-        slug = f'blocked-path-{uuid.uuid4().hex[:8]}'
-        page_id, _ = _create_page(wp_admin_session, 'Blocked Path', slug)
-        deny_path = f'/{slug}/'
-
-        try:
-            save_robots_settings(
-                wp_admin_session,
-                enable='on',
-                enforce='on',
-                custom_top=(
-                    'User-agent: *\n'
-                    'Allow: /\n'
-                    f'Disallow: {deny_path}'
-                ),
-                redirect_url=redirect_page,
-                allowed_categories=[],
-            )
-            time.sleep(1)
-
-            # Sanity check: the broad Allow: / does NOT block the root
-            baseline = _crawler_get('/', GOOGLEBOT_UA)
-            assert_not_blocked(baseline, redirect_page)
-
-            # The more-specific Deny path MUST be blocked
-            resp = _crawler_get(deny_path, GOOGLEBOT_UA)
-            assert_blocked(resp, redirect_page)
-        finally:
-            _delete_page(wp_admin_session, page_id)

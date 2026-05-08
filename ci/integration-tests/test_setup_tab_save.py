@@ -17,7 +17,7 @@ import requests
 
 from conftest import WORDPRESS_URL
 
-VALID_RESOURCE_KEY = os.environ.get('VALID_RESOURCE_KEY', os.environ.get('RESOURCE_KEY', ''))
+VALID_RESOURCE_KEY = os.environ.get('RESOURCE_KEY', '')
 SETUP_TAB_PATH    = '/wp-admin/admin.php?page=51Degrees&tab=setup'
 OPTIONS_GROUP_KEY = 'fiftyonedegrees_options'
 RED_BOX_RE        = re.compile(r'class="fod-pipeline-status\s+error"')
@@ -25,7 +25,7 @@ GREEN_BOX_RE      = re.compile(r'class="fod-pipeline-status\s+good"')
 
 pytestmark = pytest.mark.skipif(
     not VALID_RESOURCE_KEY,
-    reason='VALID_RESOURCE_KEY (or RESOURCE_KEY) env var required.',
+    reason='RESOURCE_KEY env var required.',
 )
 
 
@@ -60,6 +60,18 @@ def _fetch_setup_html(session: requests.Session) -> str:
     resp = session.get(_base() + SETUP_TAB_PATH)
     resp.raise_for_status()
     return resp.text
+
+
+@pytest.fixture(autouse=True)
+def _restore_valid_key_after(wp_admin_session):
+    """Restore the valid resource key after each test.
+
+    Tests in this module legitimately push the plugin into bad and empty
+    key states; without restoration, downstream tests (e.g. permalink JS
+    injection) fail because the pipeline can't build.
+    """
+    yield
+    _save_resource_key(wp_admin_session, VALID_RESOURCE_KEY)
 
 
 def test_red_box_clears_after_successful_save(wp_admin_session):
