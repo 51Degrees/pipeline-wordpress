@@ -806,10 +806,18 @@ class FiftyoneService {
             } else {
                 return null;
             }
-            
+
         }
 
-        return $block_content;       
+        return $block_content;
+    }
+
+    public function delete_pipeline_options() {
+        delete_option(Options::RESOURCE_KEY);
+        delete_option(Options::PIPELINE);
+        delete_option(Options::PIPELINE_ENABLE);
+        delete_option(Options::SESSION_INVALIDATED);
+        delete_option(Options::PIPELINE_VALIDATION_ERROR);
     }
 }
 ?>

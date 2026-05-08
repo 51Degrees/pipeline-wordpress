@@ -145,6 +145,9 @@ class Fiftyonedegrees {
     
     function delete_options() {
         $this->ga_service->delete_ga_options();
+        $this->fiftyone_service->delete_pipeline_options();
+        SuspiciousActivity::delete_options();
+        FiftyOneDegreesRobotsTxt::delete_options();
     }
 
     function execute_ga_tracking_steps() {
@@ -186,6 +189,5 @@ register_uninstall_hook(__FILE__, 'fiftyonedegrees_deactivate'); // delete
 function fiftyonedegrees_deactivate() {
     wp_clear_scheduled_hook('fiftyonedegrees_refresh_robots_txt');
     Fiftyonedegrees::get_instance()->delete_options();
-    delete_option(Options::RESOURCE_KEY);
-    delete_option(Options::PIPELINE);
+    FiftyOneDegreesCloudMetadata::invalidate_all();
 }

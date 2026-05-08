@@ -286,4 +286,17 @@ class FiftyOneDegreesRobotsTxt {
             exit;
         }
     }
+
+    public static function delete_options() {
+        delete_option(Options::ROBOTS_ENABLE);
+        delete_option(Options::ROBOTS_ENFORCE);
+        delete_option(Options::ROBOTS_REDIRECT_URL);
+        delete_option(Options::ROBOTS_STANDARD_TDL_SELECTED);
+        delete_option(Options::ROBOTS_CUSTOM_TDL);
+        delete_option(Options::ROBOTS_CUSTOM_TOP);
+        delete_option(Options::ROBOTS_CUSTOM_BOTTOM);
+        delete_option(Options::ROBOTS_ALLOWED_CATEGORIES);
+        delete_option(Options::ROBOTS_PLAINTEXT_CACHE);
+        delete_option(Options::ROBOTS_LAST_REFRESH);
+    }
 }
