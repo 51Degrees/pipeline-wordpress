@@ -39,31 +39,41 @@ class CloudOriginHeaderTests extends TestCase {
         );
     }
 
-    /** Test that home_url with no path returns the URL unchanged. */
+    /**
+     * Test that home_url with no path returns the URL unchanged.
+     */
     public function testDefaultOrigin_ReturnsSchemeHostForSimpleUrl() {
         Functions\when('home_url')->justReturn('https://example.com');
         $this->assertEquals('https://example.com', FiftyOneDegreesWpHttpClient::defaultOrigin());
     }
 
-    /** Test that home_url with a path is reduced to scheme+host (RFC 6454). */
+    /**
+     * Test that home_url with a path is reduced to scheme+host (RFC 6454).
+     */
     public function testDefaultOrigin_StripsPath() {
         Functions\when('home_url')->justReturn('https://example.com/wp/blog');
         $this->assertEquals('https://example.com', FiftyOneDegreesWpHttpClient::defaultOrigin());
     }
 
-    /** Test that a non-default port is preserved in the Origin value. */
+    /**
+     * Test that a non-default port is preserved in the Origin value.
+     */
     public function testDefaultOrigin_PreservesPort() {
         Functions\when('home_url')->justReturn('http://localhost:8080');
         $this->assertEquals('http://localhost:8080', FiftyOneDegreesWpHttpClient::defaultOrigin());
     }
 
-    /** Test that an unparseable home_url yields null (not a malformed Origin). */
+    /**
+     * Test that an unparseable home_url yields null (not a malformed Origin).
+     */
     public function testDefaultOrigin_ReturnsNullForInvalidHomeUrl() {
         Functions\when('home_url')->justReturn('');
         $this->assertNull(FiftyOneDegreesWpHttpClient::defaultOrigin());
     }
 
-    /** Test that Pipeline::make_pipeline passes Origin to the cloud HTTP layer. */
+    /**
+     * Test that Pipeline::make_pipeline passes Origin to the cloud HTTP layer.
+     */
     public function testMakePipeline_PassesOriginToHttpClient() {
         Functions\when('home_url')->justReturn('https://wp.example.com');
         Functions\when('rest_url')->justReturn('https://wp.example.com/wp-json/fiftyonedegrees/v4/json');
@@ -76,7 +86,9 @@ class CloudOriginHeaderTests extends TestCase {
         $this->assertEquals('https://wp.example.com', $captured);
     }
 
-    /** Test that FiftyOneDegreesCloudMetadata::fetch_accessible_properties passes Origin. */
+    /**
+     * Test that FiftyOneDegreesCloudMetadata::fetch_accessible_properties passes Origin.
+     */
     public function testFetchAccessibleProperties_PassesOriginToHttpClient() {
         Functions\when('home_url')->justReturn('https://wp.example.com');
         Functions\when('get_transient')->justReturn(false);
@@ -91,7 +103,9 @@ class CloudOriginHeaderTests extends TestCase {
         $this->assertEquals('https://wp.example.com', $captured);
     }
 
-    /** Test that FiftyOneDegreesCloudMetadata::fetch_crawler_usage_values passes Origin. */
+    /**
+     * Test that FiftyOneDegreesCloudMetadata::fetch_crawler_usage_values passes Origin.
+     */
     public function testFetchCrawlerUsageValues_PassesOriginToHttpClient() {
         Functions\when('home_url')->justReturn('https://wp.example.com');
         Functions\when('get_transient')->justReturn(false);
@@ -106,7 +120,9 @@ class CloudOriginHeaderTests extends TestCase {
         $this->assertEquals('https://wp.example.com', $captured);
     }
 
-    /** Test that FiftyOneDegreesRobotsTxt::fetch_from_cloud passes Origin. */
+    /**
+     * Test that FiftyOneDegreesRobotsTxt::fetch_from_cloud passes Origin.
+     */
     public function testRobotsTxtFetchFromCloud_PassesOriginToHttpClient() {
         Functions\when('home_url')->justReturn('https://wp.example.com');
         Functions\when('get_transient')->justReturn(false);
@@ -119,6 +135,14 @@ class CloudOriginHeaderTests extends TestCase {
             }
             return $default;
         });
+
+        // Short-circuit the crawler-usage cloud call so the only
+        // makeCloudRequest invocation captured is the robots-txt-specific one.
+        Patchwork\redefine(
+            'FiftyOneDegreesCloudMetadata::fetch_crawler_usage_values',
+            Patchwork\always([])
+        );
+
         $captured = null;
         $this->captureOrigin($captured);
 
