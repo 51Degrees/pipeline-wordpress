@@ -460,6 +460,14 @@ class FiftyoneService {
 
     // On error: leave PIPELINE alone, record error string for setup.php.
     private static function build_and_save_pipeline($resource_key) {
+        // Empty key: nothing to validate. Drop all cached state so the setup
+        // tab renders clean (no stale red box from a previous failed save).
+        if (empty($resource_key)) {
+            delete_option(Options::PIPELINE);
+            delete_option(Options::PIPELINE_VALIDATION_ERROR);
+            return;
+        }
+
         $pipeline = Pipeline::make_pipeline($resource_key);
 
         if ($pipeline && !isset($pipeline['error'])) {

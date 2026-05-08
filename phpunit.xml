@@ -18,6 +18,7 @@
       <file>tests/SuspiciousActivityTests.php</file>
       <file>tests/RobotsTxtTests.php</file>
       <file>tests/CloudMetadataTests.php</file>
+      <file>tests/PipelineErrorClearTests.php</file>
     </testsuite>
     <testsuite name="Integration">
       <file>tests/PipelineTests.php</file>
