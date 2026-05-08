@@ -21,25 +21,30 @@
 
     <?php
 
-        $cachedPipeline = get_option(Options::PIPELINE);
+        $cachedPipeline  = get_option(Options::PIPELINE);
         $validationError = get_option(Options::PIPELINE_VALIDATION_ERROR, '');
+        $resourceKey     = get_option(Options::RESOURCE_KEY, '');
 
-        if (isset($cachedPipeline['error'])) {
-            echo '<p></p><span class="fod-pipeline-status error"><b>' .
-                esc_html($cachedPipeline['error']) . '</b></span>';
-        } elseif (!empty($validationError)) {
-            echo '<p></p><span class="fod-pipeline-status error"><b>' .
-                esc_html($validationError) . '</b></span>';
-        } elseif (isset($cachedPipeline['pipeline'])) {
-            echo '<p></p><span class="fod-pipeline-status good"><b>This ' .
-                'Resource Key is valid and allows access to the custom ' .
-                'properties selected in the following categories: ' .
-                esc_html(json_encode($cachedPipeline['available_engines'])) .
-                ' </br>To continue, connect to Google Analytics via the ' .
-                '<a href="options-general.php?page=51Degrees&tab=google-analytics">' .
-                'Google Analytics</a> tab. See the ' .
-                '<a href="options-general.php?page=51Degrees&tab=properties">Properties</a>' .
-                ' tab for a list of all the custom properties.</b></span>';
+        // Defense-in-depth: only render any status box when a key is actually
+        // configured. Stale state can never bleed through to a fresh UI.
+        if (!empty($resourceKey)) {
+            if (isset($cachedPipeline['error'])) {
+                echo '<p></p><span class="fod-pipeline-status error"><b>' .
+                    esc_html($cachedPipeline['error']) . '</b></span>';
+            } elseif (!empty($validationError)) {
+                echo '<p></p><span class="fod-pipeline-status error"><b>' .
+                    esc_html($validationError) . '</b></span>';
+            } elseif (isset($cachedPipeline['pipeline'])) {
+                echo '<p></p><span class="fod-pipeline-status good"><b>This ' .
+                    'Resource Key is valid and allows access to the custom ' .
+                    'properties selected in the following categories: ' .
+                    esc_html(json_encode($cachedPipeline['available_engines'])) .
+                    ' </br>To continue, connect to Google Analytics via the ' .
+                    '<a href="options-general.php?page=51Degrees&tab=google-analytics">' .
+                    'Google Analytics</a> tab. See the ' .
+                    '<a href="options-general.php?page=51Degrees&tab=properties">Properties</a>' .
+                    ' tab for a list of all the custom properties.</b></span>';
+            }
         }
 
     ?>

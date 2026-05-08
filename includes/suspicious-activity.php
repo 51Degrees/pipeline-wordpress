@@ -299,6 +299,13 @@ class SuspiciousActivity
 
         return false;
     }
+
+    public static function delete_options() {
+        delete_option(Options::SUSPICIOUS_ENABLE);
+        delete_option(Options::SUSPICIOUS_REDIRECT_URL);
+        delete_option(Options::SUSPICIOUS_REQUESTS);
+        delete_option(Options::SUSPICIOUS_WINDOW);
+    }
 }
 
 if (function_exists('add_action')) {

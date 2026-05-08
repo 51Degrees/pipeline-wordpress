@@ -9,7 +9,11 @@ if (!$Keys.TestResourceKey) {
     return
 }
 
+# The CI workflow now feeds TestResourceKey from the org secret
+# RESOURCE_KEY_CLOUD_V5_BESPOKE (a Cloud V5 bespoke key with IsCrawler +
+# CrawlerUsage). Selenium tests read $env:RESOURCE_KEY.
 $env:RESOURCEKEY = $Keys.TestResourceKey
+$env:RESOURCE_KEY = $Keys.TestResourceKey
 ./php/run-integration-tests.ps1 -RepoName:$RepoName
 
 $passed = 0
@@ -67,7 +71,7 @@ try {
 
     Write-Host "=== Installing the plugin"
     php $wp plugin install --activate $plugin
-    php $wp option update fiftyonedegrees_resource_key $env:RESOURCEKEY
+    php $wp option update fiftyonedegrees_resource_key $env:RESOURCE_KEY
 
     [version]$phpVersion = (-split (php --version))[1]
 

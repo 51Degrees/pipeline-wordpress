@@ -31,7 +31,7 @@ jobs:
       dryrun: ${{ inputs.dryrun || false }}
     secrets:
       token: ${{ secrets.ACCESS_TOKEN }}
-      TestResourceKey: ${{ secrets.SUPER_RESOURCE_KEY }}
+      TestResourceKey: ${{ secrets.RESOURCE_KEY_CLOUD_V5_BESPOKE }}
 
   Publish:
     if: ${{ !cancelled() }}
@@ -44,7 +44,7 @@ jobs:
       dryrun: ${{ inputs.dryrun || false }}
     secrets:
       token: ${{ secrets.ACCESS_TOKEN }}
-      TestResourceKey: ${{ secrets.SUPER_RESOURCE_KEY }}
+      TestResourceKey: ${{ secrets.RESOURCE_KEY_CLOUD_V5_BESPOKE }}
       WordpressSvnUrl: ${{ vars.SVN_URL }}
       WordpressSvnUser: ${{ secrets.SVN_USER }}
       WordpressSvnPassword: ${{ secrets.SVN_PASSWORD }}

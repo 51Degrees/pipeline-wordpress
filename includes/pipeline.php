@@ -112,8 +112,9 @@ class Pipeline
 
         try {
             $cloud = new CloudRequestEngine([
-                'resourceKey' => $resourceKey,
-                'httpClient'  => new FiftyOneDegreesWpHttpClient(),
+                'resourceKey'        => $resourceKey,
+                'httpClient'         => new FiftyOneDegreesWpHttpClient(),
+                'cloudRequestOrigin' => FiftyOneDegreesWpHttpClient::defaultOrigin(),
             ]);
             // Get engines available with the Resource Key
             $engines = array_keys($cloud->getEngineProperties());
