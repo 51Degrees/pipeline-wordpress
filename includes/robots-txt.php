@@ -5,6 +5,7 @@ require_once __DIR__ . '/pipeline.php';
 require_once __DIR__ . '/cloud-metadata.php';
 require_once __DIR__ . '/fiftyone-strings.php';
 require_once __DIR__ . '/standard-tdls.php';
+require_once __DIR__ . '/wp-http-client.php';
 
 use fiftyone\pipeline\cloudrequestengine\CloudRequestEngine;
 use fiftyone\pipeline\cloudrequestengine\CloudRequestException;
@@ -182,7 +183,7 @@ class FiftyOneDegreesRobotsTxt {
             $url .= (strpos($url, '?') !== false ? '&' : '?') . 'client-ip=' . urlencode($ip);
         }
         $httpClient = new FiftyOneDegreesWpHttpClient();
-        return $httpClient->makeCloudRequest('GET', $url, null, null);
+        return $httpClient->makeCloudRequest('GET', $url, null, FiftyOneDegreesWpHttpClient::defaultOrigin());
     }
 
     public static function generate_robots_txt_content($public) {

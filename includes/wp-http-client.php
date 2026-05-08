@@ -37,6 +37,39 @@ use fiftyone\pipeline\cloudrequestengine\HttpClient;
  */
 class FiftyOneDegreesWpHttpClient extends HttpClient
 {
+    /**
+     * Returns the WP site's own URL formatted as an HTTP Origin header
+     * value (scheme://host[:port], no path), suitable for the
+     * `cloudRequestOrigin` setting / 4th `makeCloudRequest` argument.
+     *
+     * Required for resource keys with a domain restriction set in the
+     * 51Degrees configurator — the cloud compares this against the key's
+     * allow-list. Harmless for unrestricted keys (cloud ignores it).
+     */
+    public static function defaultOrigin(): ?string
+    {
+        if (!function_exists('home_url')) {
+            return null;
+        }
+        try {
+            $home = home_url();
+        } catch (\Throwable $e) {
+            return null;
+        }
+        if (!is_string($home) || $home === '') {
+            return null;
+        }
+        $parts = parse_url($home);
+        if (!is_array($parts) || empty($parts['host'])) {
+            return null;
+        }
+        $scheme = $parts['scheme'] ?? 'https';
+        $host = $parts['host'];
+        $port = isset($parts['port']) ? ':' . $parts['port'] : '';
+
+        return $scheme . '://' . $host . $port;
+    }
+
     public function makeCloudRequest(string $type, string $url, ?string $content, ?string $originHeader): string
     {
         // Outside of a loaded WordPress (CI / unit tests, CLI scripts) the WP

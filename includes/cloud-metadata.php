@@ -27,7 +27,7 @@ class FiftyOneDegreesCloudMetadata {
             $url .= (strpos($url, '?') !== false ? '&' : '?') . 'client-ip=' . urlencode($ip);
         }
         $httpClient = new FiftyOneDegreesWpHttpClient();
-        return $httpClient->makeCloudRequest('GET', $url, null, null);
+        return $httpClient->makeCloudRequest('GET', $url, null, FiftyOneDegreesWpHttpClient::defaultOrigin());
     }
 
     private static function get_transient_key() {
