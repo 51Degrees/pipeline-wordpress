@@ -16,6 +16,7 @@
       <file>tests/GaHookTests.php</file>
       <file>tests/ClientIpResolverTests.php</file>
       <file>tests/SuspiciousActivityTests.php</file>
+      <file>tests/PmpTests.php</file>
       <file>tests/RobotsTxtTests.php</file>
       <file>tests/CloudMetadataTests.php</file>
       <file>tests/PipelineErrorClearTests.php</file>
