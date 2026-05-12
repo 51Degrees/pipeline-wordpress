@@ -39,8 +39,7 @@ class PmpTests extends TestCase
 
         $this->options = [
             Options::PMP_ENABLE             => 'off',
-            Options::PMP_SCRIPT_URL         => '//cdn.51degrees.com/pmp/pmp-en-us.js',
-            Options::PMP_TCF_VENDOR_ID      => 51,
+            Options::PMP_CLOUD_HOST         => 'cloud.51degrees.com',
             Options::PMP_TCF_VENDOR_STRING  => '',
             Options::PMP_ALT_LABEL          => '',
             Options::PMP_ALT_URL            => '',
@@ -59,6 +58,7 @@ class PmpTests extends TestCase
         Functions\when('esc_url_raw')->returnArg();
         Functions\when('sanitize_text_field')->returnArg();
         Functions\when('wp_unslash')->returnArg();
+        Functions\when('get_bloginfo')->justReturn('Test Site');
         $errors = &$this->settingsErrors;
         Functions\when('add_settings_error')->alias(function ($setting, $code, $message) use (&$errors) {
             $errors[] = ['setting' => $setting, 'code' => $code, 'message' => $message];
@@ -95,52 +95,76 @@ class PmpTests extends TestCase
     }
 
     /**
-     * With every required field present in POST the enable flag passes
-     * validation and is stored as 'on'.
+     * Terms / Privacy URL plus both alternative-button fields are the
+     * required ones; the rest fall back to defaults at runtime.
      */
     public function testSanitizePmpEnableOnAllRequiredPresent()
     {
         $_POST = [
-            Options::PMP_TCF_VENDOR_STRING => 'CPYBSvo',
-            Options::PMP_BRAND_NAME        => 'Brand',
-            Options::PMP_BRAND_TERMS_URL   => 'https://example.com/privacy',
-            Options::PMP_ALT_LABEL         => 'Pay',
-            Options::PMP_ALT_URL           => 'https://example.com/pay',
+            Options::PMP_BRAND_TERMS_URL => 'https://example.com/privacy',
+            Options::PMP_ALT_LABEL       => 'Pay',
+            Options::PMP_ALT_URL         => 'https://example.com',
         ];
 
         self::assertEquals('on', FiftyoneService::sanitize_pmp_enable('on'));
     }
 
     /**
-     * A single missing required field forces the option back to 'off' and
-     * registers a settings error.
+     * Missing Terms / Privacy URL forces enable back to 'off' and
+     * registers a settings error naming that field.
      */
-    public function testSanitizePmpEnableOnMissingOneFieldRegistersError()
+    public function testSanitizePmpEnableOnMissingTermsUrlRegistersError()
     {
         $_POST = [
-            Options::PMP_TCF_VENDOR_STRING => '',
-            Options::PMP_BRAND_NAME        => 'Brand',
-            Options::PMP_BRAND_TERMS_URL   => 'https://example.com/privacy',
-            Options::PMP_ALT_LABEL         => 'Pay',
-            Options::PMP_ALT_URL           => 'https://example.com/pay',
+            Options::PMP_BRAND_TERMS_URL => '',
+            Options::PMP_ALT_LABEL       => 'Pay',
+            Options::PMP_ALT_URL         => 'https://example.com',
         ];
 
         self::assertEquals('off', FiftyoneService::sanitize_pmp_enable('on'));
         self::assertCount(1, $this->settingsErrors);
-        self::assertStringContainsString('TCF Vendor String', $this->settingsErrors[0]['message']);
+        self::assertStringContainsString('Terms / Privacy URL', $this->settingsErrors[0]['message']);
     }
 
     /**
-     * Whitespace-only values are treated as missing.
+     * Missing Alternative Button Label fails validation.
      */
-    public function testSanitizePmpEnableOnWhitespaceCountsAsMissing()
+    public function testSanitizePmpEnableOnMissingAltLabelRegistersError()
     {
         $_POST = [
-            Options::PMP_TCF_VENDOR_STRING => '   ',
-            Options::PMP_BRAND_NAME        => 'Brand',
-            Options::PMP_BRAND_TERMS_URL   => 'https://example.com/privacy',
-            Options::PMP_ALT_LABEL         => 'Pay',
-            Options::PMP_ALT_URL           => 'https://example.com/pay',
+            Options::PMP_BRAND_TERMS_URL => 'https://example.com/privacy',
+            Options::PMP_ALT_LABEL       => '',
+            Options::PMP_ALT_URL         => 'https://example.com',
+        ];
+
+        self::assertEquals('off', FiftyoneService::sanitize_pmp_enable('on'));
+        self::assertStringContainsString('Alternative Button Label', $this->settingsErrors[0]['message']);
+    }
+
+    /**
+     * Missing Alternative Button URL fails validation.
+     */
+    public function testSanitizePmpEnableOnMissingAltUrlRegistersError()
+    {
+        $_POST = [
+            Options::PMP_BRAND_TERMS_URL => 'https://example.com/privacy',
+            Options::PMP_ALT_LABEL       => 'Pay',
+            Options::PMP_ALT_URL         => '',
+        ];
+
+        self::assertEquals('off', FiftyoneService::sanitize_pmp_enable('on'));
+        self::assertStringContainsString('Alternative Button URL', $this->settingsErrors[0]['message']);
+    }
+
+    /**
+     * Whitespace-only required field is treated as missing.
+     */
+    public function testSanitizePmpEnableOnWhitespaceRequiredIsMissing()
+    {
+        $_POST = [
+            Options::PMP_BRAND_TERMS_URL => '   ',
+            Options::PMP_ALT_LABEL       => 'Pay',
+            Options::PMP_ALT_URL         => 'https://example.com',
         ];
 
         self::assertEquals('off', FiftyoneService::sanitize_pmp_enable('on'));
@@ -148,8 +172,8 @@ class PmpTests extends TestCase
     }
 
     /**
-     * When no required fields are supplied the validation still produces
-     * a single, aggregated error message rather than one per field.
+     * Empty POST aggregates all three required-field names into one
+     * settings error message.
      */
     public function testSanitizePmpEnableOnNoFieldsRegistersOneError()
     {
@@ -157,10 +181,7 @@ class PmpTests extends TestCase
 
         self::assertEquals('off', FiftyoneService::sanitize_pmp_enable('on'));
         self::assertCount(1, $this->settingsErrors);
-        // Single aggregated message lists all five missing fields.
         $message = $this->settingsErrors[0]['message'];
-        self::assertStringContainsString('TCF Vendor String', $message);
-        self::assertStringContainsString('Brand Name', $message);
         self::assertStringContainsString('Terms / Privacy URL', $message);
         self::assertStringContainsString('Alternative Button Label', $message);
         self::assertStringContainsString('Alternative Button URL', $message);
@@ -202,62 +223,70 @@ class PmpTests extends TestCase
         self::assertNull(FiftyoneService::pmp_map_locale(''));
     }
 
-    // -------- pmp_replace_locale_in_url --------
+    // -------- pmp_normalize_host --------
 
     /**
-     * en-us suffix is treated as a no-op; the URL is returned unchanged
-     * because the bundle filename already matches.
+     * Plain hostname round-trips unchanged.
      */
-    public function testPmpReplaceLocaleInUrlEnUsNoOp()
+    public function testPmpNormalizeHostPlain()
     {
         self::assertEquals(
-            '//cdn.51degrees.com/pmp/pmp-en-us.js',
-            FiftyoneService::pmp_replace_locale_in_url('//cdn.51degrees.com/pmp/pmp-en-us.js', 'en-us')
+            'cloud.51degrees.com',
+            FiftyoneService::pmp_normalize_host('cloud.51degrees.com')
         );
     }
 
     /**
-     * Locale change swaps the 'en-us' token in the CDN URL.
+     * Scheme prefixes (https://, http://, //) are stripped.
      */
-    public function testPmpReplaceLocaleInUrlDeDeSwapsCdn()
+    public function testPmpNormalizeHostStripsScheme()
     {
         self::assertEquals(
-            '//cdn.51degrees.com/pmp/pmp-de-de.js',
-            FiftyoneService::pmp_replace_locale_in_url('//cdn.51degrees.com/pmp/pmp-en-us.js', 'de-de')
+            'cloud.51degrees.com',
+            FiftyoneService::pmp_normalize_host('https://cloud.51degrees.com')
+        );
+        self::assertEquals(
+            'localhost:5001',
+            FiftyoneService::pmp_normalize_host('http://localhost:5001')
+        );
+        self::assertEquals(
+            'localhost:5001',
+            FiftyoneService::pmp_normalize_host('//localhost:5001')
         );
     }
 
     /**
-     * The same swap works against the local cloud URL used during
-     * development.
+     * Trailing slashes and surrounding whitespace are trimmed.
      */
-    public function testPmpReplaceLocaleInUrlLocalCloudFrFr()
+    public function testPmpNormalizeHostTrimsSlashesAndSpaces()
     {
         self::assertEquals(
-            'https://localhost:5001/pmp/KEY/pmp-fr-fr.js',
-            FiftyoneService::pmp_replace_locale_in_url('https://localhost:5001/pmp/KEY/pmp-en-us.js', 'fr-fr')
+            'cloud.51degrees.com',
+            FiftyoneService::pmp_normalize_host('  cloud.51degrees.com///  ')
         );
     }
 
+    // -------- sanitize_pmp_host --------
+
     /**
-     * Null suffix (locale PMP does not ship a bundle for) leaves the URL
-     * pointing at the en-us bundle.
+     * Empty input falls back to the default host.
      */
-    public function testPmpReplaceLocaleInUrlNullSuffixKeepsUrl()
+    public function testSanitizePmpHostEmptyFallsBackToDefault()
     {
-        self::assertEquals(
-            '//cdn.51degrees.com/pmp/pmp-en-us.js',
-            FiftyoneService::pmp_replace_locale_in_url('//cdn.51degrees.com/pmp/pmp-en-us.js', null)
-        );
+        self::assertEquals('cloud.51degrees.com', FiftyoneService::sanitize_pmp_host(''));
+        self::assertEquals('cloud.51degrees.com', FiftyoneService::sanitize_pmp_host('   '));
     }
 
     /**
-     * Empty URL yields an empty result regardless of suffix.
+     * Valid input passes through normalization but stays as user
+     * supplied (with scheme stripped).
      */
-    public function testPmpReplaceLocaleInUrlEmptyUrl()
+    public function testSanitizePmpHostNormalizesInput()
     {
-        self::assertEquals('', FiftyoneService::pmp_replace_locale_in_url('', 'de-de'));
-        self::assertEquals('', FiftyoneService::pmp_replace_locale_in_url('', null));
+        self::assertEquals(
+            'localhost:5001',
+            FiftyoneService::sanitize_pmp_host('https://localhost:5001')
+        );
     }
 
     // -------- pmp_add_data_attributes --------
@@ -310,10 +339,13 @@ class PmpTests extends TestCase
     }
 
     /**
-     * Empty option values are skipped so PMP does not see attributes
-     * like data-brand-name="".
+     * Empty options fall back to runtime defaults: site name for the
+     * brand, 'Pay' for the alt label, 'https://example.com' for the
+     * alt URL, and the built-in all-vendors TCF Vendor String.
+     * Optional fields without a fallback (Brand Logo, Terms URL)
+     * stay absent from the tag.
      */
-    public function testPmpAddDataAttributesSkipsEmptyOptions()
+    public function testPmpAddDataAttributesUsesFallbacksWhenOptionsEmpty()
     {
         $service = new FiftyoneService();
         $result = $service->pmp_add_data_attributes(
@@ -322,11 +354,18 @@ class PmpTests extends TestCase
             'x'
         );
 
-        self::assertStringNotContainsString('data-brand-name=""', $result);
-        self::assertStringNotContainsString('data-alt-name=""', $result);
-        self::assertStringNotContainsString('data-brand-logo=""', $result);
+        self::assertStringContainsString('data-brand-name="Test Site"', $result);
+        self::assertStringContainsString('data-alt-name="Pay"', $result);
+        self::assertStringContainsString('data-alt-url="https://example.com"', $result);
+        self::assertStringContainsString(
+            'data-tcf-vendor="' . FiftyoneService::PMP_DEFAULT_TCF_VENDOR_STRING . '"',
+            $result
+        );
         self::assertStringContainsString('data-tcf-vendor-id="51"', $result);
         self::assertStringContainsString('data-action-url=', $result);
+        // Fields without a fallback are still skipped when empty.
+        self::assertStringNotContainsString('data-brand-logo=""', $result);
+        self::assertStringNotContainsString('data-brand-terms-url=""', $result);
     }
 
     /**

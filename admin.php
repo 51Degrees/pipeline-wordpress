@@ -39,7 +39,7 @@ if (isset($_GET["tab"]) && in_array(sanitize_text_field($_GET["tab"]), $allowed_
     <a href="?page=51Degrees&tab=properties" class="nav-tab <?php echo $active_tab == 'properties' ? 'nav-tab-active' : '';  ?>" style="<?php echo !get_option(Options::RESOURCE_KEY) ? 'pointer-events:none;color:#C0C0C0;' : ''; ?>">Properties</a>
     <a href="?page=51Degrees&tab=robots" class="nav-tab <?php echo $active_tab == 'robots' ? 'nav-tab-active' : ''; ?>" style="<?php echo !get_option(Options::RESOURCE_KEY) ? 'pointer-events:none;color:#C0C0C0;' : ''; ?>">Robots.txt</a>
     <a href="?page=51Degrees&tab=suspicious" class="nav-tab <?php echo $active_tab == 'suspicious' ? 'nav-tab-active' : ''; ?>" style="<?php echo !get_option(Options::RESOURCE_KEY) ? 'pointer-events:none;color:#C0C0C0;' : ''; ?>"><?php esc_html_e('Suspicious', '51D'); ?></a>
-    <a href="?page=51Degrees&tab=pmp" class="nav-tab <?php echo $active_tab == 'pmp' ? 'nav-tab-active' : ''; ?>" style="<?php echo !get_option(Options::RESOURCE_KEY) ? 'pointer-events:none;color:#C0C0C0;' : ''; ?>">Pmp</a>
+    <a href="?page=51Degrees&tab=pmp" class="nav-tab <?php echo $active_tab == 'pmp' ? 'nav-tab-active' : ''; ?>" style="<?php echo !get_option(Options::RESOURCE_KEY) ? 'pointer-events:none;color:#C0C0C0;' : ''; ?>">PMP</a>
     <a href="?page=51Degrees&tab=help" class="nav-tab <?php echo $active_tab == 'help' ? 'nav-tab-active' : ''; ?>">Help</a>
 </h2>
                   

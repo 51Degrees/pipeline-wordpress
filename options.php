@@ -265,16 +265,12 @@ class Options
     const PMP_ENABLE = "fiftyonedegrees_pmp_enable";
 
     /**
-     * Key for storing the URL of the PMP JavaScript bundle that the
-     * browser loads. Default: '//cdn.51degrees.com/pmp/pmp-en-us.js'.
+     * Key for storing the hostname of the 51Degrees cloud server
+     * that serves PMP bundles. The plugin composes the full bundle
+     * URL as https://{host}/pmp/{resource-key}/pmp-{locale}.js.
+     * Default: 'cloud.51degrees.com'.
      */
-    const PMP_SCRIPT_URL = "fiftyonedegrees_pmp_script_url";
-
-    /**
-     * Key for storing the TCF Vendor ID assigned to this publisher
-     * (used as cmpId in the generated TCF string). Default: 51.
-     */
-    const PMP_TCF_VENDOR_ID = "fiftyonedegrees_pmp_tcf_vendor_id";
+    const PMP_CLOUD_HOST = "fiftyonedegrees_pmp_cloud_host";
 
     /**
      * Key for storing the publisher's static TCF Vendor consent string.

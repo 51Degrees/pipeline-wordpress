@@ -18,6 +18,8 @@
 
 if (!defined('ABSPATH')) { exit; }
 
+require_once __DIR__ . '/includes/page-picker.php';
+
 $resource_key    = get_option(Options::RESOURCE_KEY, '');
 $cached_pipeline = get_option(Options::PIPELINE);
 
@@ -70,44 +72,32 @@ if (!empty($resource_key) && isset($cached_pipeline['pipeline']) && isset($cache
             </tr>
             <tr>
                 <th scope="row">
-                    <label for="<?php echo esc_attr(Options::PMP_SCRIPT_URL); ?>">
-                        <?php esc_html_e('Script URL', 'fiftyonedegrees'); ?>
+                    <label for="<?php echo esc_attr(Options::PMP_CLOUD_HOST); ?>">
+                        <?php esc_html_e('Cloud Host', 'fiftyonedegrees'); ?>
                     </label>
                 </th>
                 <td>
                     <input type="text"
-                           name="<?php echo esc_attr(Options::PMP_SCRIPT_URL); ?>"
-                           id="<?php echo esc_attr(Options::PMP_SCRIPT_URL); ?>"
-                           value="<?php echo esc_attr(get_option(Options::PMP_SCRIPT_URL, '//cdn.51degrees.com/pmp/pmp-en-us.js')); ?>"
+                           name="<?php echo esc_attr(Options::PMP_CLOUD_HOST); ?>"
+                           id="<?php echo esc_attr(Options::PMP_CLOUD_HOST); ?>"
+                           value="<?php echo esc_attr(get_option(Options::PMP_CLOUD_HOST, 'cloud.51degrees.com')); ?>"
                            class="regular-text">
-                </td>
-            </tr>
-            <tr>
-                <th scope="row">
-                    <label for="<?php echo esc_attr(Options::PMP_TCF_VENDOR_ID); ?>">
-                        <?php esc_html_e('TCF Vendor ID', 'fiftyonedegrees'); ?>
-                    </label>
-                </th>
-                <td>
-                    <input type="number"
-                           name="<?php echo esc_attr(Options::PMP_TCF_VENDOR_ID); ?>"
-                           id="<?php echo esc_attr(Options::PMP_TCF_VENDOR_ID); ?>"
-                           value="<?php echo esc_attr(get_option(Options::PMP_TCF_VENDOR_ID, 51)); ?>"
-                           min="1"
-                           class="small-text">
+                    <p class="description">
+                        <?php esc_html_e('Hostname of the 51Degrees cloud server. The bundle URL is built as https://{host}/pmp/{resource-key}/pmp-{locale}.js.', 'fiftyonedegrees'); ?>
+                    </p>
                 </td>
             </tr>
             <tr>
                 <th scope="row">
                     <label for="<?php echo esc_attr(Options::PMP_TCF_VENDOR_STRING); ?>">
-                        <?php esc_html_e('TCF Vendor String', 'fiftyonedegrees'); ?> *
+                        <?php esc_html_e('TCF Vendor String', 'fiftyonedegrees'); ?>
                     </label>
                 </th>
                 <td>
                     <input type="text"
                            name="<?php echo esc_attr(Options::PMP_TCF_VENDOR_STRING); ?>"
                            id="<?php echo esc_attr(Options::PMP_TCF_VENDOR_STRING); ?>"
-                           value="<?php echo esc_attr(get_option(Options::PMP_TCF_VENDOR_STRING)); ?>"
+                           value="<?php echo esc_attr(FiftyoneService::pmp_tcf_vendor_string()); ?>"
                            class="regular-text">
                     <p class="description">
                         <?php esc_html_e('Static TCF vendor consent string generated via TCF Tools.', 'fiftyonedegrees'); ?>
@@ -124,9 +114,8 @@ if (!empty($resource_key) && isset($cached_pipeline['pipeline']) && isset($cache
                     <input type="text"
                            name="<?php echo esc_attr(Options::PMP_ALT_LABEL); ?>"
                            id="<?php echo esc_attr(Options::PMP_ALT_LABEL); ?>"
-                           value="<?php echo esc_attr(get_option(Options::PMP_ALT_LABEL)); ?>"
-                           class="regular-text"
-                           placeholder="Pay">
+                           value="<?php echo esc_attr(FiftyoneService::pmp_alt_label()); ?>"
+                           class="regular-text">
                 </td>
             </tr>
             <tr>
@@ -139,21 +128,27 @@ if (!empty($resource_key) && isset($cached_pipeline['pipeline']) && isset($cache
                     <input type="text"
                            name="<?php echo esc_attr(Options::PMP_ALT_URL); ?>"
                            id="<?php echo esc_attr(Options::PMP_ALT_URL); ?>"
-                           value="<?php echo esc_attr(get_option(Options::PMP_ALT_URL)); ?>"
+                           value="<?php echo esc_attr(FiftyoneService::pmp_alt_url()); ?>"
                            class="regular-text">
+                    <?php
+                    fiftyonedegrees_render_page_picker(
+                        Options::PMP_ALT_URL,
+                        __('-- Select a page --', 'fiftyonedegrees')
+                    );
+                    ?>
                 </td>
             </tr>
             <tr>
                 <th scope="row">
                     <label for="<?php echo esc_attr(Options::PMP_BRAND_NAME); ?>">
-                        <?php esc_html_e('Brand Name', 'fiftyonedegrees'); ?> *
+                        <?php esc_html_e('Brand Name', 'fiftyonedegrees'); ?>
                     </label>
                 </th>
                 <td>
                     <input type="text"
                            name="<?php echo esc_attr(Options::PMP_BRAND_NAME); ?>"
                            id="<?php echo esc_attr(Options::PMP_BRAND_NAME); ?>"
-                           value="<?php echo esc_attr(get_option(Options::PMP_BRAND_NAME)); ?>"
+                           value="<?php echo esc_attr(FiftyoneService::pmp_brand_name()); ?>"
                            class="regular-text">
                 </td>
             </tr>
@@ -183,6 +178,12 @@ if (!empty($resource_key) && isset($cached_pipeline['pipeline']) && isset($cache
                            id="<?php echo esc_attr(Options::PMP_BRAND_TERMS_URL); ?>"
                            value="<?php echo esc_attr(get_option(Options::PMP_BRAND_TERMS_URL)); ?>"
                            class="regular-text">
+                    <?php
+                    fiftyonedegrees_render_page_picker(
+                        Options::PMP_BRAND_TERMS_URL,
+                        __('-- Select a page --', 'fiftyonedegrees')
+                    );
+                    ?>
                 </td>
             </tr>
             <tr>

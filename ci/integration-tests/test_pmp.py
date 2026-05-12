@@ -18,11 +18,9 @@ from conftest import WORDPRESS_URL
 
 PMP_CLOUD_URL = os.environ.get('PMP_CLOUD_URL', 'https://localhost:5001')
 PMP_REQUIRED_FIELDS = {
-    'fiftyonedegrees_pmp_tcf_vendor_string': 'CPYBSvoPYBSvoO3AAAENAwCAAAAAAAAAAAAAAAAAAAAA',
-    'fiftyonedegrees_pmp_brand_name':        'Test Brand',
-    'fiftyonedegrees_pmp_brand_terms_url':   'https://example.com/privacy',
-    'fiftyonedegrees_pmp_alt_label':         'Pay',
-    'fiftyonedegrees_pmp_alt_url':           'https://example.com/pay',
+    'fiftyonedegrees_pmp_brand_terms_url': 'https://example.com/privacy',
+    'fiftyonedegrees_pmp_alt_label':       'Pay',
+    'fiftyonedegrees_pmp_alt_url':         'https://example.com',
 }
 
 
@@ -49,8 +47,9 @@ def save_pmp_settings(session, **overrides):
         'option_page': 'fiftyonedegrees_pmp_options',
         'action': 'update',
         'fiftyonedegrees_pmp_enable':            'on',
-        'fiftyonedegrees_pmp_script_url':        '//cdn.51degrees.com/pmp/pmp-en-us.js',
-        'fiftyonedegrees_pmp_tcf_vendor_id':     '51',
+        'fiftyonedegrees_pmp_cloud_host':        'cloud.51degrees.com',
+        'fiftyonedegrees_pmp_tcf_vendor_string': '',
+        'fiftyonedegrees_pmp_brand_name':        '',
         'fiftyonedegrees_pmp_brand_logo_url':    '',
         'fiftyonedegrees_pmp_show_standard':     'off',
         **PMP_REQUIRED_FIELDS,
@@ -78,34 +77,35 @@ class TestSettingsRoundTrip:
     def test_round_trip(self, wp_admin_session):
         save_pmp_settings(
             wp_admin_session,
-            fiftyonedegrees_pmp_script_url='https://localhost:5001/pmp/KEY/pmp-en-us.js',
-            fiftyonedegrees_pmp_tcf_vendor_id='99',
+            fiftyonedegrees_pmp_cloud_host='localhost:5001',
+            fiftyonedegrees_pmp_brand_name='Custom Brand',
+            fiftyonedegrees_pmp_alt_label='Subscribe',
+            fiftyonedegrees_pmp_alt_url='https://example.com/sub',
             fiftyonedegrees_pmp_show_standard='on',
         )
 
         _, html = _get_admin_nonce(wp_admin_session, 'pmp')
 
-        assert 'https://localhost:5001/pmp/KEY/pmp-en-us.js' in html
-        assert 'value="99"' in html
-        assert PMP_REQUIRED_FIELDS['fiftyonedegrees_pmp_brand_name'] in html
-        assert PMP_REQUIRED_FIELDS['fiftyonedegrees_pmp_alt_label'] in html
-        assert PMP_REQUIRED_FIELDS['fiftyonedegrees_pmp_alt_url'] in html
+        assert 'value="localhost:5001"' in html
+        assert 'Custom Brand' in html
+        assert 'Subscribe' in html
+        assert 'https://example.com/sub' in html
+        assert PMP_REQUIRED_FIELDS['fiftyonedegrees_pmp_brand_terms_url'] in html
         # Both Enable and Show Standard checkboxes saved as 'on'.
         assert html.count('checked') >= 2
 
 
 class TestRequiredFieldValidation:
-    """Enabling PMP without a required field produces a settings error
-    and reverts the option to 'off'."""
+    """Enabling PMP with any required field missing (Terms / Privacy
+    URL, Alternative Button Label, Alternative Button URL) produces
+    a settings error and reverts the option to 'off'."""
 
-    def test_missing_brand_name_blocks_enable(self, wp_admin_session):
-        save_pmp_settings(wp_admin_session, fiftyonedegrees_pmp_brand_name='')
+    def test_missing_terms_url_blocks_enable(self, wp_admin_session):
+        save_pmp_settings(wp_admin_session, fiftyonedegrees_pmp_brand_terms_url='')
 
-        # The enable checkbox is forced back to 'off' when a required
-        # field is missing. The admin notice with the error message is
-        # auto-rendered after the POST -> redirect cycle (driven by
-        # WordPress's settings_errors transient + the settings-updated
-        # query param it appends to the redirect target).
+        # The enable checkbox is forced back to 'off' when the required
+        # Terms / Privacy URL is missing. WordPress reloads the form
+        # with settings-updated=true to surface the transient error.
         tab_url = WORDPRESS_URL.rstrip('/') + (
             '/wp-admin/options-general.php?page=51Degrees&tab=pmp&settings-updated=true'
         )
@@ -122,7 +122,12 @@ class TestScriptTagOnFrontend:
     the expected attributes; disabling PMP removes the tag entirely."""
 
     def test_script_present_when_enabled(self, wp_admin_session):
-        save_pmp_settings(wp_admin_session)
+        save_pmp_settings(
+            wp_admin_session,
+            fiftyonedegrees_pmp_brand_name='Brand X',
+            fiftyonedegrees_pmp_alt_label='Pay X',
+            fiftyonedegrees_pmp_alt_url='https://example.com/pay-x',
+        )
 
         resp = requests.get(WORDPRESS_URL)
         assert resp.status_code == 200
@@ -133,11 +138,15 @@ class TestScriptTagOnFrontend:
         )
         assert m, 'PMP script tag was not rendered'
         tag = m.group(0)
-        assert f'data-tcf-vendor="{PMP_REQUIRED_FIELDS["fiftyonedegrees_pmp_tcf_vendor_string"]}"' in tag
-        assert f'data-brand-name="{PMP_REQUIRED_FIELDS["fiftyonedegrees_pmp_brand_name"]}"' in tag
+        # Explicit settings round-trip into data-* attributes.
+        assert 'data-brand-name="Brand X"' in tag
+        assert 'data-alt-name="Pay X"' in tag
+        assert 'data-alt-url="https://example.com/pay-x"' in tag
         assert f'data-brand-terms-url="{PMP_REQUIRED_FIELDS["fiftyonedegrees_pmp_brand_terms_url"]}"' in tag
-        assert f'data-alt-name="{PMP_REQUIRED_FIELDS["fiftyonedegrees_pmp_alt_label"]}"' in tag
-        assert f'data-alt-url="{PMP_REQUIRED_FIELDS["fiftyonedegrees_pmp_alt_url"]}"' in tag
+        # TCF Vendor ID is hardcoded to 51 (randomized rotation lands later).
+        assert 'data-tcf-vendor-id="51"' in tag
+        # TCF Vendor String always present: either user value or the built-in default.
+        assert 'data-tcf-vendor="' in tag
         assert 'data-action-url=' in tag
 
     def test_script_absent_when_disabled(self, wp_admin_session):
@@ -187,7 +196,7 @@ class TestBrowserFlow:
     ):
         self._ensure_cloud_reachable(pmp_cloud_reachable)
 
-        # Point Script URL at the local PMP cloud, with the configured key.
+        # Point Cloud Host at the local PMP cloud (host only, no scheme).
         rk_resp = wp_admin_session.get(
             WORDPRESS_URL.rstrip('/') + '/wp-admin/options-general.php?page=51Degrees&tab=setup'
         )
@@ -196,11 +205,12 @@ class TestBrowserFlow:
             pytest.skip('No resource key configured — set one in the Setup tab')
         resource_key = key_match.group(1)
 
+        # PMP_CLOUD_URL is "https://localhost:5001"; strip the scheme
+        # for the host-only Cloud Host setting.
+        host = re.sub(r'^https?://', '', PMP_CLOUD_URL)
         save_pmp_settings(
             wp_admin_session,
-            fiftyonedegrees_pmp_script_url=(
-                f'{PMP_CLOUD_URL}/pmp/{resource_key}/pmp-en-us.js'
-            ),
+            fiftyonedegrees_pmp_cloud_host=host,
         )
 
         browser.delete_all_cookies()

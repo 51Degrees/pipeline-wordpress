@@ -256,8 +256,7 @@ class FiftyoneService {
 
         // PMP (Preference Management Platform) settings.
         add_option(Options::PMP_ENABLE,            'off');
-        add_option(Options::PMP_SCRIPT_URL,        '//cdn.51degrees.com/pmp/pmp-en-us.js');
-        add_option(Options::PMP_TCF_VENDOR_ID,     51);
+        add_option(Options::PMP_CLOUD_HOST,        'cloud.51degrees.com');
         add_option(Options::PMP_TCF_VENDOR_STRING, '');
         add_option(Options::PMP_ALT_LABEL,         '');
         add_option(Options::PMP_ALT_URL,           '');
@@ -271,14 +270,10 @@ class FiftyoneService {
             'sanitize_callback' => ['FiftyoneService', 'sanitize_pmp_enable'],
             'default' => 'off',
         ]);
-        register_setting(Options::PMP_GROUP_KEY, Options::PMP_SCRIPT_URL, [
+        register_setting(Options::PMP_GROUP_KEY, Options::PMP_CLOUD_HOST, [
             'type' => 'string',
-            'sanitize_callback' => 'esc_url_raw',
-        ]);
-        register_setting(Options::PMP_GROUP_KEY, Options::PMP_TCF_VENDOR_ID, [
-            'type' => 'integer',
-            'sanitize_callback' => function ($v) { return max(1, (int) $v); },
-            'default' => 51,
+            'sanitize_callback' => ['FiftyoneService', 'sanitize_pmp_host'],
+            'default' => 'cloud.51degrees.com',
         ]);
         register_setting(Options::PMP_GROUP_KEY, Options::PMP_TCF_VENDOR_STRING, [
             'type' => 'string',
@@ -361,10 +356,9 @@ class FiftyoneService {
 
     /**
      * Sanitizer for Options::PMP_ENABLE. When the caller asks for 'on',
-     * verifies that all fields required for a working PMP popup are
-     * present in the same POST. Missing values force the option back
-     * to 'off' and register a settings error listing the missing
-     * field labels.
+     * verifies that fields without a sensible default are filled in.
+     * Missing values force the option back to 'off' and register a
+     * settings error listing the missing field labels.
      *
      * @param  string $value the submitted PMP_ENABLE value
      * @return string        'on' if validation passes, 'off' otherwise
@@ -373,12 +367,15 @@ class FiftyoneService {
         if ($value !== 'on') {
             return 'off';
         }
+        // Terms / Privacy URL plus the two alternative-button fields
+        // are required server-side. PMP widget rejects an empty alt
+        // button outright; Terms URL has no runtime fallback. The
+        // remaining fields (TCF Vendor String, Brand Name) have
+        // sensible runtime defaults so they stay optional.
         $required = [
-            Options::PMP_TCF_VENDOR_STRING => 'TCF Vendor String',
-            Options::PMP_BRAND_NAME        => 'Brand Name',
-            Options::PMP_BRAND_TERMS_URL   => 'Terms / Privacy URL',
-            Options::PMP_ALT_LABEL         => 'Alternative Button Label',
-            Options::PMP_ALT_URL           => 'Alternative Button URL',
+            Options::PMP_BRAND_TERMS_URL => 'Terms / Privacy URL',
+            Options::PMP_ALT_LABEL       => 'Alternative Button Label',
+            Options::PMP_ALT_URL         => 'Alternative Button URL',
         ];
         $missing = [];
         foreach ($required as $key => $label) {
@@ -751,34 +748,101 @@ JS;
     }
 
     /**
-     * Swaps the 'en-us' locale token in a PMP bundle URL for the supplied
-     * suffix. Returns the URL unchanged when there is nothing to swap.
+     * Strips scheme/protocol-relative prefix and trailing slashes from
+     * a host value so admins can paste either 'host:port' or
+     * 'https://host:port' and get the same canonical form back.
      *
-     * @param  string      $url    a PMP bundle URL (CDN or local cloud)
-     * @param  string|null $suffix a value returned by pmp_map_locale
-     * @return string
+     * @param  string $host raw host value from the form
+     * @return string       canonical host (no scheme, no trailing slash)
      */
-    public static function pmp_replace_locale_in_url($url, $suffix) {
-        if ($url === '' || $suffix === null || $suffix === 'en-us') {
-            return $url;
-        }
-        return str_replace('en-us', $suffix, $url);
+    public static function pmp_normalize_host($host) {
+        $host = trim((string) $host);
+        $host = preg_replace('#^(?:https?:)?//#', '', $host);
+        return rtrim($host, '/');
     }
 
     /**
-     * Returns the PMP Script URL with the locale token swapped for the
-     * suffix matching the active WordPress locale. Returns an empty
-     * string when PMP_SCRIPT_URL is unset.
+     * Sanitizer for PMP_CLOUD_HOST. Falls back to the default when
+     * the user clears the field.
+     *
+     * @param  string $value submitted value
+     * @return string
+     */
+    public static function sanitize_pmp_host($value) {
+        $host = self::pmp_normalize_host(sanitize_text_field($value));
+        return $host === '' ? 'cloud.51degrees.com' : $host;
+    }
+
+    /**
+     * Composes the PMP bundle URL from PMP_CLOUD_HOST, RESOURCE_KEY,
+     * and the active WordPress locale. Returns an empty string when
+     * the resource key is missing -- the enqueue path uses that to
+     * short-circuit registration.
      *
      * @return string
      */
     private static function pmp_resolve_script_url() {
-        $url = get_option(Options::PMP_SCRIPT_URL);
-        if (empty($url)) {
+        $key = get_option(Options::RESOURCE_KEY);
+        if (empty($key)) {
             return '';
         }
+        $host = self::pmp_normalize_host(
+            get_option(Options::PMP_CLOUD_HOST, 'cloud.51degrees.com'));
         $locale = function_exists('get_locale') ? get_locale() : 'en_US';
-        return self::pmp_replace_locale_in_url($url, self::pmp_map_locale($locale));
+        $suffix = self::pmp_map_locale($locale) ?: 'en-us';
+        return sprintf(
+            'https://%s/pmp/%s/pmp-%s.js',
+            $host,
+            rawurlencode($key),
+            $suffix);
+    }
+
+    /**
+     * Default TCF Vendor String -- core segment with consent granted
+     * to every vendor, purpose and special feature from IAB GVL
+     * version 158 (cmpId=51, publisherCountryCode=AA). Regenerate
+     * via the @iabtcf/core script when the GVL bumps a major
+     * version; admins can override per-site via the PMP settings.
+     */
+    public const PMP_DEFAULT_TCF_VENDOR_STRING =
+        'CQkGEcAQkGEcAAzABAENCeFsAP_gAH_gAAAAMdNR_G__bWlr-bb3abtkeYxP9_hr7sQxBgbIkm4FzLvW7JwHx2EZNAzatiIKmRIAu3TBIQNlHJDURUCgKIgFryDMaE2U4TNKJ6BkiFMZI2tQCFxvm4tjeQCY4ur_9kc1mB-t7dr82dzyy6hHn3a5fmS1UJCdIYetDfv8ZBOT-9IEd-x8v4v4_EbpEm8eS1n_pGtp4jc6Yns_dBmxt-Tyff7Pn__rl_e7X_ve_n3zv8oXn7rr____f_-7___2b_-___b-__7Z_zI_BjQAEw0OiCMsiBQIFAQggQAKCsIAKBAEAACQFEBACYMCHIGAC6wiQAgBQADBACAAEGAAIAABIAEIgAgAIBACBAIFAAGABAEBAAwMAAYAKEQCAAEB0DFMCCAQLABIjKgNMCEABIICWyoQSgYEFcIUixwCCBETBQAAAgAFAAAgPhYCEkoJWJBAFxBdAAgAAABRAiwIpCzAEFQZotBWBJwGRpgCR5gmSU6CIAmCEjIMiE1QSDxTFEKCHIDYpZgDp4goAZdrJCH-oFm4AAAA';
+
+    /**
+     * Returns the configured TCF Vendor String or the built-in
+     * all-vendors-enabled default when none is set.
+     */
+    public static function pmp_tcf_vendor_string() {
+        $value = get_option(Options::PMP_TCF_VENDOR_STRING);
+        return empty($value)
+            ? self::PMP_DEFAULT_TCF_VENDOR_STRING
+            : $value;
+    }
+
+    /**
+     * Returns the configured Brand Name or the WordPress site name
+     * when none is set.
+     */
+    public static function pmp_brand_name() {
+        $value = get_option(Options::PMP_BRAND_NAME);
+        return empty($value) ? get_bloginfo('name') : $value;
+    }
+
+    /**
+     * Returns the configured Alternative Button Label or 'Pay' when
+     * none is set.
+     */
+    public static function pmp_alt_label() {
+        $value = get_option(Options::PMP_ALT_LABEL);
+        return empty($value) ? 'Pay' : $value;
+    }
+
+    /**
+     * Returns the configured Alternative Button URL or
+     * 'https://example.com' when none is set.
+     */
+    public static function pmp_alt_url() {
+        $value = get_option(Options::PMP_ALT_URL);
+        return empty($value) ? 'https://example.com' : $value;
     }
 
     /**
@@ -797,13 +861,13 @@ JS;
         }
 
         $attrs = [
-            'data-tcf-vendor'       => get_option(Options::PMP_TCF_VENDOR_STRING),
-            'data-tcf-vendor-id'    => get_option(Options::PMP_TCF_VENDOR_ID, 51),
-            'data-brand-name'       => get_option(Options::PMP_BRAND_NAME),
+            'data-tcf-vendor'       => self::pmp_tcf_vendor_string(),
+            'data-tcf-vendor-id'    => 51, // Hardcoded for now; randomized rotation is planned at runtime.
+            'data-brand-name'       => self::pmp_brand_name(),
             'data-brand-logo'       => get_option(Options::PMP_BRAND_LOGO_URL),
             'data-brand-terms-url'  => get_option(Options::PMP_BRAND_TERMS_URL),
-            'data-alt-name'         => get_option(Options::PMP_ALT_LABEL),
-            'data-alt-url'          => get_option(Options::PMP_ALT_URL),
+            'data-alt-name'         => self::pmp_alt_label(),
+            'data-alt-url'          => self::pmp_alt_url(),
             'data-action-url'       => "javascript:window.fiftyoneDegreesPmpOnChoice('{preference}')",
         ];
         if (get_option(Options::PMP_SHOW_STANDARD, 'off') === 'on') {
