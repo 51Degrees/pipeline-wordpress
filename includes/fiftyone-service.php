@@ -253,62 +253,6 @@ class FiftyoneService {
             Options::ROBOTS_CUSTOM_TDL,
             ['sanitize_callback' => ['FiftyoneService', 'sanitize_tdl']]);
         register_setting(Options::GROUP_KEY, Options::PIPELINE_ENABLE);
-
-        // PMP (Preference Management Platform) settings.
-        add_option(Options::PMP_ENABLE,            'off');
-        add_option(Options::PMP_SCRIPT_URL,        '//cdn.51degrees.com/pmp/pmp-en-us.js');
-        add_option(Options::PMP_TCF_VENDOR_ID,     51);
-        add_option(Options::PMP_TCF_VENDOR_STRING, '');
-        add_option(Options::PMP_ALT_LABEL,         '');
-        add_option(Options::PMP_ALT_URL,           '');
-        add_option(Options::PMP_BRAND_NAME,        '');
-        add_option(Options::PMP_BRAND_LOGO_URL,    '');
-        add_option(Options::PMP_BRAND_TERMS_URL,   '');
-        add_option(Options::PMP_SHOW_STANDARD,     'off');
-
-        register_setting(Options::PMP_GROUP_KEY, Options::PMP_ENABLE, [
-            'type' => 'string',
-            'sanitize_callback' => ['FiftyoneService', 'sanitize_pmp_enable'],
-            'default' => 'off',
-        ]);
-        register_setting(Options::PMP_GROUP_KEY, Options::PMP_SCRIPT_URL, [
-            'type' => 'string',
-            'sanitize_callback' => 'esc_url_raw',
-        ]);
-        register_setting(Options::PMP_GROUP_KEY, Options::PMP_TCF_VENDOR_ID, [
-            'type' => 'integer',
-            'sanitize_callback' => function ($v) { return max(1, (int) $v); },
-            'default' => 51,
-        ]);
-        register_setting(Options::PMP_GROUP_KEY, Options::PMP_TCF_VENDOR_STRING, [
-            'type' => 'string',
-            'sanitize_callback' => 'sanitize_text_field',
-        ]);
-        register_setting(Options::PMP_GROUP_KEY, Options::PMP_ALT_LABEL, [
-            'type' => 'string',
-            'sanitize_callback' => 'sanitize_text_field',
-        ]);
-        register_setting(Options::PMP_GROUP_KEY, Options::PMP_ALT_URL, [
-            'type' => 'string',
-            'sanitize_callback' => 'esc_url_raw',
-        ]);
-        register_setting(Options::PMP_GROUP_KEY, Options::PMP_BRAND_NAME, [
-            'type' => 'string',
-            'sanitize_callback' => 'sanitize_text_field',
-        ]);
-        register_setting(Options::PMP_GROUP_KEY, Options::PMP_BRAND_LOGO_URL, [
-            'type' => 'string',
-            'sanitize_callback' => 'esc_url_raw',
-        ]);
-        register_setting(Options::PMP_GROUP_KEY, Options::PMP_BRAND_TERMS_URL, [
-            'type' => 'string',
-            'sanitize_callback' => 'esc_url_raw',
-        ]);
-        register_setting(Options::PMP_GROUP_KEY, Options::PMP_SHOW_STANDARD, [
-            'type' => 'string',
-            'sanitize_callback' => function ($v) { return $v === 'on' ? 'on' : 'off'; },
-            'default' => 'off',
-        ]);
     }
 
     static function sanitize_robots_textarea($value) {
@@ -357,50 +301,6 @@ class FiftyoneService {
             }
         }
         return array_values(array_unique($clean));
-    }
-
-    /**
-     * Sanitizer for Options::PMP_ENABLE. When the caller asks for 'on',
-     * verifies that all fields required for a working PMP popup are
-     * present in the same POST. Missing values force the option back
-     * to 'off' and register a settings error listing the missing
-     * field labels.
-     *
-     * @param  string $value the submitted PMP_ENABLE value
-     * @return string        'on' if validation passes, 'off' otherwise
-     */
-    static function sanitize_pmp_enable($value) {
-        if ($value !== 'on') {
-            return 'off';
-        }
-        $required = [
-            Options::PMP_TCF_VENDOR_STRING => 'TCF Vendor String',
-            Options::PMP_BRAND_NAME        => 'Brand Name',
-            Options::PMP_BRAND_TERMS_URL   => 'Terms / Privacy URL',
-            Options::PMP_ALT_LABEL         => 'Alternative Button Label',
-            Options::PMP_ALT_URL           => 'Alternative Button URL',
-        ];
-        $missing = [];
-        foreach ($required as $key => $label) {
-            $raw = isset($_POST[$key]) ? wp_unslash($_POST[$key]) : '';
-            if (trim((string) $raw) === '') {
-                $missing[] = $label;
-            }
-        }
-        if (!empty($missing)) {
-            add_settings_error(
-                Options::PMP_GROUP_KEY,
-                'pmp_required_missing',
-                sprintf(
-                    /* translators: %s is a comma-separated list of field labels. */
-                    __('PMP cannot be enabled: missing required field(s): %s.', 'fiftyonedegrees'),
-                    implode(', ', $missing)
-                ),
-                'error'
-            );
-            return 'off';
-        }
-        return 'on';
     }
 
     /**
@@ -681,7 +581,7 @@ class FiftyoneService {
 
     /**
      * Add the 51Degrees JavaScript to the page.
-     *
+     * 
      * @return void
      */
     function fiftyonedegrees_javascript() {
@@ -692,132 +592,6 @@ class FiftyoneService {
             "fiftyonedegrees",
             Pipeline::getJavaScript(),
             "before");
-
-        if (get_option(Options::PMP_ENABLE, 'off') !== 'on') {
-            return;
-        }
-        if (empty(get_option(Options::RESOURCE_KEY))) {
-            return;
-        }
-
-        $url = self::pmp_resolve_script_url();
-        if (empty($url)) {
-            return;
-        }
-
-        // Footer load: PMP attaches its popup container as a sibling of this
-        // script tag (see view.ts getRoot()). In <head> that container would
-        // be unrenderable (head has display:none).
-        wp_register_script('fiftyonedegrees-pmp', $url, [], null, true);
-        wp_enqueue_script('fiftyonedegrees-pmp');
-
-        add_filter('script_loader_tag', [$this, 'pmp_add_data_attributes'], 10, 3);
-
-        // Glue invoked by PMP via data-action-url=javascript:...
-        // Persists the choice as a cookie so the server-side pipeline can
-        // read it as query.id.usage evidence, re-issues the REST call so the
-        // cloud generates 51DiD with the chosen preference, then signals
-        // PMP that TCF listeners can be notified.
-        $rest_url = esc_url_raw(rest_url('fiftyonedegrees/v4/json'));
-        $pmp_glue = <<<JS
-(function () {
-  window.fiftyoneDegreesPmpOnChoice = function (preference) {
-    document.cookie = '51d_pmp_pref=' + encodeURIComponent(preference) +
-                      '; path=/; SameSite=Lax';
-    var done = function () {
-      if (window.__51d_pmp && window.__51d_pmp.markTcfReady) {
-        window.__51d_pmp.markTcfReady();
-      }
-    };
-    fetch('{$rest_url}', { method: 'POST', credentials: 'include' })
-      .then(done, done);
-  };
-})();
-JS;
-        wp_add_inline_script('fiftyonedegrees', $pmp_glue, 'after');
-    }
-
-    /**
-     * Converts a WordPress locale code (e.g. 'de_DE') into the lowercase
-     * dash-separated form used in PMP bundle filenames ('de-de').
-     * Returns null for locales that PMP does not ship a bundle for.
-     *
-     * @param  string      $locale a WordPress locale code
-     * @return string|null
-     */
-    public static function pmp_map_locale($locale) {
-        $suffix = strtolower(str_replace('_', '-', (string) $locale));
-        return in_array($suffix, ['en-us', 'de-de', 'fr-fr'], true) ? $suffix : null;
-    }
-
-    /**
-     * Swaps the 'en-us' locale token in a PMP bundle URL for the supplied
-     * suffix. Returns the URL unchanged when there is nothing to swap.
-     *
-     * @param  string      $url    a PMP bundle URL (CDN or local cloud)
-     * @param  string|null $suffix a value returned by pmp_map_locale
-     * @return string
-     */
-    public static function pmp_replace_locale_in_url($url, $suffix) {
-        if ($url === '' || $suffix === null || $suffix === 'en-us') {
-            return $url;
-        }
-        return str_replace('en-us', $suffix, $url);
-    }
-
-    /**
-     * Returns the PMP Script URL with the locale token swapped for the
-     * suffix matching the active WordPress locale. Returns an empty
-     * string when PMP_SCRIPT_URL is unset.
-     *
-     * @return string
-     */
-    private static function pmp_resolve_script_url() {
-        $url = get_option(Options::PMP_SCRIPT_URL);
-        if (empty($url)) {
-            return '';
-        }
-        $locale = function_exists('get_locale') ? get_locale() : 'en_US';
-        return self::pmp_replace_locale_in_url($url, self::pmp_map_locale($locale));
-    }
-
-    /**
-     * Adds PMP data-* attributes to the <script> tag for the
-     * fiftyonedegrees-pmp handle. Hooks 'script_loader_tag' because
-     * wp_enqueue_script does not support arbitrary HTML attributes.
-     *
-     * @param  string $tag    the rendered <script> element
-     * @param  string $handle the enqueued-script handle
-     * @param  string $src    the script src attribute value
-     * @return string
-     */
-    public function pmp_add_data_attributes($tag, $handle, $src) {
-        if ($handle !== 'fiftyonedegrees-pmp') {
-            return $tag;
-        }
-
-        $attrs = [
-            'data-tcf-vendor'       => get_option(Options::PMP_TCF_VENDOR_STRING),
-            'data-tcf-vendor-id'    => get_option(Options::PMP_TCF_VENDOR_ID, 51),
-            'data-brand-name'       => get_option(Options::PMP_BRAND_NAME),
-            'data-brand-logo'       => get_option(Options::PMP_BRAND_LOGO_URL),
-            'data-brand-terms-url'  => get_option(Options::PMP_BRAND_TERMS_URL),
-            'data-alt-name'         => get_option(Options::PMP_ALT_LABEL),
-            'data-alt-url'          => get_option(Options::PMP_ALT_URL),
-            'data-action-url'       => "javascript:window.fiftyoneDegreesPmpOnChoice('{preference}')",
-        ];
-        if (get_option(Options::PMP_SHOW_STANDARD, 'off') === 'on') {
-            $attrs['data-show-standard'] = 'true';
-        }
-
-        $attr_html = '';
-        foreach ($attrs as $k => $v) {
-            if ($v === '' || $v === null) {
-                continue;
-            }
-            $attr_html .= sprintf(' %s="%s"', esc_attr($k), esc_attr($v));
-        }
-        return str_replace('<script src=', '<script' . $attr_html . ' src=', $tag);
     }
 
     /**

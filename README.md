@@ -73,62 +73,6 @@ tracks per-IP request counts and redirects offenders once the threshold is
 crossed. Useful as a low-friction first line of defence against scraping and
 brute-force traffic.
 
-## PMP (Preference Management Platform)
-
-The `Pmp` tab adds the 51Degrees consent popup to public pages. Visitors
-choose Standard, Personalized, or an alternative (e.g. Pay) experience;
-the choice flows into the pipeline as `query.id.usage` evidence which the
-51Degrees Cloud uses to gate 51DiD identity generation.
-
-The widget requires a Resource Key that includes one of the 51DiD
-properties: `IdProbGlobal` or `IdProbLic`. The settings tab shows a
-warning if the configured key does not. Configure or upgrade the key
-at <https://configure.51degrees.com>.
-
-### Settings
-
-All fields marked `*` are required when Enable PMP is on. The form will
-not save with Enable = on if any of them is empty.
-
-- **Enable PMP** — turn the popup on for public pages.
-- **Script URL** — where the browser loads the PMP bundle from (default
-  `//cdn.51degrees.com/pmp/{resource-key}/pmp-en-us.js`). The `en-us` token is swapped
-  for the matching bundle (`de-de`, `fr-fr`) when the WordPress locale
-  is German or French.
-- **TCF Vendor ID** — `pmpId` baked into the generated TCF string
-  (default `51`).
-- **TCF Vendor String** `*` — static TCF vendor consent string generated
-  externally via TCF Tools; PMP overlays the purpose bits on top.
-- **Alternative Button Label** `*` / **Alternative Button URL** `*` —
-  label and destination for the alternative button (e.g. `Pay`).
-- **Brand Name** `*`, **Brand Logo URL**, **Terms / Privacy URL** `*` —
-  branding shown inside the popup.
-- **Show Standard Option** — show the Standard button alongside
-  Personalized and the alternative (off by default).
-
-### Flow
-
-1. The browser loads the PMP widget from the configured Script URL.
-2. On first visit the popup is shown. The visitor's choice is persisted
-   in `localStorage` under `__51d_pmp_pref`.
-3. PMP invokes the configured action URL with the chosen preference
-   substituted into `{preference}`. The plugin sets this URL to
-   `javascript:window.fiftyoneDegreesPmpOnChoice('{preference}')`.
-4. The glue function sets the cookie `51d_pmp_pref` and triggers a
-   fresh REST call to `/wp-json/fiftyonedegrees/v4/json`. On the
-   server, `Pipeline::process()` reads the cookie and adds it as
-   `query.id.usage` evidence so the cloud generates 51DiD for the
-   chosen preference.
-5. Once the REST call returns the glue calls
-   `window.__51d_pmp.markTcfReady()`. PMP then signals
-   `cmpStatus = "loaded"` and notifies `__tcfapi` listeners with
-   `eventStatus = "tcloaded"`. Third-party scripts subscribed to TCF
-   see a complete state with the new 51DiD value available.
-
-When PMP is disabled the plugin emits no `<script>` tag and no
-`query.id.usage` evidence from PMP; the existing Suspicious-activity
-fallback (`non-marketing`) still applies if that feature is on.
-
 
 ## Developer information and advanced features
 

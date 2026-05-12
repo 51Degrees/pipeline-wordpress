@@ -224,14 +224,9 @@ class Pipeline
                     $flowData->evidence->set('query.client-ip', $resolvedIp);
                 }
 
-                // PMP preference (cookie) takes priority over Suspicious's
-                // 'non-marketing' fallback when both features are active.
-                if (isset($_COOKIE['51d_pmp_pref'])) {
-                    $pref = sanitize_text_field(wp_unslash($_COOKIE['51d_pmp_pref']));
-                    if (in_array($pref, ['standard', 'personalized'], true)) {
-                        $flowData->evidence->set('query.id.usage', $pref);
-                    }
-                } elseif (get_option(Options::SUSPICIOUS_ENABLE, 'off') === 'on') {
+                // Suspicious activity detection relies on IdProbLic/IdProbGlobal;
+                // the cloud requires query.id.usage for those to be populated.
+                if (get_option(Options::SUSPICIOUS_ENABLE, 'off') === 'on') {
                     $flowData->evidence->set('query.id.usage', 'non-marketing');
                 }
 
