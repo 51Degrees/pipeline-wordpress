@@ -92,11 +92,6 @@ Alternative Button Label, Alternative Button URL. The remaining
 fields have runtime defaults so the popup works out of the box.
 
 - **Enable PMP** — turn the popup on for public pages.
-- **Cloud Host** — hostname of the 51Degrees cloud server (default
-  `cloud.51degrees.com`). The plugin composes the bundle URL as
-  `https://{host}/pmp/{resource-key}/pmp-{locale}.js`. The locale
-  suffix follows `get_locale()` for `de_DE` / `fr_FR`; everything
-  else falls back to `en-us`.
 - **TCF Vendor String** — static TCF v2 vendor consent string. The
   built-in default grants consent to every vendor, purpose and
   special feature from IAB GVL v158; admins can override per-site
@@ -117,9 +112,19 @@ The TCF Vendor ID used by the popup (`cmpId`) is hardcoded to `51`
 for now; randomized rotation will be implemented at runtime in a
 follow-up.
 
+The bundle URL is built as
+`https://{host}/pmp/{resource-key}/pmp-{locale}.js`, where `{host}`
+defaults to `cloud.51degrees.com`. Local development can override
+the host by defining `FIFTYONEDEGREES_PMP_CLOUD_HOST` in
+`wp-config.php` (e.g. `define('FIFTYONEDEGREES_PMP_CLOUD_HOST',
+'localhost:5001');`); there is no admin UI for it because production
+deployments are not expected to change the value. The locale suffix
+follows `get_locale()` for `de_DE` / `fr_FR`; everything else falls
+back to `en-us`.
+
 ### Flow
 
-1. The browser loads the PMP widget from the composed Cloud Host URL.
+1. The browser loads the PMP widget from the composed bundle URL.
 2. On first visit the popup is shown. The visitor's choice is persisted
    in `localStorage` under `__51d_pmp_pref`.
 3. PMP invokes the configured action URL with the chosen preference

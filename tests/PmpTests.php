@@ -39,7 +39,6 @@ class PmpTests extends TestCase
 
         $this->options = [
             Options::PMP_ENABLE             => 'off',
-            Options::PMP_CLOUD_HOST         => 'cloud.51degrees.com',
             Options::PMP_TCF_VENDOR_STRING  => '',
             Options::PMP_ALT_LABEL          => '',
             Options::PMP_ALT_URL            => '',
@@ -223,71 +222,20 @@ class PmpTests extends TestCase
         self::assertNull(FiftyoneService::pmp_map_locale(''));
     }
 
-    // -------- pmp_normalize_host --------
+    // -------- pmp_cloud_host --------
 
     /**
-     * Plain hostname round-trips unchanged.
+     * Without the override constant the resolver returns the
+     * built-in production host.
      */
-    public function testPmpNormalizeHostPlain()
+    public function testPmpCloudHostDefault()
     {
-        self::assertEquals(
-            'cloud.51degrees.com',
-            FiftyoneService::pmp_normalize_host('cloud.51degrees.com')
-        );
+        self::assertEquals('cloud.51degrees.com', FiftyoneService::pmp_cloud_host());
     }
 
-    /**
-     * Scheme prefixes (https://, http://, //) are stripped.
-     */
-    public function testPmpNormalizeHostStripsScheme()
-    {
-        self::assertEquals(
-            'cloud.51degrees.com',
-            FiftyoneService::pmp_normalize_host('https://cloud.51degrees.com')
-        );
-        self::assertEquals(
-            'localhost:5001',
-            FiftyoneService::pmp_normalize_host('http://localhost:5001')
-        );
-        self::assertEquals(
-            'localhost:5001',
-            FiftyoneService::pmp_normalize_host('//localhost:5001')
-        );
-    }
-
-    /**
-     * Trailing slashes and surrounding whitespace are trimmed.
-     */
-    public function testPmpNormalizeHostTrimsSlashesAndSpaces()
-    {
-        self::assertEquals(
-            'cloud.51degrees.com',
-            FiftyoneService::pmp_normalize_host('  cloud.51degrees.com///  ')
-        );
-    }
-
-    // -------- sanitize_pmp_host --------
-
-    /**
-     * Empty input falls back to the default host.
-     */
-    public function testSanitizePmpHostEmptyFallsBackToDefault()
-    {
-        self::assertEquals('cloud.51degrees.com', FiftyoneService::sanitize_pmp_host(''));
-        self::assertEquals('cloud.51degrees.com', FiftyoneService::sanitize_pmp_host('   '));
-    }
-
-    /**
-     * Valid input passes through normalization but stays as user
-     * supplied (with scheme stripped).
-     */
-    public function testSanitizePmpHostNormalizesInput()
-    {
-        self::assertEquals(
-            'localhost:5001',
-            FiftyoneService::sanitize_pmp_host('https://localhost:5001')
-        );
-    }
+    // pmp_cloud_host's constant-override branch is exercised in
+    // integration tests (see test_pmp.py): defining a runtime
+    // constant once would leak into every PHPUnit case that follows.
 
     // -------- pmp_add_data_attributes --------
 

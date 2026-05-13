@@ -265,14 +265,6 @@ class Options
     const PMP_ENABLE = "fiftyonedegrees_pmp_enable";
 
     /**
-     * Key for storing the hostname of the 51Degrees cloud server
-     * that serves PMP bundles. The plugin composes the full bundle
-     * URL as https://{host}/pmp/{resource-key}/pmp-{locale}.js.
-     * Default: 'cloud.51degrees.com'.
-     */
-    const PMP_CLOUD_HOST = "fiftyonedegrees_pmp_cloud_host";
-
-    /**
      * Key for storing the publisher's static TCF Vendor consent string.
      * Generated externally via TCF Tools; PMP overlays purpose consents
      * onto this base string at runtime.

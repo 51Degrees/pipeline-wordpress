@@ -72,23 +72,6 @@ if (!empty($resource_key) && isset($cached_pipeline['pipeline']) && isset($cache
             </tr>
             <tr>
                 <th scope="row">
-                    <label for="<?php echo esc_attr(Options::PMP_CLOUD_HOST); ?>">
-                        <?php esc_html_e('Cloud Host', 'fiftyonedegrees'); ?>
-                    </label>
-                </th>
-                <td>
-                    <input type="text"
-                           name="<?php echo esc_attr(Options::PMP_CLOUD_HOST); ?>"
-                           id="<?php echo esc_attr(Options::PMP_CLOUD_HOST); ?>"
-                           value="<?php echo esc_attr(get_option(Options::PMP_CLOUD_HOST, 'cloud.51degrees.com')); ?>"
-                           class="regular-text">
-                    <p class="description">
-                        <?php esc_html_e('Hostname of the 51Degrees cloud server. The bundle URL is built as https://{host}/pmp/{resource-key}/pmp-{locale}.js.', 'fiftyonedegrees'); ?>
-                    </p>
-                </td>
-            </tr>
-            <tr>
-                <th scope="row">
                     <label for="<?php echo esc_attr(Options::PMP_TCF_VENDOR_STRING); ?>">
                         <?php esc_html_e('TCF Vendor String', 'fiftyonedegrees'); ?>
                     </label>

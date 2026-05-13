@@ -47,7 +47,6 @@ def save_pmp_settings(session, **overrides):
         'option_page': 'fiftyonedegrees_pmp_options',
         'action': 'update',
         'fiftyonedegrees_pmp_enable':            'on',
-        'fiftyonedegrees_pmp_cloud_host':        'cloud.51degrees.com',
         'fiftyonedegrees_pmp_tcf_vendor_string': '',
         'fiftyonedegrees_pmp_brand_name':        '',
         'fiftyonedegrees_pmp_brand_logo_url':    '',
@@ -77,7 +76,6 @@ class TestSettingsRoundTrip:
     def test_round_trip(self, wp_admin_session):
         save_pmp_settings(
             wp_admin_session,
-            fiftyonedegrees_pmp_cloud_host='localhost:5001',
             fiftyonedegrees_pmp_brand_name='Custom Brand',
             fiftyonedegrees_pmp_alt_label='Subscribe',
             fiftyonedegrees_pmp_alt_url='https://example.com/sub',
@@ -86,7 +84,6 @@ class TestSettingsRoundTrip:
 
         _, html = _get_admin_nonce(wp_admin_session, 'pmp')
 
-        assert 'value="localhost:5001"' in html
         assert 'Custom Brand' in html
         assert 'Subscribe' in html
         assert 'https://example.com/sub' in html
@@ -196,22 +193,27 @@ class TestBrowserFlow:
     ):
         self._ensure_cloud_reachable(pmp_cloud_reachable)
 
-        # Point Cloud Host at the local PMP cloud (host only, no scheme).
         rk_resp = wp_admin_session.get(
             WORDPRESS_URL.rstrip('/') + '/wp-admin/options-general.php?page=51Degrees&tab=setup'
         )
         key_match = re.search(r'name="fiftyonedegrees_resource_key"[^>]*value="([^"]+)"', rk_resp.text)
         if not key_match or not key_match.group(1):
             pytest.skip('No resource key configured — set one in the Setup tab')
-        resource_key = key_match.group(1)
 
-        # PMP_CLOUD_URL is "https://localhost:5001"; strip the scheme
-        # for the host-only Cloud Host setting.
-        host = re.sub(r'^https?://', '', PMP_CLOUD_URL)
-        save_pmp_settings(
-            wp_admin_session,
-            fiftyonedegrees_pmp_cloud_host=host,
-        )
+        save_pmp_settings(wp_admin_session)
+
+        # The plugin reads FIFTYONEDEGREES_PMP_CLOUD_HOST from wp-config
+        # to compose the bundle URL. The dev environment must point that
+        # constant at PMP_CLOUD_URL for this test to load the bundle from
+        # the local cloud; otherwise the rendered tag still targets
+        # production and the browser flow won't exercise local code.
+        expected_host = re.sub(r'^https?://', '', PMP_CLOUD_URL)
+        page_resp = requests.get(WORDPRESS_URL)
+        if f'https://{expected_host}/pmp/' not in page_resp.text:
+            pytest.skip(
+                f'PMP bundle URL does not target {expected_host}. Set '
+                f'FIFTYONEDEGREES_PMP_CLOUD_HOST="{expected_host}" in wp-config.'
+            )
 
         browser.delete_all_cookies()
         browser.get(WORDPRESS_URL)

@@ -256,7 +256,6 @@ class FiftyoneService {
 
         // PMP (Preference Management Platform) settings.
         add_option(Options::PMP_ENABLE,            'off');
-        add_option(Options::PMP_CLOUD_HOST,        'cloud.51degrees.com');
         add_option(Options::PMP_TCF_VENDOR_STRING, '');
         add_option(Options::PMP_ALT_LABEL,         '');
         add_option(Options::PMP_ALT_URL,           '');
@@ -269,11 +268,6 @@ class FiftyoneService {
             'type' => 'string',
             'sanitize_callback' => ['FiftyoneService', 'sanitize_pmp_enable'],
             'default' => 'off',
-        ]);
-        register_setting(Options::PMP_GROUP_KEY, Options::PMP_CLOUD_HOST, [
-            'type' => 'string',
-            'sanitize_callback' => ['FiftyoneService', 'sanitize_pmp_host'],
-            'default' => 'cloud.51degrees.com',
         ]);
         register_setting(Options::PMP_GROUP_KEY, Options::PMP_TCF_VENDOR_STRING, [
             'type' => 'string',
@@ -748,36 +742,30 @@ JS;
     }
 
     /**
-     * Strips scheme/protocol-relative prefix and trailing slashes from
-     * a host value so admins can paste either 'host:port' or
-     * 'https://host:port' and get the same canonical form back.
+     * Hostname of the 51Degrees cloud server that serves PMP bundles.
+     * Defaults to 'cloud.51degrees.com' so the production deployment
+     * needs zero configuration. Local development can point at a
+     * different server by defining FIFTYONEDEGREES_PMP_CLOUD_HOST in
+     * wp-config.php (e.g. 'localhost:5001'); the constant is read at
+     * runtime so no UI is exposed to end users.
      *
-     * @param  string $host raw host value from the form
-     * @return string       canonical host (no scheme, no trailing slash)
-     */
-    public static function pmp_normalize_host($host) {
-        $host = trim((string) $host);
-        $host = preg_replace('#^(?:https?:)?//#', '', $host);
-        return rtrim($host, '/');
-    }
-
-    /**
-     * Sanitizer for PMP_CLOUD_HOST. Falls back to the default when
-     * the user clears the field.
-     *
-     * @param  string $value submitted value
      * @return string
      */
-    public static function sanitize_pmp_host($value) {
-        $host = self::pmp_normalize_host(sanitize_text_field($value));
-        return $host === '' ? 'cloud.51degrees.com' : $host;
+    public static function pmp_cloud_host() {
+        if (defined('FIFTYONEDEGREES_PMP_CLOUD_HOST')) {
+            $host = trim((string) FIFTYONEDEGREES_PMP_CLOUD_HOST);
+            if ($host !== '') {
+                return $host;
+            }
+        }
+        return 'cloud.51degrees.com';
     }
 
     /**
-     * Composes the PMP bundle URL from PMP_CLOUD_HOST, RESOURCE_KEY,
-     * and the active WordPress locale. Returns an empty string when
-     * the resource key is missing -- the enqueue path uses that to
-     * short-circuit registration.
+     * Composes the PMP bundle URL from the resolved cloud host,
+     * RESOURCE_KEY, and the active WordPress locale. Returns an empty
+     * string when the resource key is missing -- the enqueue path uses
+     * that to short-circuit registration.
      *
      * @return string
      */
@@ -786,13 +774,11 @@ JS;
         if (empty($key)) {
             return '';
         }
-        $host = self::pmp_normalize_host(
-            get_option(Options::PMP_CLOUD_HOST, 'cloud.51degrees.com'));
         $locale = function_exists('get_locale') ? get_locale() : 'en_US';
         $suffix = self::pmp_map_locale($locale) ?: 'en-us';
         return sprintf(
             'https://%s/pmp/%s/pmp-%s.js',
-            $host,
+            self::pmp_cloud_host(),
             rawurlencode($key),
             $suffix);
     }
