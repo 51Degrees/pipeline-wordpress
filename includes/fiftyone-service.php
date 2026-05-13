@@ -27,6 +27,7 @@
 
 require_once __DIR__ . '/pipeline.php';
 require_once __DIR__ . '/standard-tdls.php';
+require_once __DIR__ . '/cloud-metadata.php';
 
 class FiftyoneService {
 
@@ -729,43 +730,20 @@ JS;
     }
 
     /**
-     * Converts a WordPress locale code (e.g. 'de_DE') into the lowercase
-     * dash-separated form used in PMP bundle filenames ('de-de').
-     * Returns null for locales that PMP does not ship a bundle for.
+     * Composes the PMP bundle URL for the new query-parameter endpoint.
+     * Returns an empty string when the resource key is missing -- the
+     * enqueue path uses that to short-circuit registration.
      *
-     * @param  string      $locale a WordPress locale code
-     * @return string|null
-     */
-    public static function pmp_map_locale($locale) {
-        $suffix = strtolower(str_replace('_', '-', (string) $locale));
-        return in_array($suffix, ['en-us', 'de-de', 'fr-fr'], true) ? $suffix : null;
-    }
-
-    /**
-     * Hostname of the 51Degrees cloud server that serves PMP bundles.
-     * Defaults to 'cloud.51degrees.com' so the production deployment
-     * needs zero configuration. Local development can point at a
-     * different server by defining FIFTYONEDEGREES_PMP_CLOUD_HOST in
-     * wp-config.php (e.g. 'localhost:5001'); the constant is read at
-     * runtime so no UI is exposed to end users.
+     * The base URL comes from FiftyOneDegreesCloudMetadata, which honours
+     * the FOD_CLOUD_API_URL env var used across the plugin (robots,
+     * suspicious, cloud metadata) and falls back to
+     * https://cloud.51degrees.com when unset.
      *
-     * @return string
-     */
-    public static function pmp_cloud_host() {
-        if (defined('FIFTYONEDEGREES_PMP_CLOUD_HOST')) {
-            $host = trim((string) FIFTYONEDEGREES_PMP_CLOUD_HOST);
-            if ($host !== '') {
-                return $host;
-            }
-        }
-        return 'cloud.51degrees.com';
-    }
-
-    /**
-     * Composes the PMP bundle URL from the resolved cloud host,
-     * RESOURCE_KEY, and the active WordPress locale. Returns an empty
-     * string when the resource key is missing -- the enqueue path uses
-     * that to short-circuit registration.
+     * The accept-language query parameter is forwarded from get_locale()
+     * with the WordPress underscore form normalised to RFC 7231 dashes
+     * (e.g. de_DE -> de-DE). The server picks the closest available
+     * bundle, falling back to en-us when nothing matches; we no longer
+     * keep a hand-maintained allowlist of supported locales here.
      *
      * @return string
      */
@@ -775,12 +753,12 @@ JS;
             return '';
         }
         $locale = function_exists('get_locale') ? get_locale() : 'en_US';
-        $suffix = self::pmp_map_locale($locale) ?: 'en-us';
+        $acceptLang = str_replace('_', '-', (string) $locale);
         return sprintf(
-            'https://%s/pmp/%s/pmp-%s.js',
-            self::pmp_cloud_host(),
+            '%s/api/v4/pmp?resource=%s&accept-language=%s',
+            FiftyOneDegreesCloudMetadata::get_cloud_host_url(),
             rawurlencode($key),
-            $suffix);
+            rawurlencode($acceptLang));
     }
 
     /**

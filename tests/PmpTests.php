@@ -186,57 +186,6 @@ class PmpTests extends TestCase
         self::assertStringContainsString('Alternative Button URL', $message);
     }
 
-    // -------- pmp_map_locale --------
-
-    /**
-     * en_US maps to the 'en-us' bundle suffix.
-     */
-    public function testPmpMapLocaleEnUs()
-    {
-        self::assertEquals('en-us', FiftyoneService::pmp_map_locale('en_US'));
-    }
-
-    /**
-     * de_DE maps to 'de-de'.
-     */
-    public function testPmpMapLocaleDeDe()
-    {
-        self::assertEquals('de-de', FiftyoneService::pmp_map_locale('de_DE'));
-    }
-
-    /**
-     * fr_FR maps to 'fr-fr'.
-     */
-    public function testPmpMapLocaleFrFr()
-    {
-        self::assertEquals('fr-fr', FiftyoneService::pmp_map_locale('fr_FR'));
-    }
-
-    /**
-     * Locales PMP does not ship a bundle for fall through to null so the
-     * URL resolver leaves the configured URL untouched.
-     */
-    public function testPmpMapLocaleUnsupportedReturnsNull()
-    {
-        self::assertNull(FiftyoneService::pmp_map_locale('uk_UA'));
-        self::assertNull(FiftyoneService::pmp_map_locale(''));
-    }
-
-    // -------- pmp_cloud_host --------
-
-    /**
-     * Without the override constant the resolver returns the
-     * built-in production host.
-     */
-    public function testPmpCloudHostDefault()
-    {
-        self::assertEquals('cloud.51degrees.com', FiftyoneService::pmp_cloud_host());
-    }
-
-    // pmp_cloud_host's constant-override branch is exercised in
-    // integration tests (see test_pmp.py): defining a runtime
-    // constant once would leak into every PHPUnit case that follows.
-
     // -------- pmp_add_data_attributes --------
 
     /**

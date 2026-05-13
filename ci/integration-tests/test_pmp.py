@@ -202,17 +202,17 @@ class TestBrowserFlow:
 
         save_pmp_settings(wp_admin_session)
 
-        # The plugin reads FIFTYONEDEGREES_PMP_CLOUD_HOST from wp-config
-        # to compose the bundle URL. The dev environment must point that
-        # constant at PMP_CLOUD_URL for this test to load the bundle from
-        # the local cloud; otherwise the rendered tag still targets
-        # production and the browser flow won't exercise local code.
-        expected_host = re.sub(r'^https?://', '', PMP_CLOUD_URL)
+        # The plugin composes the bundle URL from the shared FOD_CLOUD_API_URL
+        # env var (same one robots / suspicious / cloud metadata respect).
+        # The dev environment must point that variable at PMP_CLOUD_URL for
+        # this test to load the bundle from the local cloud; otherwise the
+        # rendered tag still targets production and the browser flow won't
+        # exercise local code.
         page_resp = requests.get(WORDPRESS_URL)
-        if f'https://{expected_host}/pmp/' not in page_resp.text:
+        if f'{PMP_CLOUD_URL}/api/v4/pmp?' not in page_resp.text:
             pytest.skip(
-                f'PMP bundle URL does not target {expected_host}. Set '
-                f'FIFTYONEDEGREES_PMP_CLOUD_HOST="{expected_host}" in wp-config.'
+                f'PMP bundle URL does not target {PMP_CLOUD_URL}. Set '
+                f'FOD_CLOUD_API_URL="{PMP_CLOUD_URL}" in the environment.'
             )
 
         browser.delete_all_cookies()

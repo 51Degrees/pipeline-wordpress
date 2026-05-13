@@ -113,14 +113,15 @@ for now; randomized rotation will be implemented at runtime in a
 follow-up.
 
 The bundle URL is built as
-`https://{host}/pmp/{resource-key}/pmp-{locale}.js`, where `{host}`
-defaults to `cloud.51degrees.com`. Local development can override
-the host by defining `FIFTYONEDEGREES_PMP_CLOUD_HOST` in
-`wp-config.php` (e.g. `define('FIFTYONEDEGREES_PMP_CLOUD_HOST',
-'localhost:5001');`); there is no admin UI for it because production
-deployments are not expected to change the value. The locale suffix
-follows `get_locale()` for `de_DE` / `fr_FR`; everything else falls
-back to `en-us`.
+`{base}/api/v4/pmp?resource={resource-key}&accept-language={locale}`,
+where `{base}` comes from the same `FOD_CLOUD_API_URL` env var the
+rest of the plugin honours (robots, suspicious, cloud metadata) and
+defaults to `https://cloud.51degrees.com`. Point it at a staging or
+local server when running the cloud yourself; production deployments
+need no configuration. The `{locale}` value is `get_locale()`
+rewritten to RFC 7231 form (`de_DE` → `de-DE`); the cloud resolves
+the closest available bundle and falls back to `en-us` for anything
+it doesn't ship, so no allowlist lives in the plugin.
 
 ### Flow
 
