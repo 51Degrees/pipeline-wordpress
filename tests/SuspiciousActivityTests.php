@@ -244,6 +244,21 @@ class SuspiciousActivityTests extends TestCase
     }
 
     /**
+     * /robots.txt is crawler metadata; counting it would redirect bots
+     * away from the policy they were asked to fetch and break the paired
+     * robots-enforce feature.
+     */
+    public function testSkippedOnRobotsTxt()
+    {
+        $this->options[Options::SUSPICIOUS_ENABLE] = 'on';
+        $_SERVER['REQUEST_URI'] = '/robots.txt';
+
+        SuspiciousActivity::check_and_maybe_redirect();
+
+        self::assertEmpty($this->transients);
+    }
+
+    /**
      * Test that the redirect is skipped when headers have already been sent.
      */
     public function testSkippedWhenHeadersSent()
