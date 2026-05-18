@@ -769,7 +769,7 @@ JS;
      * version; admins can override per-site via the PMP settings.
      */
     public const PMP_DEFAULT_TCF_VENDOR_STRING =
-        'CQkGEcAQkGEcAAzABAENCeFsAP_gAH_gAAAAMdNR_G__bWlr-bb3abtkeYxP9_hr7sQxBgbIkm4FzLvW7JwHx2EZNAzatiIKmRIAu3TBIQNlHJDURUCgKIgFryDMaE2U4TNKJ6BkiFMZI2tQCFxvm4tjeQCY4ur_9kc1mB-t7dr82dzyy6hHn3a5fmS1UJCdIYetDfv8ZBOT-9IEd-x8v4v4_EbpEm8eS1n_pGtp4jc6Yns_dBmxt-Tyff7Pn__rl_e7X_ve_n3zv8oXn7rr____f_-7___2b_-___b-__7Z_zI_BjQAEw0OiCMsiBQIFAQggQAKCsIAKBAEAACQFEBACYMCHIGAC6wiQAgBQADBACAAEGAAIAABIAEIgAgAIBACBAIFAAGABAEBAAwMAAYAKEQCAAEB0DFMCCAQLABIjKgNMCEABIICWyoQSgYEFcIUixwCCBETBQAAAgAFAAAgPhYCEkoJWJBAFxBdAAgAAABRAiwIpCzAEFQZotBWBJwGRpgCR5gmSU6CIAmCEjIMiE1QSDxTFEKCHIDYpZgDp4goAZdrJCH-oFm4AAAA';
+        'CQkMqUAQkMqUAAfABAENCfFsAP_wAEPgAAAAMetR_G__bWlr-bb3abtkeYxP9_hr7sQxBgbIkm4FzLvW7JwHx2EZNAzatiIKmRIAu3TBIQNlHJDURUCgKIgFryDMaE2U4TNKJ6BkiFMZI2tQCFxvm4tjeQCY4ur_9kc1mB-t7dr82dzyy6hHn3a5fmS1UJCdIYetDfv8ZBOT-9IEd-x8v4v4_EbpEm8eS1n_pGtp4jc6Yns_dBmxt-Tyff7Pn__7l_e7X_ve_n3zv8oXn7rr____f_-7___2b_-___b-__7Z_zI_4MegAmGh0QRlkQKBAoCEECABQVhABQIAgAASAogIATBgQ5AwAXWESAEAKAAYIAQAAgwABAAAJAAhEAEABAIAQIBAoAAwAIAgIAGBgADABQiAQAAgOgYpgQQCBYAJEZUBpgQgAJBAS2VCCUDAgrhCkWOAQQIiYKAAAEAAoAAEB8LAQklBKxIIAuILoAEAAAAKIEWBFIWYAgqDNFoKwJOAyNMASPMEiSnQRAEwQkZBkQmqCQeKYohQQ5AbFLMAdPEFADLtZIQ_1As3AIAA.IMetX_H__bX9v-f736ft0eY1f9_j77uQxBhfJs-4FzLvW_JwX32E7NF36tqYKmRIEu3bBIQNtHJnUTVihaogVrzHsak2c4TtKJ-BkiHMZe29YCF5vm4tj-QKZ5_r_93d92T_9_dv-3dzy3_1nv3f9_-f1eLide5_tH_v_bROb-_I_9_7-_4v8_t_rk2_eT1v_9evv7__-________9_____________-____f________________________f__________9____4AA';
 
     /**
      * Returns the configured TCF Vendor String or the built-in
@@ -792,12 +792,12 @@ JS;
     }
 
     /**
-     * Returns the configured Alternative Button Label or 'Pay' when
+     * Returns the configured Alternative Button Label or 'Remove ads' when
      * none is set.
      */
     public static function pmp_alt_label() {
         $value = get_option(Options::PMP_ALT_LABEL);
-        return empty($value) ? 'Pay' : $value;
+        return empty($value) ? 'Remove ads' : $value;
     }
 
     /**

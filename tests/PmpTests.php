@@ -237,7 +237,7 @@ class PmpTests extends TestCase
 
     /**
      * Empty options fall back to runtime defaults: site name for the
-     * brand, 'Pay' for the alt label, 'https://example.com' for the
+     * brand, 'Remove ads' for the alt label, 'https://example.com' for the
      * alt URL, and the built-in all-vendors TCF Vendor String.
      * Optional fields without a fallback (Brand Logo, Terms URL)
      * stay absent from the tag.
@@ -252,7 +252,7 @@ class PmpTests extends TestCase
         );
 
         self::assertStringContainsString('data-brand-name="Test Site"', $result);
-        self::assertStringContainsString('data-alt-name="Pay"', $result);
+        self::assertStringContainsString('data-alt-name="Remove ads"', $result);
         self::assertStringContainsString('data-alt-url="https://example.com"', $result);
         self::assertStringContainsString(
             'data-tcf-vendor="' . FiftyoneService::PMP_DEFAULT_TCF_VENDOR_STRING . '"',
