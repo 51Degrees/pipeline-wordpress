@@ -120,9 +120,14 @@ try {
         }
 
     } finally {
-        Stop-Job $server
-        Receive-Job $server -ErrorAction SilentlyContinue
-        Remove-Job $server
+        Stop-Job $server -ErrorAction SilentlyContinue | Out-Null
+        Write-Host "=== PHP built-in server output (stdout + stderr) ==="
+        # 6>&1 surfaces the Information stream that `php -S` request logs
+        # land on under PowerShell jobs; 2>&1 surfaces PHP fatals.
+        Receive-Job $server -Keep -ErrorAction SilentlyContinue *>&1 |
+            ForEach-Object { Write-Host $_ }
+        Write-Host "=== end PHP built-in server output ==="
+        Remove-Job $server -Force -ErrorAction SilentlyContinue
     }
 } finally {
     Pop-Location
