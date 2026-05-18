@@ -83,7 +83,16 @@ try {
 
     try {
         Write-Host "=== Starting the server"
-        $server = php $wp server &
+        $serverStdout = "$PWD/php-server.stdout.log"
+        $serverStderr = "$PWD/php-server.stderr.log"
+        Remove-Item $serverStdout, $serverStderr -ErrorAction SilentlyContinue
+        # Start-Process with -RedirectStandard* writes directly to disk —
+        # unlike PowerShell jobs, which drop native-process stderr.
+        $server = Start-Process -FilePath "php" `
+            -ArgumentList @("$wp", "server") `
+            -RedirectStandardOutput $serverStdout `
+            -RedirectStandardError $serverStderr `
+            -PassThru -NoNewWindow
 
         Wait-Port -Port 8080
 
@@ -120,14 +129,15 @@ try {
         }
 
     } finally {
-        Stop-Job $server -ErrorAction SilentlyContinue | Out-Null
-        Write-Host "=== PHP built-in server output (stdout + stderr) ==="
-        # 6>&1 surfaces the Information stream that `php -S` request logs
-        # land on under PowerShell jobs; 2>&1 surfaces PHP fatals.
-        Receive-Job $server -Keep -ErrorAction SilentlyContinue *>&1 |
-            ForEach-Object { Write-Host $_ }
+        if ($server -and -not $server.HasExited) {
+            Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
+            $server.WaitForExit(2000) | Out-Null
+        }
+        Write-Host "=== PHP built-in server stderr (request log + PHP errors/fatals) ==="
+        if (Test-Path $serverStderr) { Get-Content $serverStderr | ForEach-Object { Write-Host $_ } }
+        Write-Host "=== PHP built-in server stdout ==="
+        if (Test-Path $serverStdout) { Get-Content $serverStdout | ForEach-Object { Write-Host $_ } }
         Write-Host "=== end PHP built-in server output ==="
-        Remove-Job $server -Force -ErrorAction SilentlyContinue
     }
 } finally {
     Pop-Location
