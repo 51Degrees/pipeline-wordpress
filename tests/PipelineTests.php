@@ -90,14 +90,15 @@ class PipelineTests extends TestCase {
             "replacing !!YOUR_RESOURCE_KEY!!.");
         }
 
+        $result = null;
+        Functions\when('get_option')->alias(function ($name, $default = null) use (&$result) {
+            if ($name === Options::PIPELINE) return $result;
+            if ($name === Options::SUSPICIOUS_ENABLE) return 'off';
+            return $default;
+        });
         $result = Pipeline::make_pipeline($resourceKey);
         $this->assertInstanceOf(\fiftyone\pipeline\core\Pipeline::class, $result['pipeline']);
 
-        Functions\expect('get_option')
-            ->once()
-            ->with(Options::PIPELINE)
-            ->andReturn($result);
-        
         Pipeline::process();
         $this->assertArrayHasKey('device', Pipeline::$data['flowData']->pipeline->flowElementsList["cloud"]->flowElementProperties);
     }
@@ -263,6 +264,57 @@ class PipelineTests extends TestCase {
     }
 
     /**
+     * Test that make_pipeline drops fodid from the cached engine list when
+     * suspicious activity detection is off — preventing the upstream
+     * CloudEngine isset() crash for a missing per-request fodid block.
+     */
+    public function testMakePipeline_ExcludesFodidWhenSuspiciousDisabled() {
+        Functions\when('get_site_url')->justReturn('http://localhost/testsite');
+        Functions\when('rest_url')->justReturn('http://localhost/testsite/wp-json/fiftyonedegrees/v4/json');
+        Functions\when('home_url')->justReturn('http://localhost/testsite');
+        Functions\when('get_option')->alias(function ($name, $default = null) {
+            if ($name === Options::SUSPICIOUS_ENABLE) return 'off';
+            return $default;
+        });
+
+        Patchwork\redefine(
+            'fiftyone\pipeline\cloudrequestengine\CloudRequestEngine::getEngineProperties',
+            Patchwork\always(['device' => [], 'fodid' => [], 'robotstxt' => []])
+        );
+
+        $result = Pipeline::make_pipeline('AQS5-test');
+
+        $this->assertSame(['device'], $result['available_engines']);
+        $this->assertInstanceOf(\fiftyone\pipeline\core\Pipeline::class, $result['pipeline']);
+    }
+
+    /**
+     * Test that make_pipeline keeps fodid in the cached engine list when
+     * suspicious activity detection is enabled — robotstxt is still excluded
+     * because it has its own direct-HTTP fetcher.
+     */
+    public function testMakePipeline_IncludesFodidWhenSuspiciousEnabled() {
+        Functions\when('get_site_url')->justReturn('http://localhost/testsite');
+        Functions\when('rest_url')->justReturn('http://localhost/testsite/wp-json/fiftyonedegrees/v4/json');
+        Functions\when('home_url')->justReturn('http://localhost/testsite');
+        Functions\when('get_option')->alias(function ($name, $default = null) {
+            if ($name === Options::SUSPICIOUS_ENABLE) return 'on';
+            return $default;
+        });
+
+        Patchwork\redefine(
+            'fiftyone\pipeline\cloudrequestengine\CloudRequestEngine::getEngineProperties',
+            Patchwork\always(['device' => [], 'fodid' => [], 'robotstxt' => []])
+        );
+
+        $result = Pipeline::make_pipeline('AQS5-test');
+
+        $this->assertContains('device', $result['available_engines']);
+        $this->assertContains('fodid', $result['available_engines']);
+        $this->assertNotContains('robotstxt', $result['available_engines']);
+    }
+
+    /**
      * Test that when suspicious activity detection is enabled,
      * Pipeline::process sets query.id.usage = 'non-marketing' so the
      * cloud can generate IdProbLic / IdProbGlobal.
@@ -318,6 +370,56 @@ class PipelineTests extends TestCase {
 
         $this->assertNull(
             Pipeline::$data['flowData']->evidence->get('query.id.usage')
+        );
+    }
+
+    /**
+     * Regression guard for the fodid crash path. Cloud advertises fodid in
+     * getEngineProperties() but the per-request response omits the fodid
+     * block. With SUSPICIOUS_ENABLE off, make_pipeline must exclude fodid
+     * from the cached engine list so CloudEngine::processInternal is never
+     * called for it, and process() returns Pipeline::$data populated.
+     */
+    public function testRepro_FodidCrashWhenCloudOmitsBlock() {
+        Functions\when('home_url')->justReturn('https://example.com');
+        Functions\when('get_site_url')->justReturn('https://example.com');
+        Functions\when('rest_url')->justReturn('https://example.com/wp-json/fiftyonedegrees/v4/json');
+
+        Patchwork\redefine(
+            'fiftyone\pipeline\cloudrequestengine\CloudRequestEngine::getEngineProperties',
+            Patchwork\always(['device' => [], 'fodid' => []])
+        );
+        Patchwork\redefine(
+            'FiftyOneDegreesWpHttpClient::makeCloudRequest',
+            function ($method, $url) {
+                // Cloud advertises a fodid block in evidencekeys but omits it
+                // from the per-request response — the exact crash shape.
+                if (strpos($url, 'evidencekeys') !== false) {
+                    return '["query.user-agent"]';
+                }
+                return '{"device":{"hardwarename":["Test"]}}';
+            }
+        );
+
+        $built = null;
+        Functions\when('get_option')->alias(function ($name, $default = null) use (&$built) {
+            if ($name === Options::PIPELINE) return $built;
+            if ($name === Options::SUSPICIOUS_ENABLE) return 'off';
+            return $default;
+        });
+        $built = Pipeline::make_pipeline('TEST_KEY');
+
+        Pipeline::reset();
+        Pipeline::process();
+
+        $this->assertNotNull(
+            Pipeline::$data,
+            'Regression guard: cloud advertises fodid but omits its block — '
+            . 'pipeline must not crash when SUSPICIOUS_ENABLE is off.'
+        );
+        $this->assertInstanceOf(
+            \fiftyone\pipeline\core\FlowData::class,
+            Pipeline::$data['flowData']
         );
     }
 
@@ -379,11 +481,13 @@ class PipelineTests extends TestCase {
             "replacing !!YOUR_RESOURCE_KEY!!.");
         }
 
+        $pipeline = null;
+        Functions\when('get_option')->alias(function ($name, $default = null) use (&$pipeline) {
+            if ($name === Options::PIPELINE) return $pipeline;
+            if ($name === Options::SUSPICIOUS_ENABLE) return 'off';
+            return $default;
+        });
         $pipeline = Pipeline::make_pipeline($resourceKey);
-        Functions\expect('get_option')
-            ->once()
-            ->with(Options::PIPELINE)
-            ->andReturn($pipeline);
 
         Pipeline::process();
         $result = Pipeline::$data;
@@ -392,7 +496,7 @@ class PipelineTests extends TestCase {
             "fiftyone\pipeline\core\FlowData");
         $this->assertTrue(isset($result["properties"]));
         $this->assertTrue(count($result["errors"]) == 0);
-        
+
     }
 
     /**
@@ -653,11 +757,13 @@ class PipelineTests extends TestCase {
         }
 
         $_SERVER['REMOTE_ADDR'] = '203.0.113.1';
-        $pipeline = Pipeline::make_pipeline($resourceKey);
-        Functions\when('get_option')->alias(function ($name, $default = null) use ($pipeline) {
+        $pipeline = null;
+        Functions\when('get_option')->alias(function ($name, $default = null) use (&$pipeline) {
             if ($name === Options::PIPELINE) return $pipeline;
+            if ($name === Options::SUSPICIOUS_ENABLE) return 'off';
             return $default;
         });
+        $pipeline = Pipeline::make_pipeline($resourceKey);
 
         Pipeline::process();
 
@@ -681,11 +787,13 @@ class PipelineTests extends TestCase {
 
         $_SERVER['REMOTE_ADDR'] = '203.0.113.1';
         $_GET['client-ip'] = 'attacker.ip.spoof';
-        $pipeline = Pipeline::make_pipeline($resourceKey);
-        Functions\when('get_option')->alias(function ($name, $default = null) use ($pipeline) {
+        $pipeline = null;
+        Functions\when('get_option')->alias(function ($name, $default = null) use (&$pipeline) {
             if ($name === Options::PIPELINE) return $pipeline;
+            if ($name === Options::SUSPICIOUS_ENABLE) return 'off';
             return $default;
         });
+        $pipeline = Pipeline::make_pipeline($resourceKey);
 
         Pipeline::process();
 
@@ -713,11 +821,13 @@ class PipelineTests extends TestCase {
 
         $_SERVER = [];
         $_GET = [];
-        $pipeline = Pipeline::make_pipeline($resourceKey);
-        Functions\when('get_option')->alias(function ($name, $default = null) use ($pipeline) {
+        $pipeline = null;
+        Functions\when('get_option')->alias(function ($name, $default = null) use (&$pipeline) {
             if ($name === Options::PIPELINE) return $pipeline;
+            if ($name === Options::SUSPICIOUS_ENABLE) return 'off';
             return $default;
         });
+        $pipeline = Pipeline::make_pipeline($resourceKey);
 
         Pipeline::process();
 

@@ -134,12 +134,15 @@ class Pipeline
         // Add CloudRequestEngine to the pipeline.
         $builder->add($cloud);
 
-        // Add all the engines, accessible via provided resourceKey, to the
-        // pipeline. 'robotstxt' is excluded — its content is fetched separately
-        // via a direct HTTP call in FiftyOneDegreesRobotsTxt::fetch_from_cloud()
-        // and the CloudEngine library accesses the response key without isset(),
-        // causing a fatal warning when robotstxt data is absent from the response.
-        $engines = array_values(array_filter($engines, fn($e) => $e !== 'robotstxt'));
+        // Skip engines: both would crash CloudEngine's missing-isset() path; robotstxt also has a direct-HTTP fetcher.
+        $excluded = ['robotstxt'];
+        if (get_option(Options::SUSPICIOUS_ENABLE, 'off') !== 'on') {
+            $excluded[] = 'fodid';
+        }
+        $engines = array_values(array_filter(
+            $engines,
+            fn($e) => !in_array($e, $excluded, true)
+        ));
         foreach ($engines as $engine) {
             $cloudEngine = new CloudEngine();
             $cloudEngine->dataKey = $engine;
