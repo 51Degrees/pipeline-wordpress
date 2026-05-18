@@ -227,9 +227,7 @@ class Pipeline
                     $flowData->evidence->set('query.client-ip', $resolvedIp);
                 }
 
-                // Suspicious activity detection relies on IdProbLic/IdProbGlobal;
-                // the cloud requires query.id.usage for those to be populated.
-                if (get_option(Options::SUSPICIOUS_ENABLE, 'off') === 'on') {
+                if (isset($pipeline->flowElementsList['fodid'])) {
                     $flowData->evidence->set('query.id.usage', 'non-marketing');
                 }
 

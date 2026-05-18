@@ -315,17 +315,20 @@ class PipelineTests extends TestCase {
     }
 
     /**
-     * Test that when suspicious activity detection is enabled,
-     * Pipeline::process sets query.id.usage = 'non-marketing' so the
-     * cloud can generate IdProbLic / IdProbGlobal.
+     * Test that id.usage IS set when the cached pipeline contains the fodid
+     * engine — the production-shape pipeline built when SUSPICIOUS_ENABLE was
+     * 'on' at make_pipeline time.
      */
     public function testProcess_SetsIdUsageWhenSuspiciousEnabled() {
+        $stub_fodid = new TestFlowElement();
+        $stub_fodid->dataKey = 'fodid';
         $mock_pipeline = (new PipelineBuilder())
             ->add(new TestFlowElement())
+            ->add($stub_fodid)
             ->build();
         $pipeline = [
             'pipeline' => $mock_pipeline,
-            'available_engines' => ['testElement'],
+            'available_engines' => ['testElement', 'fodid'],
             'error' => null,
         ];
 
@@ -345,17 +348,47 @@ class PipelineTests extends TestCase {
     }
 
     /**
-     * Test that when suspicious activity detection is disabled,
-     * Pipeline::process does not set query.id.usage — avoids wasted
-     * 51DiD generation at the cloud for sites not using the feature.
+     * Test that id.usage is NOT set when the cached pipeline has no fodid
+     * element. The option no longer drives this decision; pipeline state does.
      */
-    public function testProcess_DoesNotSetIdUsageWhenSuspiciousDisabled() {
+    public function testProcess_DoesNotSetIdUsage_WhenPipelineHasNoFodid() {
         $mock_pipeline = (new PipelineBuilder())
             ->add(new TestFlowElement())
             ->build();
         $pipeline = [
             'pipeline' => $mock_pipeline,
             'available_engines' => ['testElement'],
+            'error' => null,
+        ];
+
+        Functions\when('get_option')->alias(function ($name, $default = null) use ($pipeline) {
+            if ($name === Options::PIPELINE) return $pipeline;
+            return $default;
+        });
+
+        Pipeline::reset();
+        Pipeline::process();
+
+        $this->assertNull(
+            Pipeline::$data['flowData']->evidence->get('query.id.usage')
+        );
+    }
+
+    /**
+     * Test that id.usage IS set when the cached pipeline contains a fodid
+     * element, even when SUSPICIOUS_ENABLE is 'off' — the decision derives
+     * from pipeline state, not option state.
+     */
+    public function testProcess_SetsIdUsage_WhenPipelineHasFodid_RegardlessOfOption() {
+        $stub_fodid = new TestFlowElement();
+        $stub_fodid->dataKey = 'fodid';
+        $mock_pipeline = (new PipelineBuilder())
+            ->add(new TestFlowElement())
+            ->add($stub_fodid)
+            ->build();
+        $pipeline = [
+            'pipeline' => $mock_pipeline,
+            'available_engines' => ['testElement', 'fodid'],
             'error' => null,
         ];
 
@@ -368,7 +401,8 @@ class PipelineTests extends TestCase {
         Pipeline::reset();
         Pipeline::process();
 
-        $this->assertNull(
+        $this->assertSame(
+            'non-marketing',
             Pipeline::$data['flowData']->evidence->get('query.id.usage')
         );
     }
