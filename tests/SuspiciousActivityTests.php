@@ -851,6 +851,32 @@ class SuspiciousActivityTests extends TestCase
     }
 
     /**
+     * Test that when the rebuild fails, SUSPICIOUS_ENABLE is reverted to
+     * the old value, PIPELINE_VALIDATION_ERROR is cleared after the
+     * revert, and a dismissible admin-notice transient is set.
+     */
+    public function testUpdateOption_SuspiciousToggle_RevertsOnRebuildFailure()
+    {
+        $this->options[Options::RESOURCE_KEY] = 'AQS5-test';
+        $this->options[Options::SUSPICIOUS_ENABLE] = 'off';
+        Functions\when('add_action')->returnArg();
+        Functions\when('add_filter')->returnArg();
+
+        \Patchwork\redefine('Pipeline::make_pipeline', Patchwork\always([
+            'pipeline' => null,
+            'available_engines' => null,
+            'error' => 'cloud unreachable',
+        ]));
+
+        $service = new FiftyoneService();
+        $service->fiftyonedegrees_suspicious_enable_updated(Options::SUSPICIOUS_ENABLE, 'on', 'off');
+
+        self::assertSame('on', $this->options[Options::SUSPICIOUS_ENABLE], 'SUSPICIOUS_ENABLE must be reverted');
+        self::assertArrayNotHasKey(Options::PIPELINE_VALIDATION_ERROR, $this->options, 'PIPELINE_VALIDATION_ERROR must be cleared after revert');
+        self::assertArrayHasKey('fiftyonedegrees_suspicious_toggle_failed', $this->transients);
+    }
+
+    /**
      * Constant-based exclusion tests MUST be last. PHP constants persist
      * across tests in the same process, so once defined they contaminate
      * all subsequent tests.

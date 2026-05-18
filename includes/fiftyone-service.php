@@ -120,6 +120,9 @@ class FiftyoneService {
         add_action(
             'admin_notices',
             array($this, 'fiftyonedegrees_pipeline_autoenable_notice'));
+        add_action(
+            'admin_notices',
+            array($this, 'fiftyonedegrees_suspicious_toggle_failed_notice'));
     }
     
     /**
@@ -523,6 +526,17 @@ class FiftyoneService {
             '</p></div>';
     }
 
+    function fiftyonedegrees_suspicious_toggle_failed_notice() {
+        $message = get_transient('fiftyonedegrees_suspicious_toggle_failed');
+        if ($message === false) {
+            return;
+        }
+        delete_transient('fiftyonedegrees_suspicious_toggle_failed');
+        echo '<div class="notice notice-error is-dismissible"><p>' .
+            '<strong>51Degrees:</strong> ' . esc_html($message) .
+            '</p></div>';
+    }
+
     /**
      * Rebuilds the pipeline when the permalink structure changes.
      * Hooked to 'updated_option' (fires after the DB write) so that
@@ -562,18 +576,32 @@ class FiftyoneService {
         }
 
         $rebuilding = true;
-        update_option(Options::SESSION_INVALIDATED, time());
+        try {
+            update_option(Options::SESSION_INVALIDATED, time());
 
-        $resource_key = get_option(Options::RESOURCE_KEY);
-        if (empty($resource_key)) {
+            $resource_key = get_option(Options::RESOURCE_KEY);
+            if (empty($resource_key)) {
+                return;
+            }
+
+            delete_option(Options::PIPELINE_VALIDATION_ERROR);
+            self::build_and_save_pipeline($resource_key);
+            $had_error = (bool) get_option(Options::PIPELINE_VALIDATION_ERROR);
+
+            if ($had_error) {
+                update_option(Options::SUSPICIOUS_ENABLE, $old_value);
+                delete_option(Options::PIPELINE_VALIDATION_ERROR);
+                set_transient(
+                    'fiftyonedegrees_suspicious_toggle_failed',
+                    'Suspicious activity detection setting could not be applied — the '
+                    . '51Degrees cloud was unreachable. Your previous setting was '
+                    . 'preserved.',
+                    MINUTE_IN_SECONDS * 10
+                );
+            }
+        } finally {
             $rebuilding = false;
-            return;
         }
-
-        delete_option(Options::PIPELINE_VALIDATION_ERROR);
-        self::build_and_save_pipeline($resource_key);
-        $had_error = (bool) get_option(Options::PIPELINE_VALIDATION_ERROR);
-        $rebuilding = false;
     }
 
     /**
