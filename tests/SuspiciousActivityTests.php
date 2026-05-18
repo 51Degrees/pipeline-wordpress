@@ -18,6 +18,7 @@
 
 require_once(__DIR__ . '/../includes/suspicious-activity.php');
 require_once(__DIR__ . '/../includes/pipeline.php');
+require_once(__DIR__ . '/../includes/fiftyone-service.php');
 
 use Yoast\PHPUnitPolyfills\TestCases\TestCase;
 use Brain\Monkey\Functions;
@@ -57,6 +58,16 @@ class SuspiciousActivityTests extends TestCase
 
         Functions\when('set_transient')->alias(function ($key, $value, $ttl = 0) use (&$trans) {
             $trans[$key] = $value;
+            return true;
+        });
+
+        Functions\when('update_option')->alias(function ($key, $value) use (&$opts) {
+            $opts[$key] = $value;
+            return true;
+        });
+
+        Functions\when('delete_option')->alias(function ($key) use (&$opts) {
+            unset($opts[$key]);
             return true;
         });
 
@@ -761,6 +772,82 @@ class SuspiciousActivityTests extends TestCase
         $key = SuspiciousActivity::build_transient_key('abc');
         self::assertEquals('51d_suspicious_' . md5('abc'), $key);
         self::assertEquals(47, strlen($key));
+    }
+
+    // --- SUSPICIOUS_ENABLE toggle rebuilds cached pipeline ---
+
+    /**
+     * Test that toggling SUSPICIOUS_ENABLE from 'on' to 'off' synchronously
+     * rebuilds the cached pipeline.
+     */
+    public function testUpdateOption_SuspiciousToggleOnToOff_RebuildsPipeline()
+    {
+        $this->options[Options::RESOURCE_KEY] = 'AQS5-test';
+        Functions\when('add_action')->returnArg();
+        Functions\when('add_filter')->returnArg();
+
+        $built = [
+            'pipeline' => (new \fiftyone\pipeline\core\PipelineBuilder())->build(),
+            'available_engines' => ['device'],
+            'error' => null,
+        ];
+        \Patchwork\redefine('Pipeline::make_pipeline', Patchwork\always($built));
+
+        $service = new FiftyoneService();
+        $service->fiftyonedegrees_suspicious_enable_updated(Options::SUSPICIOUS_ENABLE, 'on', 'off');
+
+        self::assertArrayHasKey(Options::PIPELINE, $this->options);
+        self::assertSame($built, $this->options[Options::PIPELINE]);
+    }
+
+    /**
+     * Test that toggling SUSPICIOUS_ENABLE from 'off' to 'on' also rebuilds
+     * the cached pipeline — the handler is bidirectional.
+     */
+    public function testUpdateOption_SuspiciousToggleOffToOn_RebuildsPipeline()
+    {
+        $this->options[Options::RESOURCE_KEY] = 'AQS5-test';
+        Functions\when('add_action')->returnArg();
+        Functions\when('add_filter')->returnArg();
+
+        $built = [
+            'pipeline' => (new \fiftyone\pipeline\core\PipelineBuilder())->build(),
+            'available_engines' => ['device', 'fodid'],
+            'error' => null,
+        ];
+        \Patchwork\redefine('Pipeline::make_pipeline', Patchwork\always($built));
+
+        $service = new FiftyoneService();
+        $service->fiftyonedegrees_suspicious_enable_updated(Options::SUSPICIOUS_ENABLE, 'off', 'on');
+
+        self::assertSame($built, $this->options[Options::PIPELINE]);
+    }
+
+    /**
+     * Test that the toggle handler skips rebuild entirely when the resource
+     * key is empty — nothing to validate.
+     */
+    public function testUpdateOption_SuspiciousToggle_NoOpWhenResourceKeyEmpty()
+    {
+        $this->options[Options::RESOURCE_KEY] = '';
+        Functions\when('add_action')->returnArg();
+        Functions\when('add_filter')->returnArg();
+
+        $call_count = 0;
+        \Patchwork\redefine('Pipeline::make_pipeline', function ($key) use (&$call_count) {
+            $call_count++;
+            return [
+                'pipeline' => (new \fiftyone\pipeline\core\PipelineBuilder())->build(),
+                'available_engines' => [],
+                'error' => null,
+            ];
+        });
+
+        $service = new FiftyoneService();
+        $service->fiftyonedegrees_suspicious_enable_updated(Options::SUSPICIOUS_ENABLE, 'off', 'on');
+
+        self::assertSame(0, $call_count, 'make_pipeline must not be called when resource key is empty');
+        self::assertArrayNotHasKey(Options::PIPELINE, $this->options);
     }
 
     /**

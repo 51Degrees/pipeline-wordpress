@@ -98,6 +98,12 @@ class FiftyoneService {
             10,
             3);
 
+        add_action(
+            'updated_option',
+            array($this, 'fiftyonedegrees_suspicious_enable_updated'),
+            10,
+            3);
+
         // Build pipeline when resource key is first created (e.g. via WP-CLI)
         add_action(
             'add_option',
@@ -411,10 +417,6 @@ class FiftyoneService {
             
         }
 
-        if ($option === Options::SUSPICIOUS_ENABLE && $new_value === 'on' && $old_value !== 'on') {
-            update_option(Options::SESSION_INVALIDATED, time());
-        }
-
         if ($option === Options::GA_TRACKING_ID &&
             $old_value !== $new_value) {
             update_option(Options::GA_ID_UPDATED, true);
@@ -540,6 +542,38 @@ class FiftyoneService {
                 self::build_and_save_pipeline($resource_key);
             }
         }
+    }
+
+    /**
+     * Synchronously rebuild the cached pipeline whenever
+     * SUSPICIOUS_ENABLE is toggled. The cached pipeline's engine list is
+     * the single source of truth for both engine selection and the
+     * query.id.usage evidence decision; keep it in sync on every toggle.
+     */
+    public function fiftyonedegrees_suspicious_enable_updated($option, $old_value, $value) {
+        if ($option !== Options::SUSPICIOUS_ENABLE) {
+            return;
+        }
+
+        // $rebuilding = false reset via finally because the revert's update_option re-fires this hook; WP dispatcher guarantees the re-entry path.
+        static $rebuilding = false;
+        if ($rebuilding) {
+            return;
+        }
+
+        $rebuilding = true;
+        update_option(Options::SESSION_INVALIDATED, time());
+
+        $resource_key = get_option(Options::RESOURCE_KEY);
+        if (empty($resource_key)) {
+            $rebuilding = false;
+            return;
+        }
+
+        delete_option(Options::PIPELINE_VALIDATION_ERROR);
+        self::build_and_save_pipeline($resource_key);
+        $had_error = (bool) get_option(Options::PIPELINE_VALIDATION_ERROR);
+        $rebuilding = false;
     }
 
     /**
