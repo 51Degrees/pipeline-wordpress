@@ -234,14 +234,7 @@ class Pipeline
                     $flowData->evidence->set('query.client-ip', $resolvedIp);
                 }
 
-                // PMP preference (cookie) takes priority over the fodid
-                // engine's 'non-marketing' fallback when both features are active.
-                if (isset($_COOKIE['51d_pmp_pref'])) {
-                    $pref = sanitize_text_field(wp_unslash($_COOKIE['51d_pmp_pref']));
-                    if (in_array($pref, ['standard', 'personalized'], true)) {
-                        $flowData->evidence->set('query.id.usage', $pref);
-                    }
-                } elseif (isset($pipeline->flowElementsList['fodid'])) {
+                if (isset($pipeline->flowElementsList['fodid'])) {
                     $flowData->evidence->set('query.id.usage', 'non-marketing');
                 }
 

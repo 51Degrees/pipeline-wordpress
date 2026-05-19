@@ -187,30 +187,16 @@ require_once __DIR__ . '/includes/page-picker.php';
     var display = document.getElementById('fod-pmp-current-pref');
     var btn     = document.getElementById('fod-pmp-clear-pref');
     var STORAGE_KEY = '__51d_pmp_pref';
-    var COOKIE_NAME = '51d_pmp_pref';
     var NONE_LABEL  = <?php echo wp_json_encode(__('(none)', 'fiftyonedegrees')); ?>;
 
-    function readCookie(name) {
-        var match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
-        return match ? decodeURIComponent(match[1]) : null;
-    }
-
     function render() {
-        var local = null;
-        try { local = localStorage.getItem(STORAGE_KEY); } catch (e) {}
-        var cookie = readCookie(COOKIE_NAME);
-        if (local && cookie && local !== cookie) {
-            display.textContent = 'localStorage: ' + local + ', cookie: ' + cookie;
-        } else if (local || cookie) {
-            display.textContent = local || cookie;
-        } else {
-            display.textContent = NONE_LABEL;
-        }
+        var pref = null;
+        try { pref = localStorage.getItem(STORAGE_KEY); } catch (e) {}
+        display.textContent = pref || NONE_LABEL;
     }
 
     btn.addEventListener('click', function () {
         try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
-        document.cookie = COOKIE_NAME + '=; path=/; SameSite=Lax; expires=Thu, 01 Jan 1970 00:00:00 GMT';
         render();
     });
 

@@ -766,29 +766,6 @@ class FiftyoneService {
         wp_enqueue_script('fiftyonedegrees-pmp');
 
         add_filter('script_loader_tag', [$this, 'pmp_add_data_attributes'], 10, 3);
-
-        // Glue invoked by PMP via data-action-url=javascript:...
-        // Persists the choice as a cookie so the server-side pipeline can
-        // read it as query.id.usage evidence, re-issues the REST call so the
-        // cloud generates 51DiD with the chosen preference, then signals
-        // PMP that TCF listeners can be notified.
-        $rest_url = esc_url_raw(rest_url('fiftyonedegrees/v4/json'));
-        $pmp_glue = <<<JS
-(function () {
-  window.fiftyoneDegreesPmpOnChoice = function (preference) {
-    document.cookie = '51d_pmp_pref=' + encodeURIComponent(preference) +
-                      '; path=/; SameSite=Lax';
-    var done = function () {
-      if (window.__51d_pmp && window.__51d_pmp.markTcfReady) {
-        window.__51d_pmp.markTcfReady();
-      }
-    };
-    fetch('{$rest_url}', { method: 'POST', credentials: 'include' })
-      .then(done, done);
-  };
-})();
-JS;
-        wp_add_inline_script('fiftyonedegrees', $pmp_glue, 'after');
     }
 
     /**
@@ -904,7 +881,6 @@ JS;
             'data-brand-terms-url'  => get_option(Options::PMP_BRAND_TERMS_URL),
             'data-alt-name'         => self::pmp_alt_label(),
             'data-alt-url'          => self::pmp_alt_url(),
-            'data-action-url'       => "javascript:window.fiftyoneDegreesPmpOnChoice('{preference}')",
         ];
         if (get_option(Options::PMP_SHOW_STANDARD, 'off') === 'on') {
             $attrs['data-show-standard'] = 'true';
