@@ -1,10 +1,13 @@
 """Selenium tests for the PMP (Preference Management Platform) tab.
 
-Covers admin-form persistence, server-rendered <script data-*> tags on
-public pages, the inline ``fiftyoneDegreesPmpOnChoice`` glue, and the
-``query.id.usage`` cookie the glue sets for the next pipeline request.
+Covers admin-form persistence, server-rendered ``<script data-*>`` tags
+on public pages, and the inline ``window.onPMPCompletion`` no-op default
+that publisher code can override to react to the visitor's choice.
 Browser-flow assertions (popup visibility, __tcfapi state) need a
 running PMP cloud at ``PMP_CLOUD_URL`` and skip if it is unreachable.
+The plugin does not set cookies and does not persist the preference
+server-side; the PMP widget bundle stores it in
+``localStorage['__51d_pmp_pref']``.
 """
 
 import os
@@ -154,17 +157,31 @@ class TestScriptTagOnFrontend:
         assert 'fiftyonedegrees-pmp-js' not in resp.text
 
 
-class TestGlueAndCookie:
-    """The inline glue is rendered with the WP REST endpoint URL and
-    plants the ``51d_pmp_pref`` cookie when invoked."""
+class TestContinuationHook:
+    """When PMP is enabled, the page registers a no-op
+    ``window.onPMPCompletion`` default that publisher code can override
+    to react to the visitor's Standard/Personalized choice. The widget
+    invokes the hook via the ``data-action-url`` JS URL on the script
+    tag."""
 
-    def test_inline_glue_rendered(self, wp_admin_session):
+    def test_inline_default_registered(self, wp_admin_session):
         save_pmp_settings(wp_admin_session)
 
         resp = requests.get(WORDPRESS_URL)
-        assert 'window.fiftyoneDegreesPmpOnChoice' in resp.text
-        # The fetch target is wp-json/fiftyonedegrees/v4/json.
-        assert 'wp-json/fiftyonedegrees/v4/json' in resp.text
+        # The inline 'before' script defines a no-op default unless the
+        # publisher has already assigned their own onPMPCompletion.
+        assert 'window.onPMPCompletion=window.onPMPCompletion||function' in resp.text
+
+    def test_data_action_url_routes_to_completion_hook(self, wp_admin_session):
+        save_pmp_settings(wp_admin_session)
+
+        resp = requests.get(WORDPRESS_URL)
+        # The widget reads data-action-url and substitutes {preference}
+        # at click time. esc_attr() encodes single quotes as &#039;.
+        assert (
+            'data-action-url="javascript:window.onPMPCompletion('
+            '&#039;{preference}&#039;)"'
+        ) in resp.text
 
 
 @pytest.fixture(scope='module')
@@ -178,7 +195,7 @@ def pmp_cloud_reachable():
 
 
 class TestBrowserFlow:
-    """Browser-driven checks of popup -> choice -> cookie -> TCF.
+    """Browser-driven checks of popup -> choice -> continuation hook -> TCF.
 
     Requires a running PMP cloud at ``PMP_CLOUD_URL``. If unreachable
     we skip rather than fail: in CI the cloud is provisioned separately.
@@ -188,7 +205,7 @@ class TestBrowserFlow:
         if not pmp_cloud_reachable:
             pytest.skip(f'PMP cloud at {PMP_CLOUD_URL} not reachable')
 
-    def test_popup_appears_and_choice_fires_rest(
+    def test_popup_appears_and_choice_invokes_continuation(
         self, wp_admin_session, browser, pmp_cloud_reachable
     ):
         self._ensure_cloud_reachable(pmp_cloud_reachable)
@@ -218,27 +235,32 @@ class TestBrowserFlow:
         browser.delete_all_cookies()
         browser.get(WORDPRESS_URL)
 
-        # Check the global API instead of digging into the shadow DOM.
+        # Wait for the bundle to install its global.
         WebDriverWait(browser, 10).until(
             lambda d: d.execute_script(
                 'return typeof window.__51d_pmp === "object";'
             )
         )
 
-        # Call the glue directly instead of clicking a shadow-DOM button.
+        # The inline 'before' script registered a no-op onPMPCompletion;
+        # overwrite it with a recorder so we can observe the choice
+        # flowing through the continuation hook. Then simulate the
+        # user's choice by invoking it directly (bypasses the shadow-DOM
+        # button — the data-action-url javascript: target is the same
+        # function the widget calls on click).
         browser.execute_script(
-            'document.cookie = "51d_pmp_pref=personalized; path=/; SameSite=Lax";'
-            'window.fiftyoneDegreesPmpOnChoice("personalized");'
+            'window.__pmpChoice = null;'
+            'window.onPMPCompletion = function (preference) {'
+            '  window.__pmpChoice = preference;'
+            '};'
+            "window.onPMPCompletion('personalized');"
         )
 
-        # Wait for the cookie to land.
         WebDriverWait(browser, 5).until(
-            lambda d: any(c['name'] == '51d_pmp_pref' for c in d.get_cookies())
+            lambda d: d.execute_script('return window.__pmpChoice;') == 'personalized'
         )
-        cookie = next(c for c in browser.get_cookies() if c['name'] == '51d_pmp_pref')
-        assert cookie['value'] == 'personalized'
 
-        # markTcfReady is fired by the glue after fetch resolves; cmpStatus
+        # markTcfReady is fired by the bundle after fetch resolves; cmpStatus
         # flips from 'loading' to 'loaded' at that point.
         WebDriverWait(browser, 10).until(
             lambda d: d.execute_script(
