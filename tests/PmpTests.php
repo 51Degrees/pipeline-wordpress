@@ -228,7 +228,10 @@ class PmpTests extends TestCase
         self::assertStringContainsString('data-brand-terms-url="https://example.com/privacy"', $result);
         self::assertStringContainsString('data-alt-name="Pay"', $result);
         self::assertStringContainsString('data-alt-url="https://example.com/pay"', $result);
-        self::assertStringNotContainsString('data-action-url', $result);
+        self::assertStringContainsString(
+            "data-action-url=\"javascript:window.onPMPCompletion('{preference}')\"",
+            $result
+        );
     }
 
     /**
@@ -259,6 +262,7 @@ class PmpTests extends TestCase
             $result
         );
         self::assertStringContainsString('data-tcf-vendor-id="51"', $result);
+        self::assertStringContainsString('data-action-url=', $result);
         // Terms URL has no fallback and is skipped when empty.
         self::assertStringNotContainsString('data-brand-terms-url=""', $result);
     }

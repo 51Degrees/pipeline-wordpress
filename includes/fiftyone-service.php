@@ -765,6 +765,18 @@ class FiftyoneService {
         wp_register_script('fiftyonedegrees-pmp', $url, [], null, true);
         wp_enqueue_script('fiftyonedegrees-pmp');
 
+        // Publisher-overridable continuation hook. Site owners can use
+        // it to bootstrap anything that depends on the visitor's
+        // preference -- analytics, Prebid.js initialisation, lazy ad
+        // stacks, etc. -- by defining their own window.onPMPCompletion.
+        // The default is a no-op. PMP itself acts as the CMP via TCF
+        // API, so no separate consent manager is needed.
+        wp_add_inline_script(
+            'fiftyonedegrees-pmp',
+            '(function(){window.onPMPCompletion=window.onPMPCompletion||function(preference){};})();',
+            'before'
+        );
+
         add_filter('script_loader_tag', [$this, 'pmp_add_data_attributes'], 10, 3);
     }
 
@@ -881,6 +893,10 @@ class FiftyoneService {
             'data-brand-terms-url'  => get_option(Options::PMP_BRAND_TERMS_URL),
             'data-alt-name'         => self::pmp_alt_label(),
             'data-alt-url'          => self::pmp_alt_url(),
+            // Routes the user's choice into window.onPMPCompletion, our
+            // publisher-overridable continuation hook (see the inline
+            // script registered alongside the PMP handle).
+            'data-action-url'       => "javascript:window.onPMPCompletion('{preference}')",
         ];
         if (get_option(Options::PMP_SHOW_STANDARD, 'off') === 'on') {
             $attrs['data-show-standard'] = 'true';

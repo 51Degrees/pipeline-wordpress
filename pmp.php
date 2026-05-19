@@ -172,6 +172,19 @@ require_once __DIR__ . '/includes/page-picker.php';
 
 </form>
 
+<h2><?php esc_html_e('Developer Hook', 'fiftyonedegrees'); ?></h2>
+<p>
+    <?php esc_html_e('When a visitor makes a choice, the widget invokes', 'fiftyonedegrees'); ?>
+    <code>window.onPMPCompletion(preference)</code>.
+    <?php esc_html_e("The plugin provides a no-op default. Override it on your page to bootstrap anything that depends on the visitor's preference — analytics, Prebid.js, lazy ad stacks, etc. PMP itself acts as the CMP via the TCF API, so a separate consent manager isn't needed.", 'fiftyonedegrees'); ?>
+</p>
+<pre><code>&lt;script&gt;
+window.onPMPCompletion = function (preference) {
+    // preference is 'standard' | 'personalized'
+    console.log('PMP choice:', preference);
+};
+&lt;/script&gt;</code></pre>
+
 <h2><?php esc_html_e('Your Current Preference', 'fiftyonedegrees'); ?></h2>
 <p>
     <?php esc_html_e('Locally stored PMP choice on this browser:', 'fiftyonedegrees'); ?>
