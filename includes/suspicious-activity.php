@@ -249,6 +249,14 @@ class SuspiciousActivity
             return true;
         }
 
+        // /robots.txt is metadata for crawlers; counting it as suspicious
+        // activity redirects the bot away from the policy it was asked
+        // to fetch — defeating the paired robots-enforce feature.
+        $path = wp_parse_url(isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '/', PHP_URL_PATH);
+        if (is_string($path) && strtolower(rtrim($path, '/')) === '/robots.txt') {
+            return true;
+        }
+
         return false;
     }
 
