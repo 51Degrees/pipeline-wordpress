@@ -57,7 +57,6 @@ class PmpTests extends TestCase
         Functions\when('esc_url_raw')->returnArg();
         Functions\when('sanitize_text_field')->returnArg();
         Functions\when('wp_unslash')->returnArg();
-        Functions\when('get_bloginfo')->justReturn('Test Site');
         $errors = &$this->settingsErrors;
         Functions\when('add_settings_error')->alias(function ($setting, $code, $message) use (&$errors) {
             $errors[] = ['setting' => $setting, 'code' => $code, 'message' => $message];
@@ -236,11 +235,11 @@ class PmpTests extends TestCase
     }
 
     /**
-     * Empty options fall back to runtime defaults: site name for the
-     * brand, 'Remove ads' for the alt label, 'https://example.com' for the
-     * alt URL, and the built-in all-vendors TCF Vendor String.
-     * Optional fields without a fallback (Brand Logo, Terms URL)
-     * stay absent from the tag.
+     * Empty options fall back to runtime defaults: '51Degrees' for the
+     * brand, the bundled plugin logo for the brand logo, 'Remove ads' for
+     * the alt label, 'https://example.com' for the alt URL, and the
+     * built-in all-vendors TCF Vendor String. Terms URL has no fallback
+     * and stays absent from the tag.
      */
     public function testPmpAddDataAttributesUsesFallbacksWhenOptionsEmpty()
     {
@@ -251,7 +250,11 @@ class PmpTests extends TestCase
             'x'
         );
 
-        self::assertStringContainsString('data-brand-name="Test Site"', $result);
+        self::assertStringContainsString('data-brand-name="51Degrees"', $result);
+        self::assertStringContainsString(
+            'data-brand-logo="' . FIFTYONEDEGREES_PLUGIN_URL . 'assets/images/logo.png"',
+            $result
+        );
         self::assertStringContainsString('data-alt-name="Remove ads"', $result);
         self::assertStringContainsString('data-alt-url="https://example.com"', $result);
         self::assertStringContainsString(
@@ -260,8 +263,7 @@ class PmpTests extends TestCase
         );
         self::assertStringContainsString('data-tcf-vendor-id="51"', $result);
         self::assertStringContainsString('data-action-url=', $result);
-        // Fields without a fallback are still skipped when empty.
-        self::assertStringNotContainsString('data-brand-logo=""', $result);
+        // Terms URL has no fallback and is skipped when empty.
         self::assertStringNotContainsString('data-brand-terms-url=""', $result);
     }
 
