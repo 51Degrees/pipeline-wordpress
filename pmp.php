@@ -19,31 +19,6 @@
 if (!defined('ABSPATH')) { exit; }
 
 require_once __DIR__ . '/includes/page-picker.php';
-
-$resource_key    = get_option(Options::RESOURCE_KEY, '');
-$cached_pipeline = get_option(Options::PIPELINE);
-
-// Without IdProbGlobal or IdProbLic in the Resource Key the cloud does not
-// produce a 51DiD value, so PMP has nothing to gate.
-if (!empty($resource_key) && isset($cached_pipeline['pipeline']) && isset($cached_pipeline['available_engines'])) {
-    $has_iddprob = false;
-    foreach ($cached_pipeline['available_engines'] as $engine) {
-        try {
-            $props = $cached_pipeline['pipeline']->getElement($engine)->getProperties();
-            if (isset($props['idproblic']) || isset($props['idprobglobal'])) {
-                $has_iddprob = true;
-                break;
-            }
-        } catch (\Throwable $e) {
-        }
-    }
-    if (!$has_iddprob) {
-        echo '<p></p><span class="fod-pipeline-status warn"><b>' .
-            esc_html__('Resource Key does not include 51DiD properties (IdProbGlobal / IdProbLic). PMP cannot perform identity gating without them.', 'fiftyonedegrees') .
-            ' <a href="https://configure.51degrees.com" target="_blank">' .
-            esc_html__('Configure your key', 'fiftyonedegrees') . '</a></b></span>';
-    }
-}
 ?>
 
 <form method="post" action="options.php">
@@ -112,7 +87,8 @@ if (!empty($resource_key) && isset($cached_pipeline['pipeline']) && isset($cache
                            name="<?php echo esc_attr(Options::PMP_ALT_URL); ?>"
                            id="<?php echo esc_attr(Options::PMP_ALT_URL); ?>"
                            value="<?php echo esc_attr(FiftyoneService::pmp_alt_url()); ?>"
-                           class="regular-text">
+                           class="regular-text"
+                           autocomplete="off">
                     <?php
                     fiftyonedegrees_render_page_picker(
                         Options::PMP_ALT_URL,
@@ -145,8 +121,9 @@ if (!empty($resource_key) && isset($cached_pipeline['pipeline']) && isset($cache
                     <input type="text"
                            name="<?php echo esc_attr(Options::PMP_BRAND_LOGO_URL); ?>"
                            id="<?php echo esc_attr(Options::PMP_BRAND_LOGO_URL); ?>"
-                           value="<?php echo esc_attr(get_option(Options::PMP_BRAND_LOGO_URL)); ?>"
-                           class="regular-text">
+                           value="<?php echo esc_attr(FiftyoneService::pmp_brand_logo_url()); ?>"
+                           class="regular-text"
+                           autocomplete="off">
                 </td>
             </tr>
             <tr>
@@ -160,7 +137,8 @@ if (!empty($resource_key) && isset($cached_pipeline['pipeline']) && isset($cache
                            name="<?php echo esc_attr(Options::PMP_BRAND_TERMS_URL); ?>"
                            id="<?php echo esc_attr(Options::PMP_BRAND_TERMS_URL); ?>"
                            value="<?php echo esc_attr(get_option(Options::PMP_BRAND_TERMS_URL)); ?>"
-                           class="regular-text">
+                           class="regular-text"
+                           autocomplete="off">
                     <?php
                     fiftyonedegrees_render_page_picker(
                         Options::PMP_BRAND_TERMS_URL,
@@ -172,7 +150,7 @@ if (!empty($resource_key) && isset($cached_pipeline['pipeline']) && isset($cache
             <tr>
                 <th scope="row">
                     <label for="<?php echo esc_attr(Options::PMP_SHOW_STANDARD); ?>">
-                        <?php esc_html_e('Show Standard Option', 'fiftyonedegrees'); ?>
+                        <?php esc_html_e('Show Standard Marketing Option', 'fiftyonedegrees'); ?>
                     </label>
                 </th>
                 <td>
@@ -193,3 +171,49 @@ if (!empty($resource_key) && isset($cached_pipeline['pipeline']) && isset($cache
     <?php submit_button(__('Save Changes', 'fiftyonedegrees')); ?>
 
 </form>
+
+<h2><?php esc_html_e('Your Current Preference', 'fiftyonedegrees'); ?></h2>
+<p>
+    <?php esc_html_e('Locally stored PMP choice on this browser:', 'fiftyonedegrees'); ?>
+    <strong><span id="fod-pmp-current-pref"><em><?php esc_html_e('checking…', 'fiftyonedegrees'); ?></em></span></strong>
+</p>
+<p>
+    <button type="button" class="button" id="fod-pmp-clear-pref">
+        <?php esc_html_e('Clear Preference', 'fiftyonedegrees'); ?>
+    </button>
+</p>
+<script>
+(function () {
+    var display = document.getElementById('fod-pmp-current-pref');
+    var btn     = document.getElementById('fod-pmp-clear-pref');
+    var STORAGE_KEY = '__51d_pmp_pref';
+    var COOKIE_NAME = '51d_pmp_pref';
+    var NONE_LABEL  = <?php echo wp_json_encode(__('(none)', 'fiftyonedegrees')); ?>;
+
+    function readCookie(name) {
+        var match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+        return match ? decodeURIComponent(match[1]) : null;
+    }
+
+    function render() {
+        var local = null;
+        try { local = localStorage.getItem(STORAGE_KEY); } catch (e) {}
+        var cookie = readCookie(COOKIE_NAME);
+        if (local && cookie && local !== cookie) {
+            display.textContent = 'localStorage: ' + local + ', cookie: ' + cookie;
+        } else if (local || cookie) {
+            display.textContent = local || cookie;
+        } else {
+            display.textContent = NONE_LABEL;
+        }
+    }
+
+    btn.addEventListener('click', function () {
+        try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+        document.cookie = COOKIE_NAME + '=; path=/; SameSite=Lax; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        render();
+    });
+
+    render();
+})();
+</script>
