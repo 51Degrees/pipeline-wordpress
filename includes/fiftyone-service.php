@@ -1135,5 +1135,16 @@ JS;
         delete_option(Options::SESSION_INVALIDATED);
         delete_option(Options::PIPELINE_VALIDATION_ERROR);
     }
+
+    public function delete_pmp_options() {
+        delete_option(Options::PMP_ENABLE);
+        delete_option(Options::PMP_TCF_VENDOR_STRING);
+        delete_option(Options::PMP_ALT_LABEL);
+        delete_option(Options::PMP_ALT_URL);
+        delete_option(Options::PMP_BRAND_NAME);
+        delete_option(Options::PMP_BRAND_LOGO_URL);
+        delete_option(Options::PMP_BRAND_TERMS_URL);
+        delete_option(Options::PMP_SHOW_STANDARD);
+    }
 }
 ?>
