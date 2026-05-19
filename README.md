@@ -116,15 +116,15 @@ for now; randomized rotation will be implemented at runtime in a
 follow-up.
 
 The bundle URL is built as
-`{base}/api/v4/pmp?resource={resource-key}&accept-language={locale}`,
-where `{base}` comes from the same `FOD_CLOUD_API_URL` env var the
-rest of the plugin honours (robots, suspicious, cloud metadata) and
-defaults to `https://cloud.51degrees.com`. Point it at a staging or
-local server when running the cloud yourself; production deployments
-need no configuration. The `{locale}` value is `get_locale()`
-rewritten to RFC 7231 form (`de_DE` → `de-DE`); the cloud resolves
-the closest available bundle and falls back to `en-us` for anything
-it doesn't ship, so no allowlist lives in the plugin.
+`{base}/api/v4/pmp?resource={resource-key}`, where `{base}` comes
+from the same `FOD_CLOUD_API_URL` env var the rest of the plugin
+honours (robots, suspicious, cloud metadata) and defaults to
+`https://cloud.51degrees.com`. Point it at a staging or local
+server when running the cloud yourself; production deployments
+need no configuration. Locale negotiation is left to the browser's
+`Accept-Language` request header — the cloud resolves the closest
+available bundle and falls back to `en-us` when nothing matches,
+so no allowlist lives in the plugin.
 
 The settings tab also surfaces the visitor's current preference (read
 from `localStorage['__51d_pmp_pref']` on the admin's own browser) and

@@ -790,11 +790,10 @@ class FiftyoneService {
      * suspicious, cloud metadata) and falls back to
      * https://cloud.51degrees.com when unset.
      *
-     * The accept-language query parameter is forwarded from get_locale()
-     * with the WordPress underscore form normalised to RFC 7231 dashes
-     * (e.g. de_DE -> de-DE). The server picks the closest available
-     * bundle, falling back to en-us when nothing matches; we no longer
-     * keep a hand-maintained allowlist of supported locales here.
+     * Locale negotiation is delegated to the visitor's Accept-Language
+     * request header — the browser fetches this <script src> and sends
+     * the header for free, the cloud picks the closest available bundle
+     * and falls back to en-us when nothing matches.
      *
      * @return string
      */
@@ -803,13 +802,10 @@ class FiftyoneService {
         if (empty($key)) {
             return '';
         }
-        $locale = function_exists('get_locale') ? get_locale() : 'en_US';
-        $acceptLang = str_replace('_', '-', (string) $locale);
         return sprintf(
-            '%s/api/v4/pmp?resource=%s&accept-language=%s',
+            '%s/api/v4/pmp?resource=%s',
             FiftyOneDegreesCloudMetadata::get_cloud_host_url(),
-            rawurlencode($key),
-            rawurlencode($acceptLang));
+            rawurlencode($key));
     }
 
     /**
