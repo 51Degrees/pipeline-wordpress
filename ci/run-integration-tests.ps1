@@ -89,7 +89,7 @@ try {
         # Start-Process with -RedirectStandard* writes directly to disk —
         # unlike PowerShell jobs, which drop native-process stderr.
         $server = Start-Process -FilePath "php" `
-            -ArgumentList @("$wp", "server") `
+            -ArgumentList @("-d", "max_execution_time=120", "$wp", "server") `
             -RedirectStandardOutput $serverStdout `
             -RedirectStandardError $serverStderr `
             -PassThru -NoNewWindow
