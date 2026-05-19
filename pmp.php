@@ -73,6 +73,9 @@ require_once __DIR__ . '/includes/page-picker.php';
                            id="<?php echo esc_attr(Options::PMP_ALT_LABEL); ?>"
                            value="<?php echo esc_attr(FiftyoneService::pmp_alt_label()); ?>"
                            class="regular-text">
+                    <p class="description">
+                        <?php esc_html_e('Label on the opt-out button shown alongside Standard / Personalized — e.g. "Remove ads", "Subscribe", "Pay".', 'fiftyonedegrees'); ?>
+                    </p>
                 </td>
             </tr>
             <tr>
@@ -94,6 +97,9 @@ require_once __DIR__ . '/includes/page-picker.php';
                         __('-- Select a page --', 'fiftyonedegrees')
                     );
                     ?>
+                    <p class="description">
+                        <?php esc_html_e('Destination the visitor is sent to when they click the alternative button — typically a subscription, checkout, or paywall page.', 'fiftyonedegrees'); ?>
+                    </p>
                 </td>
             </tr>
             <tr>
@@ -108,6 +114,9 @@ require_once __DIR__ . '/includes/page-picker.php';
                            id="<?php echo esc_attr(Options::PMP_BRAND_NAME); ?>"
                            value="<?php echo esc_attr(FiftyoneService::pmp_brand_name()); ?>"
                            class="regular-text">
+                    <p class="description">
+                        <?php esc_html_e("Your site's brand, shown in the popup heading. Replace the placeholder default with your own brand for visitor-facing copy.", 'fiftyonedegrees'); ?>
+                    </p>
                 </td>
             </tr>
             <tr>
@@ -123,6 +132,9 @@ require_once __DIR__ . '/includes/page-picker.php';
                            value="<?php echo esc_attr(FiftyoneService::pmp_brand_logo_url()); ?>"
                            class="large-text"
                            autocomplete="off">
+                    <p class="description">
+                        <?php esc_html_e("Your brand's logo, shown in the popup. Defaults to the bundled 51Degrees logo as a placeholder — point it at your own logo asset for visitor-facing copy.", 'fiftyonedegrees'); ?>
+                    </p>
                 </td>
             </tr>
             <tr>
@@ -144,6 +156,9 @@ require_once __DIR__ . '/includes/page-picker.php';
                         __('-- Select a page --', 'fiftyonedegrees')
                     );
                     ?>
+                    <p class="description">
+                        <?php esc_html_e('Linked from the popup so visitors can read your terms and privacy policy before making a choice. Required for a meaningful consent record.', 'fiftyonedegrees'); ?>
+                    </p>
                 </td>
             </tr>
             <tr>
