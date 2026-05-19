@@ -4,7 +4,8 @@
   <php>
     <env name="RESOURCEKEY" value="!!YOUR_RESOURCE_KEY!!"/>
     <const name="FIFTYONEDEGREES_PLUGIN_DIR" value= ""/>
-    <const name="FIFTYONEDEGREES_CUSTOM_DIMENSION_SCOPE" value= "HIT"/> 
+    <const name="FIFTYONEDEGREES_PLUGIN_URL" value="http://example.test/plugin/"/>
+    <const name="FIFTYONEDEGREES_CUSTOM_DIMENSION_SCOPE" value= "HIT"/>
   </php>
   <testsuites>
     <testsuite name="Unit">
@@ -16,6 +17,7 @@
       <file>tests/GaHookTests.php</file>
       <file>tests/ClientIpResolverTests.php</file>
       <file>tests/SuspiciousActivityTests.php</file>
+      <file>tests/PmpTests.php</file>
       <file>tests/RobotsTxtTests.php</file>
       <file>tests/CloudMetadataTests.php</file>
       <file>tests/PipelineErrorClearTests.php</file>

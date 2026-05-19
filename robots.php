@@ -166,7 +166,7 @@ $plaintext_cache      = get_option(Options::ROBOTS_PLAINTEXT_CACHE, '');
             <tr valign="top">
                 <th scope="row"><label for="<?php echo Options::ROBOTS_REDIRECT_URL; ?>"><?php echo esc_html(FiftyOneDegreesStrings::get('robots.field.redirect_url_label')); ?></label></th>
                 <td>
-                    <input type="url" name="<?php echo Options::ROBOTS_REDIRECT_URL; ?>" id="<?php echo esc_attr(Options::ROBOTS_REDIRECT_URL); ?>" value="<?php echo esc_attr($redirect_url); ?>" class="regular-text" placeholder="<?php echo esc_attr(FiftyOneDegreesStrings::get('robots.field.redirect_url_placeholder')); ?>" />
+                    <input type="url" name="<?php echo Options::ROBOTS_REDIRECT_URL; ?>" id="<?php echo esc_attr(Options::ROBOTS_REDIRECT_URL); ?>" value="<?php echo esc_attr($redirect_url); ?>" class="large-text" placeholder="<?php echo esc_attr(FiftyOneDegreesStrings::get('robots.field.redirect_url_placeholder')); ?>" />
                     <p class="description"><?php echo esc_html(FiftyOneDegreesStrings::get('robots.field.redirect_url_description')); ?></p>
                     <?php
                     fiftyonedegrees_render_page_picker(

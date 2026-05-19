@@ -52,9 +52,14 @@ class Properties_List_table extends WP_List_Table
     }
 
     public function prepare_items() {
-        $result = Pipeline::$data;
+        // Read from the cloud's authoritative entitlement map cached at
+        // resource-key save time, not from runtime Pipeline::$data. The
+        // runtime map can be empty (pipeline disabled, error, or
+        // exception) and excludes optional engines (e.g. fodid) when their
+        // feature toggle is off, even though the key entitles them.
+        $cachedPipeline = get_option(Options::PIPELINE);
 
-        if (!$result){
+        if (!$cachedPipeline || empty($cachedPipeline['engine_properties'])) {
             return;
         }
 
@@ -65,7 +70,7 @@ class Properties_List_table extends WP_List_Table
 
         $results = array();
 
-        foreach ($result["properties"] as $dataKey => $properties) {
+        foreach ($cachedPipeline['engine_properties'] as $dataKey => $properties) {
             foreach ($properties as $property) {
                 $results[] = array(
                     "col_property_name" => strtolower($property["name"]),

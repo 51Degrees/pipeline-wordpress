@@ -146,6 +146,7 @@ class Fiftyonedegrees {
     function delete_options() {
         $this->ga_service->delete_ga_options();
         $this->fiftyone_service->delete_pipeline_options();
+        $this->fiftyone_service->delete_pmp_options();
         SuspiciousActivity::delete_options();
         FiftyOneDegreesRobotsTxt::delete_options();
     }

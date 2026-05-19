@@ -73,6 +73,106 @@ tracks per-IP request counts and redirects offenders once the threshold is
 crossed. Useful as a low-friction first line of defence against scraping and
 brute-force traffic.
 
+## PMP (Preference Management Platform)
+
+The `PMP` tab adds the 51Degrees consent popup to public pages. Visitors
+choose Standard, Personalized, or an alternative (e.g. Remove ads)
+experience; the choice is persisted in the browser's `localStorage` and
+exposed to publisher code via the `window.onPMPCompletion` callback.
+PMP is a client-side consent layer — the plugin does not write cookies,
+make follow-up REST calls, or persist the preference server-side.
+
+PMP activates as soon as a Resource Key is configured. The popup
+remains useful even on keys that don't include the 51DiD identity
+properties (`IdProbGlobal` / `IdProbLic`) — those drive 51DiD gating
+elsewhere in the pipeline but are not required by the consent flow.
+
+### Settings
+
+Three fields are required when Enable PMP is on: Terms / Privacy URL,
+Alternative Button Label, Alternative Button URL. The remaining
+fields have runtime defaults so the popup works out of the box.
+
+- **Enable PMP** — turn the popup on for public pages.
+- **TCF Vendor String** — static TCF v2 vendor consent string. The
+  built-in default grants consent to every vendor, purpose and
+  special feature from IAB GVL v158; admins can override per-site
+  with their own string generated via TCF Tools.
+- **Alternative Button Label** `*` — label of the alternative button.
+  Defaults to `Remove ads`.
+- **Alternative Button URL** `*` — destination of the alternative
+  button. Defaults to `https://example.com`. A page-picker dropdown
+  lets you select a published page instead.
+- **Brand Name** — defaults to `51Degrees` when empty.
+- **Brand Logo URL** — defaults to the 51Degrees logo bundled with
+  the plugin (`assets/images/logo.png`) when empty.
+- **Terms / Privacy URL** `*` — required. A page-picker dropdown lets
+  you select a published page.
+- **Show Standard Marketing Option** — show the Standard button
+  alongside Personalized and the alternative (off by default).
+
+The TCF Vendor ID used by the popup (`cmpId`) is hardcoded to `51`
+for now; randomized rotation will be implemented at runtime in a
+follow-up.
+
+The bundle URL is built as
+`{base}/api/v4/pmp?resource={resource-key}`, where `{base}` comes
+from the same `FOD_CLOUD_API_URL` env var the rest of the plugin
+honours (robots, suspicious, cloud metadata) and defaults to
+`https://cloud.51degrees.com`. Point it at a staging or local
+server when running the cloud yourself; production deployments
+need no configuration. Locale negotiation is left to the browser's
+`Accept-Language` request header — the cloud resolves the closest
+available bundle and falls back to `en-us` when nothing matches,
+so no allowlist lives in the plugin.
+
+The settings tab also surfaces the visitor's current preference (read
+from `localStorage['__51d_pmp_pref']` on the admin's own browser) and
+a **Clear Preference** button that wipes it so the popup re-appears on
+the next public-page visit.
+
+### Continuation hook: `window.onPMPCompletion`
+
+When the visitor makes a choice, the PMP widget invokes
+`window.onPMPCompletion(preference)`. The plugin registers a no-op
+default:
+
+```js
+window.onPMPCompletion = window.onPMPCompletion || function (preference) {};
+```
+
+Override it on your page to bootstrap anything that depends on the
+visitor's preference — analytics, Prebid.js initialisation, lazy ad
+stacks, or any other publisher-side logic. PMP itself acts as the CMP
+via the TCF API (sets the TC String and exposes `__tcfapi`), so a
+separate consent manager is not needed:
+
+```html
+<script>
+window.onPMPCompletion = function (preference) {
+    // preference is 'standard' | 'personalized'
+    dataLayer.push({ event: 'pmp_choice', pmp_preference: preference });
+};
+</script>
+```
+
+The override may run before or after the plugin's PMP script — last
+assignment wins, and the widget only invokes the function when the
+visitor actually clicks a button.
+
+### Flow
+
+1. The browser loads the PMP widget from the composed bundle URL.
+2. On first visit the popup is shown. The visitor's choice is persisted
+   in `localStorage` under `__51d_pmp_pref`.
+3. PMP invokes `window.onPMPCompletion(preference)` and dismisses the
+   dialog. The plugin's default is a no-op; publisher code overrides
+   it to react to the choice.
+4. PMP signals TCF status to its `__tcfapi` listeners using the
+   configured TCF Vendor String.
+
+When PMP is disabled the plugin emits no `<script>` tag.
+
 
 ## Developer information and advanced features
 

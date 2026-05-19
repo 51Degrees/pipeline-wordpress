@@ -27,6 +27,7 @@
 
 require_once __DIR__ . '/pipeline.php';
 require_once __DIR__ . '/standard-tdls.php';
+require_once __DIR__ . '/cloud-metadata.php';
 
 class FiftyoneService {
 
@@ -262,6 +263,51 @@ class FiftyoneService {
             Options::ROBOTS_CUSTOM_TDL,
             ['sanitize_callback' => ['FiftyoneService', 'sanitize_tdl']]);
         register_setting(Options::GROUP_KEY, Options::PIPELINE_ENABLE);
+
+        // PMP (Preference Management Platform) settings.
+        add_option(Options::PMP_ENABLE,            'off');
+        add_option(Options::PMP_TCF_VENDOR_STRING, '');
+        add_option(Options::PMP_ALT_LABEL,         '');
+        add_option(Options::PMP_ALT_URL,           '');
+        add_option(Options::PMP_BRAND_NAME,        '');
+        add_option(Options::PMP_BRAND_LOGO_URL,    '');
+        add_option(Options::PMP_BRAND_TERMS_URL,   '');
+        add_option(Options::PMP_SHOW_STANDARD,     'off');
+
+        register_setting(Options::PMP_GROUP_KEY, Options::PMP_ENABLE, [
+            'type' => 'string',
+            'sanitize_callback' => ['FiftyoneService', 'sanitize_pmp_enable'],
+            'default' => 'off',
+        ]);
+        register_setting(Options::PMP_GROUP_KEY, Options::PMP_TCF_VENDOR_STRING, [
+            'type' => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+        ]);
+        register_setting(Options::PMP_GROUP_KEY, Options::PMP_ALT_LABEL, [
+            'type' => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+        ]);
+        register_setting(Options::PMP_GROUP_KEY, Options::PMP_ALT_URL, [
+            'type' => 'string',
+            'sanitize_callback' => 'esc_url_raw',
+        ]);
+        register_setting(Options::PMP_GROUP_KEY, Options::PMP_BRAND_NAME, [
+            'type' => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+        ]);
+        register_setting(Options::PMP_GROUP_KEY, Options::PMP_BRAND_LOGO_URL, [
+            'type' => 'string',
+            'sanitize_callback' => 'esc_url_raw',
+        ]);
+        register_setting(Options::PMP_GROUP_KEY, Options::PMP_BRAND_TERMS_URL, [
+            'type' => 'string',
+            'sanitize_callback' => 'esc_url_raw',
+        ]);
+        register_setting(Options::PMP_GROUP_KEY, Options::PMP_SHOW_STANDARD, [
+            'type' => 'string',
+            'sanitize_callback' => function ($v) { return $v === 'on' ? 'on' : 'off'; },
+            'default' => 'off',
+        ]);
     }
 
     static function sanitize_robots_textarea($value) {
@@ -310,6 +356,52 @@ class FiftyoneService {
             }
         }
         return array_values(array_unique($clean));
+    }
+
+    /**
+     * Sanitizer for Options::PMP_ENABLE. When the caller asks for 'on',
+     * verifies that fields without a sensible default are filled in.
+     * Missing values force the option back to 'off' and register a
+     * settings error listing the missing field labels.
+     *
+     * @param  string $value the submitted PMP_ENABLE value
+     * @return string        'on' if validation passes, 'off' otherwise
+     */
+    static function sanitize_pmp_enable($value) {
+        if ($value !== 'on') {
+            return 'off';
+        }
+        // Terms / Privacy URL plus the two alternative-button fields
+        // are required server-side. PMP widget rejects an empty alt
+        // button outright; Terms URL has no runtime fallback. The
+        // remaining fields (TCF Vendor String, Brand Name) have
+        // sensible runtime defaults so they stay optional.
+        $required = [
+            Options::PMP_BRAND_TERMS_URL => 'Terms / Privacy URL',
+            Options::PMP_ALT_LABEL       => 'Alternative Button Label',
+            Options::PMP_ALT_URL         => 'Alternative Button URL',
+        ];
+        $missing = [];
+        foreach ($required as $key => $label) {
+            $raw = isset($_POST[$key]) ? wp_unslash($_POST[$key]) : '';
+            if (trim((string) $raw) === '') {
+                $missing[] = $label;
+            }
+        }
+        if (!empty($missing)) {
+            add_settings_error(
+                Options::PMP_GROUP_KEY,
+                'pmp_required_missing',
+                sprintf(
+                    /* translators: %s is a comma-separated list of field labels. */
+                    __('PMP cannot be enabled: missing required field(s): %s.', 'fiftyonedegrees'),
+                    implode(', ', $missing)
+                ),
+                'error'
+            );
+            return 'off';
+        }
+        return 'on';
     }
 
     /**
@@ -643,7 +735,7 @@ class FiftyoneService {
 
     /**
      * Add the 51Degrees JavaScript to the page.
-     * 
+     *
      * @return void
      */
     function fiftyonedegrees_javascript() {
@@ -654,6 +746,166 @@ class FiftyoneService {
             "fiftyonedegrees",
             Pipeline::getJavaScript(),
             "before");
+
+        if (get_option(Options::PMP_ENABLE, 'off') !== 'on') {
+            return;
+        }
+        if (empty(get_option(Options::RESOURCE_KEY))) {
+            return;
+        }
+
+        $url = self::pmp_resolve_script_url();
+        if (empty($url)) {
+            return;
+        }
+
+        // Footer load: PMP attaches its popup container as a sibling of this
+        // script tag (see view.ts getRoot()). In <head> that container would
+        // be unrenderable (head has display:none).
+        wp_register_script('fiftyonedegrees-pmp', $url, [], null, true);
+        wp_enqueue_script('fiftyonedegrees-pmp');
+
+        // Publisher-overridable continuation hook. Site owners can use
+        // it to bootstrap anything that depends on the visitor's
+        // preference -- analytics, Prebid.js initialisation, lazy ad
+        // stacks, etc. -- by defining their own window.onPMPCompletion.
+        // The default is a no-op. PMP itself acts as the CMP via TCF
+        // API, so no separate consent manager is needed.
+        wp_add_inline_script(
+            'fiftyonedegrees-pmp',
+            '(function(){window.onPMPCompletion=window.onPMPCompletion||function(preference){};})();',
+            'before'
+        );
+
+        add_filter('script_loader_tag', [$this, 'pmp_add_data_attributes'], 10, 3);
+    }
+
+    /**
+     * Composes the PMP bundle URL for the new query-parameter endpoint.
+     * Returns an empty string when the resource key is missing -- the
+     * enqueue path uses that to short-circuit registration.
+     *
+     * The base URL comes from FiftyOneDegreesCloudMetadata, which honours
+     * the FOD_CLOUD_API_URL env var used across the plugin (robots,
+     * suspicious, cloud metadata) and falls back to
+     * https://cloud.51degrees.com when unset.
+     *
+     * Locale negotiation is delegated to the visitor's Accept-Language
+     * request header — the browser fetches this <script src> and sends
+     * the header for free, the cloud picks the closest available bundle
+     * and falls back to en-us when nothing matches.
+     *
+     * @return string
+     */
+    private static function pmp_resolve_script_url() {
+        $key = get_option(Options::RESOURCE_KEY);
+        if (empty($key)) {
+            return '';
+        }
+        return sprintf(
+            '%s/api/v4/pmp?resource=%s',
+            FiftyOneDegreesCloudMetadata::get_cloud_host_url(),
+            rawurlencode($key));
+    }
+
+    /**
+     * Default TCF Vendor String -- core segment with consent granted
+     * to every vendor, purpose and special feature from IAB GVL
+     * version 158 (cmpId=51, publisherCountryCode=AA). Regenerate
+     * via the @iabtcf/core script when the GVL bumps a major
+     * version; admins can override per-site via the PMP settings.
+     */
+    public const PMP_DEFAULT_TCF_VENDOR_STRING =
+        'CQkMqUAQkMqUAAfABAENCfFsAP_wAEPgAAAAMetR_G__bWlr-bb3abtkeYxP9_hr7sQxBgbIkm4FzLvW7JwHx2EZNAzatiIKmRIAu3TBIQNlHJDURUCgKIgFryDMaE2U4TNKJ6BkiFMZI2tQCFxvm4tjeQCY4ur_9kc1mB-t7dr82dzyy6hHn3a5fmS1UJCdIYetDfv8ZBOT-9IEd-x8v4v4_EbpEm8eS1n_pGtp4jc6Yns_dBmxt-Tyff7Pn__7l_e7X_ve_n3zv8oXn7rr____f_-7___2b_-___b-__7Z_zI_4MegAmGh0QRlkQKBAoCEECABQVhABQIAgAASAogIATBgQ5AwAXWESAEAKAAYIAQAAgwABAAAJAAhEAEABAIAQIBAoAAwAIAgIAGBgADABQiAQAAgOgYpgQQCBYAJEZUBpgQgAJBAS2VCCUDAgrhCkWOAQQIiYKAAAEAAoAAEB8LAQklBKxIIAuILoAEAAAAKIEWBFIWYAgqDNFoKwJOAyNMASPMEiSnQRAEwQkZBkQmqCQeKYohQQ5AbFLMAdPEFADLtZIQ_1As3AIAA.IMetX_H__bX9v-f736ft0eY1f9_j77uQxBhfJs-4FzLvW_JwX32E7NF36tqYKmRIEu3bBIQNtHJnUTVihaogVrzHsak2c4TtKJ-BkiHMZe29YCF5vm4tj-QKZ5_r_93d92T_9_dv-3dzy3_1nv3f9_-f1eLide5_tH_v_bROb-_I_9_7-_4v8_t_rk2_eT1v_9evv7__-________9_____________-____f________________________f__________9____4AA';
+
+    /**
+     * Returns the configured TCF Vendor String or the built-in
+     * all-vendors-enabled default when none is set.
+     */
+    public static function pmp_tcf_vendor_string() {
+        $value = get_option(Options::PMP_TCF_VENDOR_STRING);
+        return empty($value)
+            ? self::PMP_DEFAULT_TCF_VENDOR_STRING
+            : $value;
+    }
+
+    /**
+     * Returns the configured Brand Name or '51Degrees' when none is set.
+     */
+    public static function pmp_brand_name() {
+        $value = get_option(Options::PMP_BRAND_NAME);
+        return empty($value) ? '51Degrees' : $value;
+    }
+
+    /**
+     * Returns the configured Brand Logo URL or the bundled 51Degrees logo
+     * when none is set.
+     */
+    public static function pmp_brand_logo_url() {
+        $value = get_option(Options::PMP_BRAND_LOGO_URL);
+        return empty($value)
+            ? FIFTYONEDEGREES_PLUGIN_URL . 'assets/images/logo.png'
+            : $value;
+    }
+
+    /**
+     * Returns the configured Alternative Button Label or 'Remove ads' when
+     * none is set.
+     */
+    public static function pmp_alt_label() {
+        $value = get_option(Options::PMP_ALT_LABEL);
+        return empty($value) ? 'Remove ads' : $value;
+    }
+
+    /**
+     * Returns the configured Alternative Button URL or
+     * 'https://example.com' when none is set.
+     */
+    public static function pmp_alt_url() {
+        $value = get_option(Options::PMP_ALT_URL);
+        return empty($value) ? 'https://example.com' : $value;
+    }
+
+    /**
+     * Adds PMP data-* attributes to the <script> tag for the
+     * fiftyonedegrees-pmp handle. Hooks 'script_loader_tag' because
+     * wp_enqueue_script does not support arbitrary HTML attributes.
+     *
+     * @param  string $tag    the rendered <script> element
+     * @param  string $handle the enqueued-script handle
+     * @param  string $src    the script src attribute value
+     * @return string
+     */
+    public function pmp_add_data_attributes($tag, $handle, $src) {
+        if ($handle !== 'fiftyonedegrees-pmp') {
+            return $tag;
+        }
+
+        $attrs = [
+            'data-tcf-vendor'       => self::pmp_tcf_vendor_string(),
+            'data-tcf-vendor-id'    => 51, // Hardcoded for now; randomized rotation is planned at runtime.
+            'data-brand-name'       => self::pmp_brand_name(),
+            'data-brand-logo'       => self::pmp_brand_logo_url(),
+            'data-brand-terms-url'  => get_option(Options::PMP_BRAND_TERMS_URL),
+            'data-alt-name'         => self::pmp_alt_label(),
+            'data-alt-url'          => self::pmp_alt_url(),
+            // Routes the user's choice into window.onPMPCompletion, our
+            // publisher-overridable continuation hook (see the inline
+            // script registered alongside the PMP handle).
+            'data-action-url'       => "javascript:window.onPMPCompletion('{preference}')",
+        ];
+        if (get_option(Options::PMP_SHOW_STANDARD, 'off') === 'on') {
+            $attrs['data-show-standard'] = 'true';
+        }
+
+        $attr_html = '';
+        foreach ($attrs as $k => $v) {
+            if ($v === '' || $v === null) {
+                continue;
+            }
+            $attr_html .= sprintf(' %s="%s"', esc_attr($k), esc_attr($v));
+        }
+        return str_replace('<script src=', '<script' . $attr_html . ' src=', $tag);
     }
 
     /**
@@ -880,6 +1132,17 @@ class FiftyoneService {
         delete_option(Options::PIPELINE_ENABLE);
         delete_option(Options::SESSION_INVALIDATED);
         delete_option(Options::PIPELINE_VALIDATION_ERROR);
+    }
+
+    public function delete_pmp_options() {
+        delete_option(Options::PMP_ENABLE);
+        delete_option(Options::PMP_TCF_VENDOR_STRING);
+        delete_option(Options::PMP_ALT_LABEL);
+        delete_option(Options::PMP_ALT_URL);
+        delete_option(Options::PMP_BRAND_NAME);
+        delete_option(Options::PMP_BRAND_LOGO_URL);
+        delete_option(Options::PMP_BRAND_TERMS_URL);
+        delete_option(Options::PMP_SHOW_STANDARD);
     }
 }
 ?>

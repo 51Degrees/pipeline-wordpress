@@ -116,8 +116,13 @@ class Pipeline
                 'httpClient'         => new FiftyOneDegreesWpHttpClient(),
                 'cloudRequestOrigin' => FiftyOneDegreesWpHttpClient::defaultOrigin(),
             ]);
-            // Get engines available with the Resource Key
-            $engines = array_keys($cloud->getEngineProperties());
+            // Entitlement map advertised by the cloud for this Resource Key:
+            // [engine => [propertyName => meta]]. Cached separately because
+            // optional engines (e.g. fodid) may be filtered out of the runtime
+            // pipeline below, yet callers still need to know whether the key
+            // is entitled to their properties.
+            $engineProperties = $cloud->getEngineProperties();
+            $engines          = array_keys($engineProperties);
         } catch (\Throwable $e) {
             Pipeline::record_runtime_error(
                 'Pipeline build failed while contacting the 51Degrees cloud (resource key save).',
@@ -127,6 +132,7 @@ class Pipeline
             return [
                 'pipeline' => null,
                 'available_engines' => null,
+                'engine_properties' => null,
                 'error' => self::user_facing_pipeline_error($e),
             ];
         }
@@ -155,6 +161,7 @@ class Pipeline
         return [
             'pipeline' => $pipeline,
             'available_engines' => $engines,
+            'engine_properties' => $engineProperties,
             'error' => $error
         ];
     }
@@ -236,10 +243,19 @@ class Pipeline
                 // https://51degrees.com/blog/user-agent-client-hints
                 Utils::setResponseHeader($flowData);
 
-                $properties = [];
-                foreach ($engines as $engine) {
-                    $properties[$engine] =
-                        $pipeline->getElement($engine)->getProperties();
+                // Prefer the cloud's entitlement map cached at build time:
+                // it covers optional engines (e.g. fodid) that may be absent
+                // from the runtime pipeline yet entitled by the Resource Key.
+                // Fall back to live-pipeline introspection for legacy caches
+                // built before engine_properties was stored.
+                if (!empty($cachedPipeline['engine_properties'])) {
+                    $properties = $cachedPipeline['engine_properties'];
+                } else {
+                    $properties = [];
+                    foreach ($engines as $engine) {
+                        $properties[$engine] =
+                            $pipeline->getElement($engine)->getProperties();
+                    }
                 }
 
                 Pipeline::$data = [

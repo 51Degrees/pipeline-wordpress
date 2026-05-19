@@ -9,7 +9,7 @@ require_once __DIR__ . '/wp-http-client.php';
 
 class FiftyOneDegreesCloudMetadata {
 
-    private static function get_cloud_host_url(): string {
+    public static function get_cloud_host_url(): string {
         $apiUrl = getenv(Constants::FOD_CLOUD_API_URL);
         if (!empty($apiUrl)) {
             $parsed = parse_url(rtrim($apiUrl, '/'));

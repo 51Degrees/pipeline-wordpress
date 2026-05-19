@@ -31,6 +31,16 @@ Detect and redirect visitors who make too many requests in a short time window. 
 
 Use 51Degrees device detection to intelligently manage your robots.txt file and control crawler access. The plugin automatically detects crawlers and bad bots, then enforces access policies based on crawler type. Protect your site from unwanted scraping and DDoS attempts while allowing legitimate search engines and analytics crawlers to function normally.
 
+## Preference Management Platform (PMP)
+
+Add a 51Degrees consent popup to your site. Visitors choose Standard, Personalized, or a publisher-defined alternative (e.g. "Remove ads"). The choice is stored client-side in `localStorage` — no cookies, no extra server round-trips. Configure the brand, the alternative button, and the terms/privacy URL from the `PMP` tab.
+
+Publishers can react to the visitor's choice by overriding a single global callback on their page:
+
+`window.onPMPCompletion = function (preference) { /* preference is 'standard' or 'personalized' */ };`
+
+The plugin ships a no-op default, so the popup works out of the box without any custom JavaScript.
+
 ## Advanced Features and Developer Info
 
 For advanced feature usage, including in-page value replacement and shortcodes, conditional display based on property values, and access to 51Degrees property data from PHP and JavaScript, see the project [GitHub](https://github.com/51Degrees/pipeline-wordpress/) repository.
