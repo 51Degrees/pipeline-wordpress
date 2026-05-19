@@ -52,13 +52,12 @@ require_once __DIR__ . '/includes/page-picker.php';
                     </label>
                 </th>
                 <td>
-                    <input type="text"
-                           name="<?php echo esc_attr(Options::PMP_TCF_VENDOR_STRING); ?>"
-                           id="<?php echo esc_attr(Options::PMP_TCF_VENDOR_STRING); ?>"
-                           value="<?php echo esc_attr(FiftyoneService::pmp_tcf_vendor_string()); ?>"
-                           class="regular-text">
+                    <textarea name="<?php echo esc_attr(Options::PMP_TCF_VENDOR_STRING); ?>"
+                              id="<?php echo esc_attr(Options::PMP_TCF_VENDOR_STRING); ?>"
+                              class="large-text code"
+                              rows="4"><?php echo esc_textarea(FiftyoneService::pmp_tcf_vendor_string()); ?></textarea>
                     <p class="description">
-                        <?php esc_html_e('Static TCF vendor consent string generated via TCF Tools.', 'fiftyonedegrees'); ?>
+                        <?php esc_html_e('Base IAB TCF v2 consent string. It carries the static half of the TC payload — vendor consents and legitimate-interest signals — and PMP overlays the purpose consents on top of it at runtime, derived from the visitor\'s Standard or Personalized choice. The combined string is exposed via __tcfapi to downstream ad tech (Prebid.js, ad servers, analytics). The built-in default consents every vendor on IAB Global Vendor List v158; override here to restrict the allowed vendor set or to upgrade the GVL version. Generate custom strings with TCF Tools.', 'fiftyonedegrees'); ?>
                     </p>
                 </td>
             </tr>
@@ -87,7 +86,7 @@ require_once __DIR__ . '/includes/page-picker.php';
                            name="<?php echo esc_attr(Options::PMP_ALT_URL); ?>"
                            id="<?php echo esc_attr(Options::PMP_ALT_URL); ?>"
                            value="<?php echo esc_attr(FiftyoneService::pmp_alt_url()); ?>"
-                           class="regular-text"
+                           class="large-text"
                            autocomplete="off">
                     <?php
                     fiftyonedegrees_render_page_picker(
@@ -122,7 +121,7 @@ require_once __DIR__ . '/includes/page-picker.php';
                            name="<?php echo esc_attr(Options::PMP_BRAND_LOGO_URL); ?>"
                            id="<?php echo esc_attr(Options::PMP_BRAND_LOGO_URL); ?>"
                            value="<?php echo esc_attr(FiftyoneService::pmp_brand_logo_url()); ?>"
-                           class="regular-text"
+                           class="large-text"
                            autocomplete="off">
                 </td>
             </tr>
@@ -137,7 +136,7 @@ require_once __DIR__ . '/includes/page-picker.php';
                            name="<?php echo esc_attr(Options::PMP_BRAND_TERMS_URL); ?>"
                            id="<?php echo esc_attr(Options::PMP_BRAND_TERMS_URL); ?>"
                            value="<?php echo esc_attr(get_option(Options::PMP_BRAND_TERMS_URL)); ?>"
-                           class="regular-text"
+                           class="large-text"
                            autocomplete="off">
                     <?php
                     fiftyonedegrees_render_page_picker(

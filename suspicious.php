@@ -78,7 +78,7 @@ if ($suspicious_enabled === 'on') {
                            name="<?php echo esc_attr(Options::SUSPICIOUS_REDIRECT_URL); ?>"
                            id="<?php echo esc_attr(Options::SUSPICIOUS_REDIRECT_URL); ?>"
                            value="<?php echo esc_attr(get_option(Options::SUSPICIOUS_REDIRECT_URL)); ?>"
-                           class="regular-text">
+                           class="large-text">
                     <?php
                     fiftyonedegrees_render_page_picker(
                         Options::SUSPICIOUS_REDIRECT_URL,
