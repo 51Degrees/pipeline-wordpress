@@ -845,12 +845,22 @@ JS;
     }
 
     /**
-     * Returns the configured Brand Name or the WordPress site name
-     * when none is set.
+     * Returns the configured Brand Name or '51Degrees' when none is set.
      */
     public static function pmp_brand_name() {
         $value = get_option(Options::PMP_BRAND_NAME);
-        return empty($value) ? get_bloginfo('name') : $value;
+        return empty($value) ? '51Degrees' : $value;
+    }
+
+    /**
+     * Returns the configured Brand Logo URL or the bundled 51Degrees logo
+     * when none is set.
+     */
+    public static function pmp_brand_logo_url() {
+        $value = get_option(Options::PMP_BRAND_LOGO_URL);
+        return empty($value)
+            ? FIFTYONEDEGREES_PLUGIN_URL . 'assets/images/logo.png'
+            : $value;
     }
 
     /**
@@ -890,7 +900,7 @@ JS;
             'data-tcf-vendor'       => self::pmp_tcf_vendor_string(),
             'data-tcf-vendor-id'    => 51, // Hardcoded for now; randomized rotation is planned at runtime.
             'data-brand-name'       => self::pmp_brand_name(),
-            'data-brand-logo'       => get_option(Options::PMP_BRAND_LOGO_URL),
+            'data-brand-logo'       => self::pmp_brand_logo_url(),
             'data-brand-terms-url'  => get_option(Options::PMP_BRAND_TERMS_URL),
             'data-alt-name'         => self::pmp_alt_label(),
             'data-alt-url'          => self::pmp_alt_url(),
