@@ -905,7 +905,7 @@ class FiftyoneService {
             }
             $attr_html .= sprintf(' %s="%s"', esc_attr($k), esc_attr($v));
         }
-        return str_replace('<script src=', '<script' . $attr_html . ' src=', $tag);
+        return str_replace('<script', '<script' . $attr_html, $tag);
     }
 
     /**
