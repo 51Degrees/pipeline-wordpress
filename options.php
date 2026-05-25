@@ -162,6 +162,28 @@ class Options
     const GA_AUTH_DATE = "fiftyonedegrees_ga_auth_date";
 
     /**
+     * Per-site HMAC secret used to sign the OAuth state parameter.
+     * Initialized lazily on the first OAuth flow start via
+     * FiftyOneDegreesOauthState::get_or_create_secret().
+     *
+     * Write semantics: add_option($name, $value, '', 'no') — autoload=no,
+     * set-once-immutable. Never use update_option on this key, otherwise
+     * in-flight states issued under the previous secret will become
+     * unverifiable. Rotation requires an explicit delete_option +
+     * re-initialization (manual maintenance task, not exposed in UI).
+     */
+    const OAUTH_STATE_SECRET = "fiftyonedegrees_oauth_state_secret";
+
+    /**
+     * Current OAuth schema version marker.
+     * Absent (or any value other than '2') means the install predates
+     * the HMAC+PKCE migration and Fiftyonedegrees::maybe_migrate_oauth_options()
+     * will run a one-time cleanup of OOB-era state (gated by token-shape
+     * check on GA_AUTH_CODE). Set to '2' after migration.
+     */
+    const GA_OAUTH_VERSION = "fiftyonedegrees_ga_oauth_version";
+
+    /**
      * Options group key for suspicious activity detection settings.
      */
     const SUSPICIOUS_GROUP_KEY = "fiftyonedegrees_suspicious_options";
