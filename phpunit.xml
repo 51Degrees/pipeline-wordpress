@@ -23,6 +23,7 @@
       <file>tests/PipelineErrorClearTests.php</file>
       <file>tests/CloudOriginHeaderTests.php</file>
       <file>tests/OAuthStateTests.php</file>
+      <file>tests/OAuthMigrationTests.php</file>
     </testsuite>
     <testsuite name="Integration">
       <file>tests/PipelineTests.php</file>
