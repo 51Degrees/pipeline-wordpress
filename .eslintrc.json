@@ -1,0 +1,16 @@
+{
+  "extends": [
+    "plugin:@wordpress/eslint-plugin/recommended-with-formatting"
+  ],
+  "env": {
+    "browser": true
+  },
+  "globals": {
+    "dataLayer": "writable",
+    "gtag": "writable",
+    "wp": "readonly"
+  },
+  "rules": {
+    "no-console": "warn"
+  }
+}

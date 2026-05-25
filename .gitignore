@@ -1,0 +1,16 @@
+# Dependencies installed by dev tooling. Lockfile (package-lock.json)
+# is committed; node_modules itself is not.
+node_modules/
+
+# Runtime-generated JS artifacts. includes/ga-tracking-gtag.php rewrites
+# these on every render via fopen("w"); they reflect the last render and
+# are not source code.
+assets/js/ga-51d-tracking.js
+assets/js/ga-integration-tracking.js
+
+# Tooling caches.
+.phpunit.result.cache
+.php-cs-fixer.cache
+
+# OS noise.
+.DS_Store
