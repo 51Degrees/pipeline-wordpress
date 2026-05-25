@@ -56,11 +56,12 @@ class Fiftyonedegrees {
      */
     private function __construct() {
         $this->load_includes();
-        $this->setup_constants();		
+        $this->setup_constants();
         $this->fiftyone_service = new FiftyoneService();
         $this->ga_service = new Fiftyonedegrees_Google_Analytics();
         $this->setup_wp_actions();
         $this->setup_wp_filters();
+        $this->setup_oauth_actions();
     }
 
     /**
@@ -97,12 +98,29 @@ class Fiftyonedegrees {
         define('FIFTYONEDEGREES_PROMPT', 'force');
         define('FIFTYONEDEGREES_ACCESS_TYPE', 'offline');
         define('FIFTYONEDEGREES_RESPONSE_TYPE', 'code');
+        // Production credentials. Local dev can override these by defining
+        // FIFTYONEDEGREES_DEV_CLIENT_ID / _SECRET / _REDIRECT earlier in
+        // the request (e.g. via wp-config.php inside wp-env). The DEV
+        // constants are never committed to source control — see the
+        // dev-oauth-setup note in the project vault for setup.
         define('FIFTYONEDEGREES_CLIENT_ID',
-            '296335631462-e36u9us90puu4de17ct7rnklu3j8q63n.apps.googleusercontent.com');
-        define(
-            'FIFTYONEDEGREES_CLIENT_SECRET',
-            'V9lcL-V3SxtGSWWcGsFW9QeI');
-        define( 'FIFTYONEDEGREES_REDIRECT', 'urn:ietf:wg:oauth:2.0:oob');
+            defined('FIFTYONEDEGREES_DEV_CLIENT_ID')
+                ? FIFTYONEDEGREES_DEV_CLIENT_ID
+                : '296335631462-e36u9us90puu4de17ct7rnklu3j8q63n.apps.googleusercontent.com');
+        define('FIFTYONEDEGREES_CLIENT_SECRET',
+            defined('FIFTYONEDEGREES_DEV_CLIENT_SECRET')
+                ? FIFTYONEDEGREES_DEV_CLIENT_SECRET
+                : 'V9lcL-V3SxtGSWWcGsFW9QeI');
+        // Production redirect URI is a TODO placeholder until 51Degrees
+        // provisions the real relay URL (release ship-gate). Until then
+        // the runtime guard in setup_oauth_actions() refuses to wire the
+        // OAuth handlers and surfaces an admin notice — accidental
+        // release with the placeholder produces a loud failure instead
+        // of a silent redirect to a non-existent host.
+        define('FIFTYONEDEGREES_REDIRECT',
+            defined('FIFTYONEDEGREES_DEV_REDIRECT')
+                ? FIFTYONEDEGREES_DEV_REDIRECT
+                : 'https://TODO-relay-url');
         define(
             'FIFTYONEDEGREES_SCOPE',
             Google_Service_Analytics::ANALYTICS_READONLY .
@@ -127,11 +145,26 @@ class Fiftyonedegrees {
         require_once __DIR__ . '/includes/ga-tracking-gtag.php';
         require_once __DIR__ . '/options.php';
         require_once __DIR__ . '/includes/suspicious-activity.php';
-        
+        require_once __DIR__ . '/includes/oauth-state.php';
+        require_once __DIR__ . '/includes/oauth-migration.php';
+
+        // OAuth callback and start handlers land in later commits. Guard
+        // with file_exists so the bootstrap stays loadable while the
+        // files are being introduced one at a time — once both exist,
+        // the class_exists checks in setup_oauth_actions() pick them up.
+        $oauth_callback_file = __DIR__ . '/includes/oauth-callback.php';
+        if (file_exists($oauth_callback_file)) {
+            require_once $oauth_callback_file;
+        }
+        $oauth_start_file = __DIR__ . '/includes/oauth-start.php';
+        if (file_exists($oauth_start_file)) {
+            require_once $oauth_start_file;
+        }
+
         // Include Custom_Dimensions class
         if (!class_exists('Fiftyonedegrees_Custom_Dimensions')) {
             require_once('includes/ga-custom-dimension-class.php');
-        }         
+        }
     }
 
     function setup_wp_actions() {
@@ -153,6 +186,57 @@ class Fiftyonedegrees {
 
     function execute_ga_tracking_steps() {
         $this->ga_service->execute_ga_tracking_steps();
+    }
+
+    /**
+     * Wires up the OAuth flow on admin_init / admin_post.
+     *
+     * Migration runs unconditionally and idempotently — it cleans up
+     * OOB-era state regardless of whether the new OAuth flow has a
+     * working redirect URL yet.
+     *
+     * The callback and start handlers are gated on FIFTYONEDEGREES_REDIRECT
+     * not being a placeholder. If the build shipped with the TODO URL
+     * (no real relay configured), we refuse to wire the handlers and
+     * surface a sticky admin notice instead — accidental release should
+     * fail loudly rather than redirect users to a non-existent host.
+     *
+     * Once the handler classes land in later commits, the class_exists
+     * checks pick them up without further changes to this file.
+     */
+    private function setup_oauth_actions() {
+        add_action('admin_init', ['FiftyOneDegreesOauthMigration', 'run'], 10);
+
+        if (strpos(FIFTYONEDEGREES_REDIRECT, 'TODO') !== false) {
+            add_action('admin_notices', [$this, 'render_placeholder_url_notice']);
+            return;
+        }
+
+        if (class_exists('FiftyOneDegreesOauthCallback')) {
+            add_action('admin_init', ['FiftyOneDegreesOauthCallback', 'handle'], 5);
+        }
+        if (class_exists('FiftyOneDegrees_OAuth_Start_Handler')) {
+            add_action(
+                'admin_post_fiftyonedegrees_oauth_start',
+                ['FiftyOneDegrees_OAuth_Start_Handler', 'handle']
+            );
+        }
+    }
+
+    /**
+     * Sticky admin notice shown when the plugin shipped with a
+     * placeholder OAuth redirect URL. Visible to all admins on every
+     * wp-admin page until the build is replaced.
+     */
+    public function render_placeholder_url_notice() {
+        echo '<div class="notice notice-error"><p><strong>'
+            . esc_html__('51Degrees:', 'fiftyonedegrees')
+            . '</strong> '
+            . esc_html__(
+                'OAuth is disabled — this build of the plugin shipped with a placeholder redirect URL. Google Analytics cannot be connected until a real relay URL is configured. Please contact 51Degrees support.',
+                'fiftyonedegrees'
+            )
+            . '</p></div>';
     }
 }
 
