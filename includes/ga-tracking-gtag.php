@@ -160,7 +160,6 @@ class Fiftyonedegrees_Tracking_Gtag {
 			gtag('js', new Date());
 	
 			const configuration = {
-				<!-- 'cookieDomain': 'none', -->
 				'send_page_view': '<?php echo esc_html($send_page_view); ?>',
 				'custom_map' : {
 					<?php
@@ -240,9 +239,8 @@ class Fiftyonedegrees_Tracking_Gtag {
 			};
 	
 			const trackingId = '<?php echo esc_html($google_trackingId); ?>';
-			i = len = 0;
 
-			for (i, len = window.dataLayer.length; i < len; i += 1) {
+			for (let i = 0, len = window.dataLayer.length; i < len; i += 1) {
 				if(window.dataLayer[i][0] == "config" && window.dataLayer[i][1] == trackingId ) {
 					if(window.dataLayer[i].length > 2) {
 						if( window.dataLayer[i][2]["custom_map"] !== undefined) {
@@ -311,8 +309,7 @@ class Fiftyonedegrees_Tracking_Gtag {
 					return false;
 				}
 
-				i = len = 0;
-				for (i, len = dataLayer.length; i < len; i += 1) {
+				for (let i = 0, len = dataLayer.length; i < len; i += 1) {
 					if(dataLayer[i][0] == "config" && dataLayer[i][1] == "<?php echo esc_html( $google_trackingId); ?>") {
 						if(window.dataLayer[i].length > 2) {
 							if(window.dataLayer[i][2]["custom_map"] !== undefined) {

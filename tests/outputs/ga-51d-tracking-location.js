@@ -3,7 +3,6 @@
                         gtag('js', new Date());
 
                         const configuration = {
-                                <!--'cookieDomain':'none',-->
                                 'send_page_view': 'true',
                                 'custom_map' : {
                                         'dimension1' : 'testproperty1', 

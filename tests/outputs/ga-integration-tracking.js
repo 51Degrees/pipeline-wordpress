@@ -8,10 +8,8 @@
                         };
 
                         const trackingId = 'test-123456789-0';
-                        i = len = 0;
 
-                        for (i, len = window.dataLayer.length; i < len; 
-i += 1) {
+                        for (let i = 0, len = window.dataLayer.length; i < len; i += 1) {
                                 if(window.dataLayer[i][0] == "config" && window.dataLayer[i][1] == trackingId ) {
                                         if(window.dataLayer[i].length > 
 2) {
