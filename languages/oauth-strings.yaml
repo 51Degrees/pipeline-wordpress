@@ -76,6 +76,18 @@ oauth:
     # verify_state with user_id <= 0. Defensive — should not happen via the UI.
     invalid_user_id: 'Could not identify the administrator who started the Google Analytics connection. Please log in and try again.'
 
+    # Shown when wp_json_encode fails to serialize the state payload
+    # (e.g. non-UTF-8 input from a future caller). Defensive — current
+    # payload shape is plain ASCII so this branch is unreachable in
+    # practice, but the contract demands a key for every state exception.
+    encode_failure: 'Internal error while preparing the Google Analytics authorization request. Please try connecting again.'
+
+    # Last-resort slug emitted by oauth-start when the state engine throws
+    # something other than FiftyOneDegreesOauthStateException (e.g. a
+    # CSPRNG failure inside random_bytes). Pairs with an error_log entry
+    # for ops diagnostics.
+    start_failed: 'Could not start the Google Analytics authorization. Please try connecting again. If the problem persists, contact your administrator.'
+
     # Shown when the site is a multisite install. OAuth flow is single-site only
     # in this release; multisite support is tracked for 1.0.13.
     multisite_unsupported: 'Google Analytics OAuth is not yet supported on multisite installations. This site is on the roadmap for a future release.'

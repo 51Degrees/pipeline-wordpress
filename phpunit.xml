@@ -25,6 +25,7 @@
       <file>tests/OAuthStateTests.php</file>
       <file>tests/OAuthMigrationTests.php</file>
       <file>tests/OAuthCallbackTests.php</file>
+      <file>tests/OAuthStartHandlerTests.php</file>
     </testsuite>
     <testsuite name="Integration">
       <file>tests/PipelineTests.php</file>

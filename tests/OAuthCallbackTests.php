@@ -561,7 +561,7 @@ class OAuthCallbackTests extends TestCase
             'GA_TOKEN must be persisted on success');
         $this->assertIsInt($opts->data[Options::GA_AUTH_DATE],
             'GA_AUTH_DATE must be a unix timestamp');
-        $this->assertSame('success', $tr->data[FiftyOneDegreesOauthCallback::NOTICE_TRANSIENT],
+        $this->assertSame('success', $tr->data[FiftyOneDegreesOauthNotice::TRANSIENT_KEY],
             'success notice must be queued for the next admin page render');
 
         $redirects = $this->log_keys_of('wp_safe_redirect');
@@ -673,7 +673,7 @@ class OAuthCallbackTests extends TestCase
     private function assertNoticeSet($branch)
     {
         $this->assertContains(
-            FiftyOneDegreesOauthCallback::NOTICE_TRANSIENT,
+            FiftyOneDegreesOauthNotice::TRANSIENT_KEY,
             $this->log_keys_of('set_transient'),
             'notice transient must be set so the admin tab can render ' . $branch
         );

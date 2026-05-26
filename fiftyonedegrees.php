@@ -215,10 +215,10 @@ class Fiftyonedegrees {
         if (class_exists('FiftyOneDegreesOauthCallback')) {
             add_action('admin_init', ['FiftyOneDegreesOauthCallback', 'handle'], 5);
         }
-        if (class_exists('FiftyOneDegrees_OAuth_Start_Handler')) {
+        if (class_exists('FiftyOneDegreesOauthStart')) {
             add_action(
                 'admin_post_fiftyonedegrees_oauth_start',
-                ['FiftyOneDegrees_OAuth_Start_Handler', 'handle']
+                ['FiftyOneDegreesOauthStart', 'handle']
             );
         }
     }

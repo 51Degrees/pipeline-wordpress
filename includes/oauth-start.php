@@ -1,0 +1,233 @@
+<?php
+
+/*
+    This Original Work is copyright of 51 Degrees Mobile Experts Limited.
+    Copyright 2019 51 Degrees Mobile Experts Limited, 5 Charlotte Close,
+    Caversham, Reading, Berkshire, United Kingdom RG4 7BY.
+
+    This Original Work is licensed under the European Union Public Licence (EUPL)
+    v.1.2 and is subject to its terms as set out below.
+
+    If a copy of the EUPL was not distributed with this file, You can obtain
+    one at https://opensource.org/licenses/EUPL-1.2.
+
+    The 'Compatible Licences' set out in the Appendix to the EUPL (as may be
+    amended by the European Commission) shall be deemed incompatible for
+    the purposes of the Work and the provisions of the compatibility
+    clause in Article 5 of the EUPL shall not apply.
+*/
+
+require_once __DIR__ . '/../options.php';
+require_once __DIR__ . '/oauth-state.php';
+require_once __DIR__ . '/oauth-notice.php';
+
+/**
+ * OAuth start handler: admin-post action `fiftyonedegrees_oauth_start`.
+ *
+ * The Connect button on the Google Analytics admin tab posts to
+ * admin-post.php?action=fiftyonedegrees_oauth_start with a WP nonce.
+ * This handler runs the safety gauntlet (capability, nonce, multisite,
+ * HTTPS), generates a state + PKCE verifier pair via OauthState,
+ * builds the Google authorization URL, and redirects the browser
+ * there. The verifier is stashed in the per-nonce transient that
+ * verify_state will read back on callback (see oauth-callback.php).
+ *
+ * The PKCE code_challenge is sent to Google through the second argument
+ * of Google_Client::createAuthUrl(). The vendored google/apiclient v2.x
+ * does not expose dedicated setCodeChallenge/setCodeChallengeMethod
+ * setters; instead, $queryParams are merged into the auth URL by
+ * createAuthUrl itself (array_filter([...config...]) + $queryParams —
+ * see lib/vendor/google/apiclient/src/Client.php:443). DO NOT add
+ * setCodeChallenge/setCodeChallengeMethod here without first removing
+ * the createAuthUrl second-arg branch; both would otherwise duplicate.
+ *
+ * The final wp_redirect to accounts.google.com deliberately uses
+ * wp_redirect (not wp_safe_redirect): the latter restricts the Location
+ * header to wp_allowed_redirect_hosts (same-host by default) and would
+ * silently fall back to admin_url, breaking the flow end-to-end. The
+ * target URL is built entirely from trusted constants + vendored
+ * library + our own state — no user input flows in.
+ *
+ * GAPs closed by this handler:
+ *   - GAP-2 (transient bloat): state is created only on actual click,
+ *     not on every admin page render.
+ *   - GAP-3 (CSRF on start): WP nonce + check_admin_referer().
+ *   - GAP-5 (ambiguous site_url): admin_url() is the single source.
+ *   - GAP-6 (HTTP-site OAuth): scheme check via home_url() before
+ *     creating any state.
+ *   - Multisite guard: OAuth flow is single-site only in this release;
+ *     see [[#57 S-9 google-analytics-ui]] roadmap.
+ *
+ * See oauth-callback.php for the consumer side of the flow (verify_state
+ * -> delete_transient -> authenticate -> save_token).
+ */
+class FiftyOneDegreesOauthStart
+{
+    /**
+     * WP nonce action shared with the Connect button render (S-9). The
+     * button calls wp_nonce_field(self::NONCE_ACTION) and this handler
+     * verifies the same slug via check_admin_referer.
+     */
+    public const NONCE_ACTION = 'fiftyonedegrees_oauth_start';
+
+    /**
+     * Entry point. Hooked on admin_post_fiftyonedegrees_oauth_start by
+     * fiftyonedegrees.php::setup_oauth_actions().
+     */
+    public static function handle()
+    {
+        // a. Login + capability. Unauthenticated requests go to wp-login;
+        // there is no notice channel for them. An authenticated non-admin
+        // also lands on the login screen — that matches WP's own pattern
+        // for admin-post handlers that require manage_options.
+        if (!is_user_logged_in() || !current_user_can('manage_options')) {
+            wp_safe_redirect(wp_login_url());
+            static::halt();
+            return;
+        }
+
+        // b. CSRF: WP nonce. check_admin_referer() calls wp_die() on a
+        // missing or bad nonce, which is the correct behavior for an
+        // admin-post handler. Tests stub it to throw instead.
+        check_admin_referer(self::NONCE_ACTION);
+
+        $user_id = (int) get_current_user_id();
+
+        // c. Multisite is out of scope for this release (roadmap: 1.0.13).
+        if (is_multisite()) {
+            self::reject('multisite_unsupported', $user_id);
+            return;
+        }
+
+        // d. HTTPS gate. We read the scheme from home_url() — the
+        // DB-stored siteurl — rather than $_SERVER. is_ssl() depends on
+        // request-time server vars that may not reflect the external
+        // scheme when WP sits behind a TLS-terminating proxy without a
+        // matching site URL configuration. Trade-off: a site on a TLS
+        // proxy where the admin has not yet updated General Settings to
+        // https:// will fail this gate even though the request itself
+        // is encrypted.
+        if (parse_url((string) home_url(), PHP_URL_SCHEME) !== 'https') {
+            self::reject('https_required', $user_id);
+            return;
+        }
+
+        // e-f. Generate PKCE verifier + challenge, then build a state
+        // string. create_state stashes the {user_id, verifier} pair in
+        // a per-nonce transient that the callback will look up via
+        // verify_state.
+        try {
+            $verifier = FiftyOneDegreesOauthState::generate_code_verifier();
+            $challenge = FiftyOneDegreesOauthState::code_challenge_from($verifier);
+            $state = FiftyOneDegreesOauthState::create_state($user_id, $verifier);
+        } catch (FiftyOneDegreesOauthStateException $e) {
+            // Typed branch: secret_corrupt / encode_failure / invalid_user_id.
+            // $e->reason is a slug that maps 1:1 to an oauth.notice.* key.
+            self::reject($e->reason, $user_id);
+            return;
+        } catch (\Throwable $e) {
+            // Last-resort catch for random_bytes() CSPRNG failure or any
+            // future non-typed crash from the state engine. Without this
+            // the request would bubble out as a WSOD and the transient
+            // table stays clean — but the admin sees nothing actionable.
+            error_log('51Degrees OAuth start exception: ' . $e->getMessage());
+            self::reject('start_failed', $user_id);
+            return;
+        }
+
+        // g. Build the auth URL via the Google client. The vendored
+        // google/apiclient does not surface code_challenge as a config
+        // key, so PKCE params go through createAuthUrl's second argument
+        // (see class docblock for the don't-add-setters caveat). state
+        // goes via setState() which IS supported.
+        $client = static::build_client();
+        $client->setRedirectUri(self::resolve_redirect_uri());
+        $client->setState($state);
+
+        $url = $client->createAuthUrl(null, [
+            'code_challenge' => $challenge,
+            'code_challenge_method' => 'S256',
+        ]);
+
+        // h. Off to Google. wp_redirect (not wp_safe_redirect) — see
+        // class docblock for the host-allowlist rationale.
+        wp_redirect($url);
+        static::halt();
+    }
+
+    /**
+     * Resolves the redirect URI through the public filter, with type
+     * validation. A misbehaving third-party hook can return null, false,
+     * an array, or an invalid string; rather than silently propagating
+     * a broken URI into the Google client, we log and fall back to the
+     * constant. The filter still gets full control on the happy path.
+     */
+    private static function resolve_redirect_uri()
+    {
+        $filtered = apply_filters(
+            'fiftyonedegrees_oauth_redirect_url',
+            FIFTYONEDEGREES_REDIRECT
+        );
+
+        if (!is_string($filtered)
+            || filter_var($filtered, FILTER_VALIDATE_URL) === false
+        ) {
+            error_log(
+                '51Degrees OAuth: fiftyonedegrees_oauth_redirect_url filter '
+                . 'returned an invalid value; falling back to default'
+            );
+            return FIFTYONEDEGREES_REDIRECT;
+        }
+
+        return $filtered;
+    }
+
+    /**
+     * Stores a notice slug, fires the observability action, and PRGs
+     * back to the GA admin tab. Mirrors FiftyOneDegreesOauthCallback::reject
+     * so the same `fiftyonedegrees_oauth_rejection` hook fires from both
+     * sides of the flow; the leaf slug matches a key under oauth.notice.*
+     * in languages/oauth-strings.yaml.
+     */
+    private static function reject($branch, $user_id, array $context = [])
+    {
+        do_action('fiftyonedegrees_oauth_rejection', $branch, $user_id, $context);
+        FiftyOneDegreesOauthNotice::set($branch);
+        wp_safe_redirect(admin_url(
+            'options-general.php?page=51Degrees&tab=google-analytics'
+        ));
+        static::halt();
+    }
+
+    /**
+     * Test seam — see FiftyOneDegreesOauthCallback::build_client(). Kept
+     * in lockstep with that block and with ga-service.php::authenticate().
+     * KEEP IN SYNC WITH ga-service.php::authenticate() and
+     * oauth-callback.php::build_client(); S-10 will fold all three into
+     * a single factory. handle() overrides setRedirectUri with the
+     * filtered value, so the constant set here is just the safe default.
+     *
+     * @return Google_Client
+     */
+    protected static function build_client()
+    {
+        $client = new Google_Client();
+        $client->setApprovalPrompt(FIFTYONEDEGREES_PROMPT);
+        $client->setAccessType(FIFTYONEDEGREES_ACCESS_TYPE);
+        $client->setClientId(FIFTYONEDEGREES_CLIENT_ID);
+        $client->setClientSecret(FIFTYONEDEGREES_CLIENT_SECRET);
+        $client->setRedirectUri(FIFTYONEDEGREES_REDIRECT);
+        $client->setScopes(Google_Service_Analytics::ANALYTICS_READONLY);
+        return $client;
+    }
+
+    /**
+     * Test seam over `exit`. Production exits after the wp_redirect /
+     * wp_safe_redirect to prevent any further admin_post handler from
+     * running. Tests override to flag and return so PHPUnit isn't killed.
+     */
+    protected static function halt()
+    {
+        exit;
+    }
+}

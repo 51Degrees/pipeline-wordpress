@@ -19,6 +19,7 @@
 
 require_once __DIR__ . '/../options.php';
 require_once __DIR__ . '/oauth-state.php';
+require_once __DIR__ . '/oauth-notice.php';
 
 /**
  * OAuth callback handler: admin_init priority 5.
@@ -56,13 +57,6 @@ require_once __DIR__ . '/oauth-state.php';
  */
 class FiftyOneDegreesOauthCallback
 {
-    /**
-     * Transient key set just before the PRG redirect; the admin tab
-     * reads-and-deletes it on render to surface the notice exactly once.
-     */
-    public const NOTICE_TRANSIENT = 'fiftyonedegrees_oauth_notice';
-    public const NOTICE_TTL = 30;
-
     /**
      * Entry point. Hooked on admin_init priority 5 so it runs before
      * the rest of the admin bootstrap notices the empty token.
@@ -176,7 +170,7 @@ class FiftyOneDegreesOauthCallback
         update_option(Options::GA_TOKEN, $token);
         update_option(Options::GA_AUTH_DATE, time());
 
-        set_transient(self::NOTICE_TRANSIENT, 'success', self::NOTICE_TTL);
+        FiftyOneDegreesOauthNotice::set('success');
         wp_safe_redirect(self::clean_admin_url('&oauth-success=1'));
         static::halt();
     }
@@ -191,7 +185,7 @@ class FiftyOneDegreesOauthCallback
     private static function reject($branch, $user_id, array $context = [])
     {
         do_action('fiftyonedegrees_oauth_rejection', $branch, $user_id, $context);
-        set_transient(self::NOTICE_TRANSIENT, $branch, self::NOTICE_TTL);
+        FiftyOneDegreesOauthNotice::set($branch);
         wp_safe_redirect(self::clean_admin_url());
         static::halt();
     }
