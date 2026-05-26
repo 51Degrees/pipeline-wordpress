@@ -26,6 +26,7 @@
       <file>tests/OAuthMigrationTests.php</file>
       <file>tests/OAuthCallbackTests.php</file>
       <file>tests/OAuthStartHandlerTests.php</file>
+      <file>tests/GoogleAnalyticsTabRenderTests.php</file>
     </testsuite>
     <testsuite name="Integration">
       <file>tests/PipelineTests.php</file>

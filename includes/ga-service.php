@@ -624,22 +624,26 @@ class Fiftyonedegrees_Google_Analytics {
     }
 
     /**
-     * If a new Google Analytics token is set in the admin interface, then
-     * authenticate it in the Google Analytics service. This will then set
-     * the GA_TOKEN option.
-     * 
+     * Legacy OOB Access Code handler. The UI that produced this POST was
+     * removed in S-9 (replaced by the Connect button + admin-post OAuth
+     * flow in oauth-start.php / oauth-callback.php). The hook + method
+     * are still registered to keep the diff for S-9 minimal — S-10 will
+     * delete both. Until then, any incoming POST is logged and silently
+     * dropped so a stale form (open in another tab, replayed by a
+     * browser extension, or hand-crafted by a third party) cannot
+     * resurrect the deprecated OOB exchange path.
+     *
      * @return void
      */
     function fiftyonedegrees_ga_authentication() {
 
         if (isset($_POST["fiftyonedegrees_ga_code"]) &&
             isset($_POST['submit'])) {
-            
-            $key_google_token = sanitize_text_field(wp_unslash(
-                    $_POST["fiftyonedegrees_ga_code"]));
-            $this->google_analytics_authenticate(
-                $key_google_token);
-            delete_option(Options::GA_TRACKING_ID_ERROR);
+
+            error_log(
+                '51Degrees: legacy OOB Access Code POST ignored '
+                . '(handler removed in S-9; full cleanup pending S-10)'
+            );
             wp_redirect(get_admin_url() .
                 'options-general.php?page=51Degrees&tab=google-analytics' );
             if (defined('ABSPATH')) { exit; }

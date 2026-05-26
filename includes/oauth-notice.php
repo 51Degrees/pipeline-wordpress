@@ -56,4 +56,24 @@ class FiftyOneDegreesOauthNotice
     {
         set_transient(self::TRANSIENT_KEY, (string) $slug, self::TTL);
     }
+
+    /**
+     * Reads and clears the notice slug in one call. Returns an empty
+     * string if no notice is pending or the stored value is not a
+     * non-empty string. The read+delete pair is what makes notices
+     * one-shot — co-locating it here so every UI consumer gets the
+     * same semantics without re-implementing the cast + delete combo.
+     *
+     * @return string The stored slug, or '' if absent or malformed.
+     */
+    public static function consume()
+    {
+        $candidate = get_transient(self::TRANSIENT_KEY);
+        if (!is_string($candidate) || $candidate === '') {
+            return '';
+        }
+        delete_transient(self::TRANSIENT_KEY);
+
+        return $candidate;
+    }
 }

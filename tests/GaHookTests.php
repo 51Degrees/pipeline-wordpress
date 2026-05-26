@@ -81,10 +81,13 @@ class GaHookTests extends TestCase {
     }
 
     /**
-     * Test that when an auth request is posted, the method correctly clears
-     * any existing errors, calls authenticate, and redirects.
+     * Legacy OOB Access Code POST handler was neutered in S-9 review (the
+     * UI input that produced the POST was removed in S-9). Until S-10
+     * removes the hook entirely, any incoming POST must be a no-op: no
+     * update_option, no delete_option, just a redirect back to the GA tab.
+     * This test pins the defensive behaviour against replayed forms.
      */
-    public function testGaAuthenticate() {
+    public function testGaAuthenticate_LegacyPostIsIgnored() {
         $_POST = array(
             "fiftyonedegrees_ga_code" => "some code",
             "submit" => ""
@@ -92,15 +95,16 @@ class GaHookTests extends TestCase {
         Functions\when('get_admin_url')->justReturn('admin/');
         $service = \Mockery::mock('Fiftyonedegrees_Google_Analytics')
             ->makePartial();
-        $service->shouldReceive('authenticate')->andReturn(false);
 
-        Functions\expect('delete_option')->once()->with(Options::GA_TRACKING_ID_ERROR);
+        // The handler must NOT mutate options or call authenticate any more.
+        Functions\expect('update_option')->never();
+        Functions\expect('delete_option')->never();
+        $service->shouldNotReceive('authenticate');
+        $service->shouldNotReceive('google_analytics_authenticate');
+
         Functions\expect('wp_redirect')
             ->once()
             ->with('admin/options-general.php?page=51Degrees&tab=google-analytics');
-        Functions\expect('update_option')
-            ->once()
-            ->with(Options::GA_AUTH_CODE, "some code");
 
         $service->fiftyonedegrees_ga_authentication();
         $this->assertTrue(true);
