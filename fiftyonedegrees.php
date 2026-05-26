@@ -97,7 +97,6 @@ class Fiftyonedegrees {
         define('FIFTYONEDEGREES_PLUGIN_URL', plugin_dir_url(__FILE__));
         define('FIFTYONEDEGREES_PROMPT', 'force');
         define('FIFTYONEDEGREES_ACCESS_TYPE', 'offline');
-        define('FIFTYONEDEGREES_RESPONSE_TYPE', 'code');
         // Production credentials. Local dev can override these by defining
         // FIFTYONEDEGREES_DEV_CLIENT_ID / _SECRET / _REDIRECT earlier in
         // the request (e.g. via wp-config.php inside wp-env). The DEV
@@ -121,10 +120,6 @@ class Fiftyonedegrees {
             defined('FIFTYONEDEGREES_DEV_REDIRECT')
                 ? FIFTYONEDEGREES_DEV_REDIRECT
                 : 'https://TODO-relay-url');
-        define(
-            'FIFTYONEDEGREES_SCOPE',
-            Google_Service_Analytics::ANALYTICS_READONLY .
-            " " .  Google_Service_Analytics::ANALYTICS_EDIT);
         define('FIFTYONEDEGREES_CUSTOM_DIMENSION_SCOPE', "HIT");
     }
 
@@ -146,6 +141,8 @@ class Fiftyonedegrees {
         require_once __DIR__ . '/options.php';
         require_once __DIR__ . '/includes/suspicious-activity.php';
         require_once __DIR__ . '/includes/oauth-state.php';
+        require_once __DIR__ . '/includes/oauth-notice.php';
+        require_once __DIR__ . '/includes/google-client-factory.php';
         require_once __DIR__ . '/includes/oauth-migration.php';
 
         // OAuth callback and start handlers land in later commits. Guard

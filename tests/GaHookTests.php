@@ -50,9 +50,11 @@ class GaHookTests extends TestCase {
      */
     public function testAdminInitActions() {
         (new Fiftyonedegrees_Google_Analytics())->setup_wp_actions();
-        self::assertNotFalse(has_action(
-            'admin_init',
-            'Fiftyonedegrees_Google_Analytics->fiftyonedegrees_ga_authentication()'));
+        // Note: the legacy `fiftyonedegrees_ga_authentication` admin_init
+        // hook was removed in S-10. has_action() with an unresolvable
+        // callable string throws inside Brain Monkey validation, so the
+        // negative assertion lives in testLegacyOauthOobSurfaceIsRemoved
+        // below (`method_exists` check) instead.
         self::assertNotFalse(has_action(
             'admin_init',
             'Fiftyonedegrees_Google_Analytics->fiftyonedegrees_ga_logout()'));
@@ -81,33 +83,25 @@ class GaHookTests extends TestCase {
     }
 
     /**
-     * Legacy OOB Access Code POST handler was neutered in S-9 review (the
-     * UI input that produced the POST was removed in S-9). Until S-10
-     * removes the hook entirely, any incoming POST must be a no-op: no
-     * update_option, no delete_option, just a redirect back to the GA tab.
-     * This test pins the defensive behaviour against replayed forms.
+     * Legacy OOB OAuth surface — the Access Code POST handler
+     * (`fiftyonedegrees_ga_authentication`) and the sibling
+     * `google_analytics_authenticate` exchange helper — was removed in
+     * S-10. The UI input that produced the POST disappeared in S-9, the
+     * methods + admin_init hook were unreachable code, and S-10 deleted
+     * them outright. This test pins the removal so a future refactor
+     * cannot accidentally resurrect either symbol.
      */
-    public function testGaAuthenticate_LegacyPostIsIgnored() {
-        $_POST = array(
-            "fiftyonedegrees_ga_code" => "some code",
-            "submit" => ""
+    public function testLegacyOauthOobSurfaceIsRemoved() {
+        $service = new Fiftyonedegrees_Google_Analytics();
+
+        $this->assertFalse(
+            method_exists($service, 'fiftyonedegrees_ga_authentication'),
+            'fiftyonedegrees_ga_authentication must not be re-introduced'
         );
-        Functions\when('get_admin_url')->justReturn('admin/');
-        $service = \Mockery::mock('Fiftyonedegrees_Google_Analytics')
-            ->makePartial();
-
-        // The handler must NOT mutate options or call authenticate any more.
-        Functions\expect('update_option')->never();
-        Functions\expect('delete_option')->never();
-        $service->shouldNotReceive('authenticate');
-        $service->shouldNotReceive('google_analytics_authenticate');
-
-        Functions\expect('wp_redirect')
-            ->once()
-            ->with('admin/options-general.php?page=51Degrees&tab=google-analytics');
-
-        $service->fiftyonedegrees_ga_authentication();
-        $this->assertTrue(true);
+        $this->assertFalse(
+            method_exists($service, 'google_analytics_authenticate'),
+            'google_analytics_authenticate must not be re-introduced'
+        );
     }
     
     /**

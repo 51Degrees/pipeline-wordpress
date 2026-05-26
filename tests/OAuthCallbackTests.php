@@ -52,8 +52,13 @@ class TestableOauthCallback extends FiftyOneDegreesOauthCallback
 
 /**
  * Minimal Google_Client stand-in. Records the code passed to
- * authenticate() and the verifier passed to setCodeVerifier() so tests
- * can assert the exchange contract without dragging in the real library.
+ * fetchAccessTokenWithAuthCode() and the verifier passed as its second
+ * argument so tests can assert the exchange contract without dragging
+ * in the real Google_Client.
+ *
+ * fetchAccessTokenWithAuthCode is the non-deprecated form; the older
+ * authenticate($code) alias drops the verifier silently. S-10 migrated
+ * the callback to the non-deprecated method so PKCE actually works.
  */
 class FakeGoogleClient
 {
@@ -67,14 +72,10 @@ class FakeGoogleClient
         $this->return_value = $return_value;
     }
 
-    public function setCodeVerifier($verifier)
-    {
-        $this->verifier = $verifier;
-    }
-
-    public function authenticate($code)
+    public function fetchAccessTokenWithAuthCode($code, $codeVerifier = null)
     {
         $this->code_seen = $code;
+        $this->verifier = $codeVerifier;
         if ($this->throw !== null) {
             throw $this->throw;
         }

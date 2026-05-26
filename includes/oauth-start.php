@@ -20,6 +20,7 @@
 require_once __DIR__ . '/../options.php';
 require_once __DIR__ . '/oauth-state.php';
 require_once __DIR__ . '/oauth-notice.php';
+require_once __DIR__ . '/google-client-factory.php';
 
 /**
  * OAuth start handler: admin-post action `fiftyonedegrees_oauth_start`.
@@ -40,6 +41,11 @@ require_once __DIR__ . '/oauth-notice.php';
  * see lib/vendor/google/apiclient/src/Client.php:443). DO NOT add
  * setCodeChallenge/setCodeChallengeMethod here without first removing
  * the createAuthUrl second-arg branch; both would otherwise duplicate.
+ *
+ * The matching code_verifier travels via the transient set in S-3 and is
+ * consumed on the callback side through
+ * Google_Client::fetchAccessTokenWithAuthCode($code, $codeVerifier), which
+ * forwards it as code_verifier= in the token POST. See oauth-callback.php.
  *
  * The final wp_redirect to accounts.google.com deliberately uses
  * wp_redirect (not wp_safe_redirect): the latter restricts the Location
@@ -135,13 +141,16 @@ class FiftyOneDegreesOauthStart
             return;
         }
 
-        // g. Build the auth URL via the Google client. The vendored
-        // google/apiclient does not surface code_challenge as a config
-        // key, so PKCE params go through createAuthUrl's second argument
-        // (see class docblock for the don't-add-setters caveat). state
-        // goes via setState() which IS supported.
+        // g. Build the auth URL via the Google client. The factory has
+        // already applied the fiftyonedegrees_oauth_redirect_url filter
+        // to setRedirectUri, so we only attach the run-time state here.
+        //
+        // PKCE: the vendored google/apiclient does not surface
+        // code_challenge as a config key, so PKCE params go through
+        // createAuthUrl's second argument. DO NOT add
+        // setCodeChallenge/setCodeChallengeMethod here without first
+        // removing this branch — both would otherwise duplicate.
         $client = static::build_client();
-        $client->setRedirectUri(self::resolve_redirect_uri());
         $client->setState($state);
 
         $url = $client->createAuthUrl(null, [
@@ -153,33 +162,6 @@ class FiftyOneDegreesOauthStart
         // class docblock for the host-allowlist rationale.
         wp_redirect($url);
         static::halt();
-    }
-
-    /**
-     * Resolves the redirect URI through the public filter, with type
-     * validation. A misbehaving third-party hook can return null, false,
-     * an array, or an invalid string; rather than silently propagating
-     * a broken URI into the Google client, we log and fall back to the
-     * constant. The filter still gets full control on the happy path.
-     */
-    private static function resolve_redirect_uri()
-    {
-        $filtered = apply_filters(
-            'fiftyonedegrees_oauth_redirect_url',
-            FIFTYONEDEGREES_REDIRECT
-        );
-
-        if (!is_string($filtered)
-            || filter_var($filtered, FILTER_VALIDATE_URL) === false
-        ) {
-            error_log(
-                '51Degrees OAuth: fiftyonedegrees_oauth_redirect_url filter '
-                . 'returned an invalid value; falling back to default'
-            );
-            return FIFTYONEDEGREES_REDIRECT;
-        }
-
-        return $filtered;
     }
 
     /**
@@ -200,25 +182,15 @@ class FiftyOneDegreesOauthStart
     }
 
     /**
-     * Test seam — see FiftyOneDegreesOauthCallback::build_client(). Kept
-     * in lockstep with that block and with ga-service.php::authenticate().
-     * KEEP IN SYNC WITH ga-service.php::authenticate() and
-     * oauth-callback.php::build_client(); S-10 will fold all three into
-     * a single factory. handle() overrides setRedirectUri with the
-     * filtered value, so the constant set here is just the safe default.
+     * Test seam over the Google_Client construction. Production delegates
+     * to the shared factory; tests override to inject a mock without
+     * touching the real apiclient.
      *
      * @return Google_Client
      */
     protected static function build_client()
     {
-        $client = new Google_Client();
-        $client->setApprovalPrompt(FIFTYONEDEGREES_PROMPT);
-        $client->setAccessType(FIFTYONEDEGREES_ACCESS_TYPE);
-        $client->setClientId(FIFTYONEDEGREES_CLIENT_ID);
-        $client->setClientSecret(FIFTYONEDEGREES_CLIENT_SECRET);
-        $client->setRedirectUri(FIFTYONEDEGREES_REDIRECT);
-        $client->setScopes(Google_Service_Analytics::ANALYTICS_READONLY);
-        return $client;
+        return FiftyOneDegreesGoogleClientFactory::make();
     }
 
     /**

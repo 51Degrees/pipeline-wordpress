@@ -380,15 +380,11 @@ class OAuthStartHandlerTests extends TestCase
             'PKCE verifier must be stashed alongside the user_id'
         );
 
-        // Filter applied to redirect URI.
-        $this->assertSame(
-            FIFTYONEDEGREES_REDIRECT,
-            $client->redirect_uri,
-            'redirect URI must come from the filter (default = constant)'
-        );
-        $this->assertContains('fiftyonedegrees_oauth_redirect_url',
-            $this->log_keys_of('apply_filters'),
-            'fiftyonedegrees_oauth_redirect_url filter must run'
+        // Redirect URI is set inside the factory (S-10) rather than in the
+        // handler. Filter coverage lives in GoogleClientFactoryTests; tests
+        // here only assert that the handler does not also re-set it.
+        $this->assertNull($client->redirect_uri,
+            'handler must no longer call setRedirectUri directly — factory owns it'
         );
 
         // Final redirect goes to Google via wp_redirect (NOT wp_safe_redirect).
@@ -442,27 +438,7 @@ class OAuthStartHandlerTests extends TestCase
         );
     }
 
-    // ─── 9. Filter receives default and can swap it ─────────────────────
-
-    public function testRedirectUriFilterCanOverrideDefault()
-    {
-        $this->stub_wp();
-        // Re-register apply_filters to swap the value for this hook.
-        Functions\when('apply_filters')->alias(function ($hook, $value) {
-            if ($hook === 'fiftyonedegrees_oauth_redirect_url') {
-                return 'https://override.example/relay';
-            }
-            return $value;
-        });
-        $client = new FakeStartGoogleClient();
-        TestableOauthStart::$mock_client = $client;
-
-        TestableOauthStart::handle();
-
-        $this->assertSame('https://override.example/relay', $client->redirect_uri,
-            'filter return value must reach the client unchanged'
-        );
-    }
+    // ─── 9. (filter override coverage moved to GoogleClientFactoryTests) ─
 
     // ─── 10. URL length sanity check ────────────────────────────────────
 
@@ -570,34 +546,5 @@ PHP
         $this->assertSame('start_failed', $action[1]);
     }
 
-    // ─── 13. Invalid filter return falls back to constant ───────────────
-
-    public function testInvalidFilterReturnFallsBackToConstant()
-    {
-        $this->stub_wp();
-        // Filter returns garbage (non-URL). resolve_redirect_uri() must
-        // log + fall back to the constant rather than pass nonsense to
-        // setRedirectUri.
-        Functions\when('apply_filters')->alias(function ($hook, $value) {
-            if ($hook === 'fiftyonedegrees_oauth_redirect_url') {
-                return ['not', 'a', 'string'];
-            }
-            return $value;
-        });
-        $client = new FakeStartGoogleClient();
-        TestableOauthStart::$mock_client = $client;
-
-        TestableOauthStart::handle();
-
-        $this->assertSame(
-            FIFTYONEDEGREES_REDIRECT,
-            $client->redirect_uri,
-            'invalid filter return must fall back to the constant'
-        );
-        // The Google leg must still complete — fallback is for resilience,
-        // not a rejection.
-        $this->assertCount(1, $this->log_keys_of('wp_redirect'),
-            'happy flow continues with the fallback redirect URI'
-        );
-    }
+    // ─── 13. (invalid-filter fallback coverage moved to GoogleClientFactoryTests) ─
 }

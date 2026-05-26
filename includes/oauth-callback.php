@@ -20,6 +20,7 @@
 require_once __DIR__ . '/../options.php';
 require_once __DIR__ . '/oauth-state.php';
 require_once __DIR__ . '/oauth-notice.php';
+require_once __DIR__ . '/google-client-factory.php';
 
 /**
  * OAuth callback handler: admin_init priority 5.
@@ -135,9 +136,6 @@ class FiftyOneDegreesOauthCallback
         }
 
         $client = static::build_client();
-        if ($code_verifier !== null && method_exists($client, 'setCodeVerifier')) {
-            $client->setCodeVerifier($code_verifier);
-        }
 
         // Rejection context for the exchange failure paths is deliberately
         // a small scalar: hook subscribers (logging plugins, error monitors)
@@ -145,8 +143,13 @@ class FiftyOneDegreesOauthCallback
         // messages / error-array responses can echo request bodies or
         // partial token material. The branch slug alone is enough for the
         // admin-facing notice; ops diagnostics go through error_log.
+        //
+        // fetchAccessTokenWithAuthCode (not the deprecated `authenticate`
+        // alias) accepts the PKCE verifier as a second argument and forwards
+        // it as code_verifier= in the token POST. The alias drops the
+        // verifier silently and would defeat the PKCE binding from S-8.
         try {
-            $token = $client->authenticate($code);
+            $token = $client->fetchAccessTokenWithAuthCode($code, $code_verifier);
         } catch (\Exception $e) {
             error_log('51Degrees OAuth exchange exception: ' . $e->getMessage());
             self::reject('exchange_failed', $user_id);
@@ -201,23 +204,16 @@ class FiftyOneDegreesOauthCallback
     }
 
     /**
-     * Test seam. Default returns a freshly-configured Google_Client matching
-     * the credentials used by GAService::authenticate(). Subclasses override
-     * to inject a mock; S-10 will fold this into ga-service.php and replace
-     * the override with a delegating call.
+     * Test seam over the Google_Client construction. Production delegates
+     * to the shared factory so the credentials/scope/redirect config stays
+     * in lockstep across the three call sites (start, callback, ga-service).
+     * Tests override to inject a mock without touching the real apiclient.
      *
      * @return Google_Client
      */
     protected static function build_client()
     {
-        $client = new Google_Client();
-        $client->setApprovalPrompt(FIFTYONEDEGREES_PROMPT);
-        $client->setAccessType(FIFTYONEDEGREES_ACCESS_TYPE);
-        $client->setClientId(FIFTYONEDEGREES_CLIENT_ID);
-        $client->setClientSecret(FIFTYONEDEGREES_CLIENT_SECRET);
-        $client->setRedirectUri(FIFTYONEDEGREES_REDIRECT);
-        $client->setScopes(Google_Service_Analytics::ANALYTICS_READONLY);
-        return $client;
+        return FiftyOneDegreesGoogleClientFactory::make();
     }
 
     /**

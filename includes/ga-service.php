@@ -46,133 +46,27 @@ class Fiftyonedegrees_Google_Analytics {
     }
 
     /**
-     * Authenticate with Google Analytics.
-	 * @param string $key_google_token Access Code
-     * @return boolean true for successful authentication. 
-     */	
-    public function google_analytics_authenticate($key_google_token) {
-        
-        try {
-
-            update_option(Options::GA_AUTH_CODE, $key_google_token);
-
-            $client = $this->authenticate();
-
-            if ($client) {
-              
-                $service = $this->get_google_analytics_service( $client );
-                $this->get_analytics_properties_list($service);
-                return true; 
-            }
-            else {
-                error_log("Could not authenticate with the user.");
-            }
-    
-        }
-        catch (Exception $e) {
-
-            error_log($e->getMessage());
-        }
-        return false; 
-    }
-
-    /**
-     * Authenticates with backend PHP server using Google Client.
-     * @return boolean status flag
-     */	
+     * Returns a configured Google_Client carrying the stored access token,
+     * or false when no token is available. Token acquisition happens in
+     * the OAuth callback (oauth-callback.php); this method is the reuse
+     * path called by the custom-dimensions code in this file.
+     *
+     * The factory's `make()` constructs a fresh client with the right
+     * credentials/scope/redirect block — the test seam lives at this
+     * method (callers mock authenticate() rather than the factory), so
+     * we deliberately do not introduce an inner build_client() override.
+     *
+     * @return Google_Client|false
+     */
     public function authenticate() {
 
-        $client = new Google_Client();
-        $client->setApprovalPrompt(FIFTYONEDEGREES_PROMPT);
-        $client->setAccessType(FIFTYONEDEGREES_ACCESS_TYPE);
-        $client->setClientId(FIFTYONEDEGREES_CLIENT_ID);
-        $client->setClientSecret(FIFTYONEDEGREES_CLIENT_SECRET);
-        $client->setRedirectUri(FIFTYONEDEGREES_REDIRECT);
-        $client->setScopes(Google_Service_Analytics::ANALYTICS_READONLY);
-        
         $ga_google_authtoken = get_option(Options::GA_TOKEN);
-    
-        if (!empty($ga_google_authtoken)) {
-    
-            $client->setAccessToken($ga_google_authtoken);
+        if (empty($ga_google_authtoken)) {
+            return false;
         }
-        else {
-    
-            $auth_code = get_option(Options::GA_AUTH_CODE);
-    
-            if (empty($auth_code)) {
-                
-                update_option(
-                    Options::GA_ERROR,
-                    "Please enter Access Code to authenticate.");
-                return false; 
-            }
-    
-            try {   
-                               
-                $access_token = $client->authenticate($auth_code);
 
-                if (isset($access_token["error_description"])) {
-                    update_option(
-                        Options::GA_ERROR,
-                        "<b>Authentication request has returned " .
-                        $access_token["error_description"] . "</b>");  
-                }
-                else if (isset($access_token["scope"]) &&
-                    strpos(
-                        $access_token["scope"],
-                        Google_Service_Analytics::ANALYTICS_READONLY) === false) {
-                    update_option(
-                        Options::GA_ERROR,
-                        'Please ensure you tick the <b>See and download your ' .
-                        'Google Analytics data</b> box when logging into ' .
-                        'Google Analytics.');
-                    return false;
-                }
-                else if (isset($access_token["scope"]) &&
-                    strpos(
-                        $access_token["scope"],
-                        Google_Service_Analytics::ANALYTICS_EDIT) === false) {
-                    update_option(
-                        Options::GA_ERROR,
-                        'Please ensure you tick the <b>Edit Google Analytics ' .
-                        'management entities</b> box when logging into ' .
-                        'Google Analytics.');
-                    return false;
-                }                
-
-            }
-            catch (Analytify_Google_Auth_Exception $e) {
-                update_option(
-                    Options::GA_ERROR,
-                    "Authentication request has returned an error. " .
-                    "Please enter valid Access Code.");
-                error_log($e->getMessage());
-                return false;
-            }
-            catch (Exception $e) {
-                update_option(
-                    Options::GA_ERROR,
-                    "Authentication request has returned an error. " .
-                    "Please enter valid Access Code.");
-                error_log($e->getMessage());
-                return false;
-            }
-    
-            if ($access_token) {
-    
-                $client->setAccessToken($access_token);
-    
-                update_option(Options::GA_TOKEN, $access_token);
-                update_option(
-                    Options::GA_AUTH_DATE,
-                    date( 'l jS F Y h:i:s A' ) . date_default_timezone_get());
-    
-            }
-            else {
-                return false;
-            }
-        }
+        $client = FiftyOneDegreesGoogleClientFactory::make();
+        $client->setAccessToken($ga_google_authtoken);
 
         return $client;
     }
@@ -404,9 +298,9 @@ class Fiftyonedegrees_Google_Analytics {
      * @return      void
      */
     public function setup_wp_actions() {
-        add_action(
-            'admin_init',
-            array($this, 'fiftyonedegrees_ga_authentication'));
+        // (Legacy OOB Access Code admin_init hook removed in S-10. The UI
+        // input that produced its POST disappeared in S-9; the method
+        // itself was unreachable code and was deleted alongside.)
         add_action(
             'admin_init',
             array($this, 'fiftyonedegrees_ga_logout'));
@@ -620,33 +514,6 @@ class Fiftyonedegrees_Google_Analytics {
                 wp_redirect(get_admin_url() .
                     'options-general.php?page=51Degrees&tab=google-analytics' );
             }     
-        }
-    }
-
-    /**
-     * Legacy OOB Access Code handler. The UI that produced this POST was
-     * removed in S-9 (replaced by the Connect button + admin-post OAuth
-     * flow in oauth-start.php / oauth-callback.php). The hook + method
-     * are still registered to keep the diff for S-9 minimal — S-10 will
-     * delete both. Until then, any incoming POST is logged and silently
-     * dropped so a stale form (open in another tab, replayed by a
-     * browser extension, or hand-crafted by a third party) cannot
-     * resurrect the deprecated OOB exchange path.
-     *
-     * @return void
-     */
-    function fiftyonedegrees_ga_authentication() {
-
-        if (isset($_POST["fiftyonedegrees_ga_code"]) &&
-            isset($_POST['submit'])) {
-
-            error_log(
-                '51Degrees: legacy OOB Access Code POST ignored '
-                . '(handler removed in S-9; full cleanup pending S-10)'
-            );
-            wp_redirect(get_admin_url() .
-                'options-general.php?page=51Degrees&tab=google-analytics' );
-            if (defined('ABSPATH')) { exit; }
         }
     }
 
