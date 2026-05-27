@@ -542,6 +542,7 @@ class Fiftyonedegrees_Google_Analytics {
 
         delete_option(Options::GA_AUTH_CODE);
         delete_option(Options::GA_TOKEN);
+        delete_option(Options::GA_AUTH_DATE);
         delete_option(Options::GA_PROPERTIES);
         delete_option(Options::GA_TRACKING_ID);
         delete_option(Options::GA_ACCOUNT_ID);

@@ -179,6 +179,8 @@ class Fiftyonedegrees {
         $this->fiftyone_service->delete_pmp_options();
         SuspiciousActivity::delete_options();
         FiftyOneDegreesRobotsTxt::delete_options();
+        FiftyOneDegreesOauthState::delete_options();
+        FiftyOneDegreesOauthMigration::delete_options();
     }
 
     function execute_ga_tracking_steps() {
@@ -269,10 +271,20 @@ function fiftyonedegrees_activate() {
 }
 register_activation_hook(__FILE__, 'fiftyonedegrees_activate');
 
-register_deactivation_hook(__FILE__, 'fiftyonedegrees_deactivate'); //in-active
-register_uninstall_hook(__FILE__, 'fiftyonedegrees_deactivate'); // delete
+// Deactivation is reversible and runs on plugin auto-update too, so it
+// must not destroy persistent data. Only stop scheduled work and drop
+// derived caches; the user's saved options stay put.
+register_deactivation_hook(__FILE__, 'fiftyonedegrees_deactivate');
+
+// Uninstall is terminal — wipe every option row the plugin ever wrote.
+register_uninstall_hook(__FILE__, 'fiftyonedegrees_uninstall');
 
 function fiftyonedegrees_deactivate() {
+    wp_clear_scheduled_hook('fiftyonedegrees_refresh_robots_txt');
+    FiftyOneDegreesCloudMetadata::invalidate_all();
+}
+
+function fiftyonedegrees_uninstall() {
     wp_clear_scheduled_hook('fiftyonedegrees_refresh_robots_txt');
     Fiftyonedegrees::get_instance()->delete_options();
     FiftyOneDegreesCloudMetadata::invalidate_all();

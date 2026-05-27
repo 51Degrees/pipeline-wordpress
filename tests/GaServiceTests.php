@@ -144,4 +144,24 @@ class GaServiceTests extends TestCase {
 
     }
 
+    /**
+     * Regression: delete_ga_options must include GA_AUTH_DATE so that
+     * uninstall fully clears the OAuth-touched options. The row is
+     * written by oauth-callback on successful token exchange; it had
+     * been historically absent from this sweep.
+     */
+    public function testDeleteGaOptionsIncludesAuthDate() {
+        $deleted = [];
+        Functions\when('delete_option')->alias(function ($key) use (&$deleted) {
+            $deleted[] = $key;
+            return true;
+        });
+
+        $svc = new Fiftyonedegrees_Google_Analytics();
+        $svc->delete_ga_options();
+
+        $this->assertContains(Options::GA_AUTH_DATE, $deleted);
+        $this->assertContains(Options::GA_TOKEN, $deleted);
+    }
+
 }

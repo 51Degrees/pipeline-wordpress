@@ -94,4 +94,18 @@ class FiftyOneDegreesOauthMigration
         delete_option(Options::GA_AUTH_CODE);
         update_option(Options::GA_OAUTH_VERSION, self::VERSION);
     }
+
+    /**
+     * Uninstall hook contribution — removes the migration version stamp
+     * and any leftover one-shot notice transient. Symmetric with
+     * FiftyOneDegreesOauthState::delete_options.
+     *
+     * Single-blog scope on multisite — same precedent as
+     * cleanup_expired_pending; multisite cleanup deferred to 1.0.13.
+     */
+    public static function delete_options()
+    {
+        delete_option(Options::GA_OAUTH_VERSION);
+        delete_transient(self::NOTICE_TRANSIENT);
+    }
 }

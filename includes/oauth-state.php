@@ -310,6 +310,20 @@ class FiftyOneDegreesOauthState
     }
 
     /**
+     * Uninstall hook contribution — removes the per-site HMAC secret.
+     * The secret is single-row, autoload=no, but leaving it behind would
+     * mean any future re-install of the plugin would silently keep
+     * validating state strings from the previous install (until the new
+     * site URL diverges, anyway). Symmetric with how SuspiciousActivity
+     * and FiftyOneDegreesRobotsTxt expose delete_options() for the
+     * top-level uninstall sweep.
+     */
+    public static function delete_options()
+    {
+        delete_option(Options::OAUTH_STATE_SECRET);
+    }
+
+    /**
      * Cron entry point: invokes cleanup_expired_pending under try/catch
      * and logs the count when non-zero. Registered as a listener on the
      * existing daily hook (`fiftyonedegrees_refresh_robots_txt`) from

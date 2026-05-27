@@ -220,6 +220,19 @@ class OAuthStateCleanupTests extends TestCase
         $this->assertSame(['fiftyonedegrees_oauth_pending_xyz'], $this->deleted);
     }
 
+    public function testDeleteOptionsRemovesStateSecret()
+    {
+        $deletedOptions = [];
+        Functions\when('delete_option')->alias(function ($key) use (&$deletedOptions) {
+            $deletedOptions[] = $key;
+            return true;
+        });
+
+        FiftyOneDegreesOauthState::delete_options();
+
+        $this->assertSame([Options::OAUTH_STATE_SECRET], $deletedOptions);
+    }
+
     public function testCronCleanupSwallowsThrowableFromInner()
     {
         // No $wpdb installed and a delete_transient stub that throws would

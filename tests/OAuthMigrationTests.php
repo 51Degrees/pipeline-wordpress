@@ -214,4 +214,24 @@ class OAuthMigrationTests extends TestCase
         $this->assertSame($snapshot, $options->data,
             'second run must not change anything once version is "2"');
     }
+
+    public function testDeleteOptionsRemovesVersionAndNoticeTransient()
+    {
+        $deletedOptions  = [];
+        $deletedTransients = [];
+
+        Functions\when('delete_option')->alias(function ($key) use (&$deletedOptions) {
+            $deletedOptions[] = $key;
+            return true;
+        });
+        Functions\when('delete_transient')->alias(function ($key) use (&$deletedTransients) {
+            $deletedTransients[] = $key;
+            return true;
+        });
+
+        FiftyOneDegreesOauthMigration::delete_options();
+
+        $this->assertSame([Options::GA_OAUTH_VERSION], $deletedOptions);
+        $this->assertSame([FiftyOneDegreesOauthMigration::NOTICE_TRANSIENT], $deletedTransients);
+    }
 }
