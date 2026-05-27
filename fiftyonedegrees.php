@@ -4,6 +4,7 @@
  *  Plugin URI:  https://51degrees.com/
  *  Description: Device detection and location-aware content for WordPress, with cloud-driven robots.txt management for AI/search crawlers and suspicious-activity protection against abusive traffic.
  *  Version:     1.0.11
+ *  Requires PHP: 8.2
  *  Author:      51Degrees
  *  Author URI:  https://51degrees.com/
  *  Text Domain: fiftyonedegrees

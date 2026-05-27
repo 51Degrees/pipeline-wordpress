@@ -104,10 +104,20 @@ If you're experiencing any issues, use the WordPress.org [support forums](https:
 
 == Changelog ==
 
+= 1.0.12 =
+* Replaced the deprecated Google "Out-of-Band" (OOB) OAuth flow (Google sunset January 2023) with a HMAC + PKCE-signed redirect through the 51Degrees relay.
+* Existing Google Analytics connections must be reconnected after this upgrade. The plugin will surface an admin notice on first wp-admin load post-update.
+* The new OAuth flow is single-site only in this release. Multisite OAuth support is on the roadmap for 1.0.13.
+* Hardened plugin uninstall: the OAuth state secret, migration version stamp, and the Google Analytics auth-date row are now removed on uninstall. Plugin deactivation is reversible and no longer wipes persistent OAuth data.
+* Added a daily cleanup of orphan OAuth pending transients to keep wp_options small on sites with abandoned authorization attempts.
+
 = 1.0.0 =
 * Initial Release.
 
 == Upgrade Notice ==
+
+= 1.0.12 =
+After updating, reconnect Google Analytics from Settings > 51Degrees > Google Analytics. Required to restore tracking — Google has retired the previous OAuth flow.
 
 = 1.0.0 =
 * Install 51Degrees Plugin.
