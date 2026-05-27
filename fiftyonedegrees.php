@@ -203,6 +203,10 @@ class Fiftyonedegrees {
      */
     private function setup_oauth_actions() {
         add_action('admin_init', ['FiftyOneDegreesOauthMigration', 'run'], 10);
+        add_action(
+            'fiftyonedegrees_refresh_robots_txt',
+            ['FiftyOneDegreesOauthState', 'cron_cleanup']
+        );
 
         if (strpos(FIFTYONEDEGREES_REDIRECT, 'TODO') !== false) {
             add_action('admin_notices', [$this, 'render_placeholder_url_notice']);

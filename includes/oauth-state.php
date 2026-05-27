@@ -309,6 +309,75 @@ class FiftyOneDegreesOauthState
         return time();
     }
 
+    /**
+     * Cron entry point: invokes cleanup_expired_pending under try/catch
+     * and logs the count when non-zero. Registered as a listener on the
+     * existing daily hook (`fiftyonedegrees_refresh_robots_txt`) from
+     * setup_oauth_actions() so the OAuth subsystem owns its own wire-up
+     * and the robots module does not need to know about OAuth.
+     */
+    public static function cron_cleanup()
+    {
+        try {
+            $count = self::cleanup_expired_pending();
+            if ($count > 0) {
+                error_log(sprintf(
+                    '51Degrees: cleaned %d orphan oauth-pending transient(s)',
+                    $count
+                ));
+            }
+        } catch (\Throwable $e) {
+            error_log('51Degrees: oauth-pending cleanup failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Removes expired oauth-pending transient rows that the WP transient
+     * API leaves behind in wp_options when their TTL passes without anyone
+     * reading them (abandoned flows: user closed the tab, Google errored,
+     * relay never returned). Returns the number of rows acted on so the
+     * caller can log.
+     *
+     * Safe to call when $wpdb is unavailable (returns 0); cron_cleanup()
+     * additionally wraps in try/catch so a DB hiccup never escapes.
+     *
+     * Single-blog scope: $wpdb->options resolves to the current blog's
+     * options table. On multisite, orphans on other subsites are not
+     * cleaned by this call — multisite OAuth support is deferred to 1.0.13.
+     */
+    public static function cleanup_expired_pending()
+    {
+        global $wpdb;
+        if (!isset($wpdb) || !is_object($wpdb)) {
+            return 0;
+        }
+
+        $like = '_transient_timeout_' . $wpdb->esc_like(self::TRANSIENT_PREFIX) . '%';
+        $sql = $wpdb->prepare(
+            "SELECT REPLACE(option_name, '_transient_timeout_', '')
+             FROM {$wpdb->options}
+             WHERE option_name LIKE %s AND option_value < %d",
+            $like,
+            static::now()
+        );
+
+        $rows = $wpdb->get_col($sql);
+        if (!is_array($rows) || empty($rows)) {
+            return 0;
+        }
+
+        $count = 0;
+        foreach ($rows as $key) {
+            if (!is_string($key) || $key === '') {
+                continue;
+            }
+            delete_transient($key);
+            $count++;
+        }
+
+        return $count;
+    }
+
     private static function b64url_encode($bytes)
     {
         return rtrim(strtr(base64_encode($bytes), '+/', '-_'), '=');
