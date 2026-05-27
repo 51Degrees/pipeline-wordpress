@@ -84,6 +84,8 @@ class FiftyOneDegreesOauthState
     public const STATE_TTL = 600;
     public const PAYLOAD_VERSION = 1;
     public const MIN_SECRET_LEN = 32;
+    /** 16 random bytes -> 32 hex chars; collision-resistant nonce per state. */
+    public const NONCE_BYTES = 16;
 
     /**
      * Returns the per-site HMAC secret, lazily initializing it on first call.
@@ -167,7 +169,7 @@ class FiftyOneDegreesOauthState
         $payload = [
             'v' => self::PAYLOAD_VERSION,
             'site_url' => admin_url('options-general.php?page=51Degrees&tab=google-analytics&oauth=callback'),
-            'nonce' => bin2hex(random_bytes(16)),
+            'nonce' => bin2hex(random_bytes(self::NONCE_BYTES)),
             'expiry' => static::now() + self::STATE_TTL,
         ];
 
@@ -329,18 +331,30 @@ class FiftyOneDegreesOauthState
      * existing daily hook (`fiftyonedegrees_refresh_robots_txt`) from
      * setup_oauth_actions() so the OAuth subsystem owns its own wire-up
      * and the robots module does not need to know about OAuth.
+     *
+     * Piggy-backing on the existing daily hook (rather than registering
+     * a second wp_schedule_event) is the deliberate tradeoff: shared
+     * cron cost, but the cleanup fires whether or not the robots feature
+     * is enabled — independent listeners on the same hook.
+     *
+     * The count + failure logs are written through error_log() rather
+     * than a verbose WP debug logger because this runs on every install
+     * including production; gating behind WP_DEBUG keeps shared-host
+     * error logs quiet when nothing went wrong.
      */
     public static function cron_cleanup()
     {
         try {
             $count = self::cleanup_expired_pending();
-            if ($count > 0) {
+            if ($count > 0 && defined('WP_DEBUG') && WP_DEBUG) {
                 error_log(sprintf(
                     '51Degrees: cleaned %d orphan oauth-pending transient(s)',
                     $count
                 ));
             }
         } catch (\Throwable $e) {
+            // Failures are always logged — silent breakage of the daily
+            // sweep is worse than a noisy log line on a broken install.
             error_log('51Degrees: oauth-pending cleanup failed: ' . $e->getMessage());
         }
     }
@@ -358,6 +372,9 @@ class FiftyOneDegreesOauthState
      * Single-blog scope: $wpdb->options resolves to the current blog's
      * options table. On multisite, orphans on other subsites are not
      * cleaned by this call — multisite OAuth support is deferred to 1.0.13.
+     *
+     * @internal Public for testability and the cron wrapper only —
+     *           callers outside this class should go through cron_cleanup().
      */
     public static function cleanup_expired_pending()
     {
@@ -366,9 +383,14 @@ class FiftyOneDegreesOauthState
             return 0;
         }
 
-        $like = '_transient_timeout_' . $wpdb->esc_like(self::TRANSIENT_PREFIX) . '%';
+        // SUBSTRING is anchored to the literal prefix, unlike REPLACE which
+        // would strip every occurrence of '_transient_timeout_' anywhere in
+        // the row — theoretical robustness since the prefix never appears
+        // inside the bin2hex nonce, but the anchored form has no downside.
+        $prefix    = '_transient_timeout_';
+        $like      = $prefix . $wpdb->esc_like(self::TRANSIENT_PREFIX) . '%';
         $sql = $wpdb->prepare(
-            "SELECT REPLACE(option_name, '_transient_timeout_', '')
+            "SELECT SUBSTRING(option_name, " . (strlen($prefix) + 1) . ")
              FROM {$wpdb->options}
              WHERE option_name LIKE %s AND option_value < %d",
             $like,

@@ -137,7 +137,7 @@ class OAuthStateCleanupTests extends TestCase
         $this->assertCount(1, $wpdb->prepared);
         $call = $wpdb->prepared[0];
         $this->assertStringContainsString('SELECT', $call['query']);
-        $this->assertStringContainsString('REPLACE(option_name', $call['query']);
+        $this->assertStringContainsString('SUBSTRING(option_name', $call['query']);
         $this->assertStringContainsString('option_name LIKE %s', $call['query']);
         $this->assertStringContainsString('option_value < %d', $call['query']);
 

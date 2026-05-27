@@ -539,13 +539,17 @@ class Fiftyonedegrees_Google_Analytics {
      * the Google Analytics feature.
      */
     function delete_ga_options() {
-
+        // auth artifacts
         delete_option(Options::GA_AUTH_CODE);
         delete_option(Options::GA_TOKEN);
         delete_option(Options::GA_AUTH_DATE);
+
+        // selected property / account
         delete_option(Options::GA_PROPERTIES);
         delete_option(Options::GA_TRACKING_ID);
         delete_option(Options::GA_ACCOUNT_ID);
+
+        // settings + dimensions
         delete_option(Options::GA_MAX_DIMENSIONS);
         delete_option(Options::GA_SEND_PAGE_VIEW);
         delete_option(Options::GA_JS);

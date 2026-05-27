@@ -106,7 +106,13 @@ class FiftyOneDegreesOauthCallback
         // maps 1:1 to a leaf key under oauth.notice.* — translate directly
         // to a rejection branch.
         $state = isset($_GET['state']) ? (string) $_GET['state'] : '';
-        $expected_host = isset($_SERVER['HTTP_HOST']) ? (string) $_SERVER['HTTP_HOST'] : '';
+        // Cap HTTP_HOST length defensively: DNS names are bounded at 253
+        // octets, and a multi-kB Host header from a malicious upstream
+        // would otherwise feed unbounded input into hash/compare paths.
+        // A value past the cap will fail host_mismatch — same outcome,
+        // bounded cost.
+        $raw_host = isset($_SERVER['HTTP_HOST']) ? (string) $_SERVER['HTTP_HOST'] : '';
+        $expected_host = substr($raw_host, 0, 253);
 
         try {
             $verified = FiftyOneDegreesOauthState::verify_state($state, $user_id, $expected_host);
@@ -150,7 +156,10 @@ class FiftyOneDegreesOauthCallback
         // verifier silently and would defeat the PKCE binding from S-8.
         try {
             $token = $client->fetchAccessTokenWithAuthCode($code, $code_verifier);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            // \Throwable (not \Exception): google/apiclient v2.x can raise
+            // \TypeError / \Error from inside Guzzle on certain transport
+            // failures; we want all of them to land in exchange_failed.
             error_log('51Degrees OAuth exchange exception: ' . $e->getMessage());
             self::reject('exchange_failed', $user_id);
             return;
