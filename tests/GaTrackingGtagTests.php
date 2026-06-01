@@ -77,22 +77,31 @@ class GaTrackingGtagTests extends TestCase
         $this->assertFalse($result['delayed_evidence']);
     }
 
-    public function testEventParametersFallsBackToPropertyNameWhenParameterNameMissing()
+    public function testEventParametersDropsRowsWithoutParameterName()
     {
-        // Pre-CD-UI-migration rows lack `parameter_name`. We must
-        // still emit something sensible so a half-populated install
-        // is not silently dead — derived key is the lowercased
-        // property_name.
+        // After the CD-UI rewrite, every row in the saved map
+        // carries an explicit parameter_name. A row missing one is
+        // a corrupted write rather than a routine state, and the
+        // emitter drops it rather than synthesising a fallback key
+        // that the GA4 property does not know about.
         $this->options[Options::GA_CUSTOM_DIMENSIONS_MAP] = [
             [
                 'property_name'            => 'HardwareName',
+                'custom_dimension_datakey' => 'device',
+            ],
+            [
+                'parameter_name'           => 'device_type',
+                'property_name'            => 'DeviceType',
                 'custom_dimension_datakey' => 'device',
             ],
         ];
 
         $result = (new Fiftyonedegrees_Tracking_Gtag())->get_event_parameters();
 
-        $this->assertSame(['hardwarename' => 'data.device.hardwarename'], $result['parameters']);
+        $this->assertSame(
+            ['device_type' => 'data.device.devicetype'],
+            $result['parameters']
+        );
     }
 
     public function testEventParametersDetectsLocationAsDelayed()
@@ -131,16 +140,14 @@ class GaTrackingGtagTests extends TestCase
     {
         // Corrupted DB rows must not emit "Array" as a parameter key
         // or trigger PHP warnings. A non-scalar parameter_name is
-        // treated the same as a missing one — the row falls through
-        // to the property_name fallback (which is the safer choice
-        // here: better to keep emitting under a derived name than
-        // to silently drop telemetry on a single bad field). An
-        // entirely non-array CD-map entry is dropped outright.
+        // treated as missing and the row is dropped — the CD-UI
+        // rewrite no longer permits a property_name fallback, so a
+        // bad field cannot leak through under a derived key.
         $this->options[Options::GA_CUSTOM_DIMENSIONS_MAP] = [
             ['parameter_name' => 'good',     'property_name' => 'Good',       'custom_dimension_datakey' => 'device'],
-            ['parameter_name' => ['nested'], 'property_name' => 'Fallback',   'custom_dimension_datakey' => 'device'],
-            ['property_name' => ['nested'],  'custom_dimension_datakey' => 'device'], // both fields non-scalar -> drop
-            ['parameter_name' => 'noseg',    'property_name' => ['nested'],   'custom_dimension_datakey' => 'device'], // property_name non-scalar segment -> drop
+            ['parameter_name' => ['nested'], 'property_name' => 'Fallback',   'custom_dimension_datakey' => 'device'], // non-scalar param_name -> dropped (no fallback)
+            ['property_name' => ['nested'],  'custom_dimension_datakey' => 'device'], // missing param_name + non-scalar property -> dropped
+            ['parameter_name' => 'noseg',    'property_name' => ['nested'],   'custom_dimension_datakey' => 'device'], // property_name non-scalar segment -> dropped
             'not-an-array',
         ];
 
@@ -149,12 +156,9 @@ class GaTrackingGtagTests extends TestCase
         $errorAfter = error_get_last();
 
         $this->assertSame(
-            [
-                'good'     => 'data.device.good',
-                'fallback' => 'data.device.fallback',
-            ],
+            ['good' => 'data.device.good'],
             $result['parameters'],
-            'array-valued parameter_name falls through to property_name; rows missing a usable segment are dropped'
+            'rows with non-scalar or missing parameter_name must be dropped, not fallback-derived'
         );
         $this->assertEquals(
             $errorBefore,
@@ -270,12 +274,13 @@ class GaTrackingGtagTests extends TestCase
         $this->assertStringContainsString("'device_type': data.device.devicetype", $result);
     }
 
-    public function testFreshBranchEmitsLowercasedPropertyNameWhenParameterNameMissing()
+    public function testFreshBranchOmitsRowWithoutParameterName()
     {
-        // End-to-end coverage of the backward-compat fallback in
-        // get_event_parameters: a CD-map row lacking parameter_name
-        // must still land in the emitted event payload, keyed by
-        // the lowercased property_name.
+        // Mirror of testEventParametersDropsRowsWithoutParameterName
+        // at the emitted-JS layer: a malformed CD-map row produces
+        // no event-parameter line. The fod event still fires under
+        // send_to so analytics receives the pageview, just without
+        // the bogus row's data.
         $this->options[Options::GA_MEASUREMENT_ID] = 'G-ABC123';
         $this->options[Options::GA_CUSTOM_DIMENSIONS_MAP] = [
             [
@@ -286,10 +291,11 @@ class GaTrackingGtagTests extends TestCase
 
         $result = (new Fiftyonedegrees_Tracking_Gtag())->output_gtag_code();
 
-        $this->assertStringContainsString(
-            "'hardwarename': data.device.hardwarename",
+        $this->assertStringContainsString("gtag('event', 'fod'", $result);
+        $this->assertStringNotContainsString(
+            "'hardwarename':",
             $result,
-            'fallback path must surface the lowercased property_name as the event parameter key'
+            'no fallback key should be synthesised for a row missing parameter_name'
         );
     }
 

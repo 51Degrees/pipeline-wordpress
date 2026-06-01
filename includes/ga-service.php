@@ -16,8 +16,6 @@
     clause in Article 5 of the EUPL shall not apply.
 */
 
-use Google\Service\Analytics\CustomDimension;
-
 require_once __DIR__ . '/../options.php';
 
 /**
@@ -83,39 +81,6 @@ class Fiftyonedegrees_Google_Analytics {
         }
 
         return $client;
-    }
-
-    /**
-     * Builds the UA Management API service. Still wired live via the
-     * Custom Dimensions admin_init handlers below — those reach the UA
-     * Management API which Google shut down on 2024-07-01, so any call
-     * lands a 404 / dead-API error. The methods are retained until a
-     * later commit replaces them with their GA4 Admin API equivalents
-     * so each intermediate commit on the branch still compiles. After
-     * the v3 schema migration the UA-paired option rows are gone, so
-     * the live code paths are non-functional at runtime until that
-     * later commit lands.
-     *
-     * @param Google_Client $client
-     * @return Google_Service_Analytics
-     */
-    public function get_google_analytics_service ($client) {
-        try {
-
-            // Create an authorized analytics service object.
-            $service = new Google_Service_Analytics($client);
-
-        }
-        catch (Google_Service_Exception $e) {
-
-            error_log($e->getMessage());
-        }
-        catch (Exception $e) {
-
-            error_log($e->getMessage());
-        }
-
-        return $service;
     }
 
     /**
@@ -194,167 +159,198 @@ class Fiftyonedegrees_Google_Analytics {
     }
 
     /**
-     * UA Management API account-id lookup. Still wired live via the
-     * Custom Dimensions code path below; non-functional at runtime
-     * after the v3 schema migration sweeps the UA tracking-id row.
-     * Removed in a later commit alongside the Custom Dimensions
-     * migration to the GA4 Admin API.
+     * Drives the GA4 Custom Dimensions side of "Enable Tracking":
+     * pre-flight against the per-property cap, then loop create()
+     * the dimensions that the admin's CD-map references but the
+     * property does not yet carry. Side effects:
      *
-     * @param Google_Service_Analytics $analytics_service
-     * @param string $trackingId
-     * @return string accountId
+     *   - On success: returns true. Invalidates the CD cache
+     *     transient so the next CD-tab render shows the freshly-
+     *     created dimensions. Frontend gtag emission already
+     *     reads the parameter names from GA_CUSTOM_DIMENSIONS_MAP
+     *     so no further wiring is needed.
+     *   - On any failure: sets Options::GA_ERROR with a copy that
+     *     identifies the specific failure mode (no property
+     *     selected / auth revoked / would exceed cap / per-row
+     *     create failed). Returns false. Caller must NOT mark
+     *     ENABLE_GA as enabled.
+     *
+     * Partial-failure semantics: on per-row create failure mid-
+     * loop the method returns false immediately. Dimensions
+     * created in earlier iterations remain on the GA4 property.
+     * Re-running Enable Tracking is safe — the upfront skip
+     * against $existing_params plus the 409-idempotent path
+     * inside Ga4DimensionService::create_custom_dimension cover
+     * the retry. The admin sees the failing-row's parameter name
+     * in the GA_ERROR notice and can resolve at the GA4 console.
+     *
+     * The method is intentionally instance-scoped (not static) so
+     * tests can Mockery-partial it together with authenticate() /
+     * get_ga4_admin_service() the way the property submit handler
+     * already does.
+     *
+     * @return bool true when every required CD is now present on
+     *              the property; false on any failure (with
+     *              GA_ERROR populated for the admin notice).
      */
-    public function get_account_id($analytics_service, $trackingId) {
+    public function apply_custom_dimensions_to_ga4() {
+        $property_id = get_option(Options::GA_PROPERTY_ID);
+        if (empty($property_id)) {
+            update_option(
+                Options::GA_ERROR,
+                'No GA4 property selected. Pick a property on the '
+                . 'Google Analytics tab before enabling tracking.'
+            );
+            return false;
+        }
 
-        if (!empty($trackingId)) {
+        $cd_map = get_option(Options::GA_CUSTOM_DIMENSIONS_MAP);
+        // is_array gate also catches corrupted option values (e.g.
+        // a string accidentally stored where the map array belongs);
+        // log the corruption and treat as failure so the admin
+        // notices instead of silently marking tracking enabled with
+        // no dimensions.
+        if (!is_array($cd_map)) {
+            if ($cd_map !== false) {
+                error_log(
+                    '51Degrees: GA_CUSTOM_DIMENSIONS_MAP is not an array; '
+                    . 'option is corrupted and will be ignored. Re-save '
+                    . 'the Custom Dimensions screen to rebuild it.'
+                );
+            }
+            // No usable map -> nothing to create, but tracking
+            // can still emit a bare fod event under the
+            // Measurement ID. Treat as success.
+            return true;
+        }
+        if (empty($cd_map)) {
+            // Legitimate "no dimensions configured" state. Frontend
+            // will emit a bare fod event; that is a valid tracking
+            // state for an admin who wants pageviews only.
+            return true;
+        }
+
+        $client = $this->authenticate();
+        if (!$client) {
+            update_option(
+                Options::GA_ERROR,
+                'Google Analytics authentication expired. Please reconnect.'
+            );
+            return false;
+        }
+
+        $admin = $this->get_ga4_admin_service($client);
+
+        try {
+            $existing = FiftyOneDegreesGa4DimensionService::list_custom_dimensions(
+                $admin,
+                $property_id
+            );
+        }
+        catch (FiftyOneDegreesGa4AuthError $e) {
+            update_option(
+                Options::GA_ERROR,
+                'Google Analytics permission was revoked or the access '
+                . 'token is no longer valid. Please reconnect Google '
+                . 'Analytics.'
+            );
+            return false;
+        }
+
+        $existing_params = array_column($existing, 'parameter_name');
+
+        // Filter to "new for this property" — anything already
+        // present at the same parameter_name is handled by the
+        // 409-idempotent path inside create_custom_dimension if
+        // we attempt it, but skipping it up front saves an API
+        // round-trip and avoids burning quota.
+        $to_create = [];
+        foreach ($cd_map as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $param = isset($row['parameter_name']) && is_scalar($row['parameter_name'])
+                ? trim((string) $row['parameter_name'])
+                : '';
+            if ($param === '' || in_array($param, $existing_params, true)) {
+                continue;
+            }
+            $to_create[] = $row;
+        }
+
+        if (FiftyOneDegreesGa4DimensionService::would_exceed_limit(
+                count($existing),
+                count($to_create)
+            )
+        ) {
+            update_option(
+                Options::GA_ERROR,
+                sprintf(
+                    'Cannot enable tracking: GA4 allows up to %d '
+                    . 'Custom Dimensions per property and the selected '
+                    . 'mapping would exceed this limit (%d existing + '
+                    . '%d new). Reduce the number of selected '
+                    . 'properties or use a GA4 360 account.',
+                    FiftyOneDegreesGa4DimensionService::MAX_DIMENSIONS_PER_PROPERTY,
+                    count($existing),
+                    count($to_create)
+                )
+            );
+            return false;
+        }
+
+        foreach ($to_create as $row) {
+            $param = (string) $row['parameter_name'];
+            $label = isset($row['property_name']) && is_scalar($row['property_name'])
+                ? (string) $row['property_name']
+                : $param;
 
             try {
-                // Get the list of accounts and web properties.
-                $accounts = $analytics_service->management_accountSummaries->listManagementAccountSummaries();
-                foreach ($accounts->getItems() as $account) {
-                    $accountId = $account->getId();
-                    foreach ($account->getWebProperties() as $property) {
-                        if ($property->getId() === $trackingId) {
-                            return $accountId;
-                        }
-                    }
-                }
+                $ok = FiftyOneDegreesGa4DimensionService::create_custom_dimension(
+                    $admin,
+                    $property_id,
+                    $param,
+                    $label
+                );
             }
-            catch (apiServiceException $e) {
-                error_log('There was an Analytics API service error ' .
-                $e->getCode() . ':' . $e->getMessage());
-                return "";
-              
+            catch (FiftyOneDegreesGa4AuthError $e) {
+                update_option(
+                    Options::GA_ERROR,
+                    'Google Analytics permission was revoked while '
+                    . 'creating Custom Dimensions. Please reconnect '
+                    . 'Google Analytics and try again.'
+                );
+                return false;
             }
-            catch (apiException $e) {
-                error_log('There was a general API error ' .
-                $e->getCode() . ':' . $e->getMessage());
 
-                return "";
+            if (!$ok) {
+                update_option(
+                    Options::GA_ERROR,
+                    sprintf(
+                        'Failed to create GA4 Custom Dimension "%s". '
+                        . 'Check the Custom Definitions screen in '
+                        . 'Google Analytics Admin and either remove '
+                        . 'the conflicting entry or pick a different '
+                        . 'parameter name here.',
+                        $param
+                    )
+                );
+                return false;
             }
         }
-        return ""; 
-    }
 
-    /**
-     * UA Management API custom-dimensions read. Still wired live but
-     * non-functional after the v3 schema migration (depends on
-     * GA_TRACKING_ID which is swept) and on a Google API that was
-     * shut down on 2024-07-01. Removed in a later commit alongside
-     * the Custom Dimensions migration to the GA4 Admin API.
-     *
-     * @return array array containing custom dimensions list
-     * and max available custom dimension index
-     */
-    public function get_custom_dimensions() {
-        $trackingId = get_option(Options::GA_TRACKING_ID);
-        $maxCustomDimIndex = get_option(Options::GA_MAX_DIMENSIONS);
-        $client = $this->authenticate();
+        // Invalidate the CD list cache so the just-created
+        // dimensions show up on the next render of the CD tab
+        // instead of waiting for the per-property transient TTL
+        // to expire. Prefix is inlined (rather than read off the
+        // Fiftyonedegrees_Custom_Dimensions class constant) so
+        // this call does not transitively load WP_List_Table —
+        // the CD class is wp-admin scoped and not autoloaded in
+        // every request path. Keep the literal in sync with
+        // Fiftyonedegrees_Custom_Dimensions::CACHE_TRANSIENT_PREFIX.
+        delete_transient('fiftyonedegrees_ga_cd_cache_' . $property_id);
 
-        if ($client) {
-
-            $service = $this->get_google_analytics_service($client);
-
-            // Get accountId from tracking Id
-            $accountId = $this->get_account_id($service, $trackingId);
-            update_option(Options::GA_ACCOUNT_ID, $accountId);
-
-            // Get the list of custom dimensions for the web property.
-            $customDimensions = $service->management_customDimensions->listManagementCustomDimensions($accountId, $trackingId);
-            
-            // Create a map with custom dimensions name and indices.
-            $custom_dimensions_map = array();
-            foreach ($customDimensions->getItems() as $customDimension) {
-                $customDimensionName = $customDimension->getName();
-                $customDimensionIndex = $customDimension->getIndex();
-                $custom_dimensions_map[$customDimensionName] = $customDimensionIndex;
-            }
-
-            // Get Maximum Custom Dimension Index
-            $maxCustomDimIndex = count($customDimensions->getItems());
-            update_option(Options::GA_MAX_DIMENSIONS, $maxCustomDimIndex);
-    
-        } 
-        else {
-            error_log("User is not authenticated.");
-        }
-
-        return array(
-            "cust_dims_map" => $custom_dimensions_map,
-            "max_cust_dim_index" => $maxCustomDimIndex );
-    }
-
-    /**
-     * UA Management API custom-dimensions write. Still wired live but
-     * non-functional after the v3 schema migration (depends on
-     * GA_TRACKING_ID + GA_ACCOUNT_ID which are swept) and on a Google
-     * API that was shut down on 2024-07-01. Removed in a later commit
-     * alongside the Custom Dimensions migration to the GA4 Admin API.
-     *
-     * @return int number of new custom dimensions inserted.
-     */
-    public function insert_custom_dimensions() {
-
-        $calls = 0;        
-        $accountId = get_option(Options::GA_ACCOUNT_ID);
-        $trackingId = get_option(Options::GA_TRACKING_ID);
-        $cust_dim_map = get_option(Options::GA_CUSTOM_DIMENSIONS_MAP);
-        $client = $this->authenticate();
-
-        if ($client) {
-
-            $service = $this->get_google_analytics_service($client);
-
-            foreach ($cust_dim_map as $dimension) {
-
-                $custDimName = $dimension["custom_dimension_name"];
-                $custDimGAIndex = $dimension["custom_dimension_ga_index"];
-                $custDimIndex = $dimension["custom_dimension_index"];
-
-                if ($custDimGAIndex === -1) {
-
-                    $customDimension = new CustomDimension();
-                    $customDimension->setName($custDimName);
-                    $customDimension->setIndex($custDimIndex);
-                    $customDimension->setScope(FIFTYONEDEGREES_CUSTOM_DIMENSION_SCOPE);
-                    $customDimension->setActive(true);
-
-                    try {
-
-                        // Insert Custom Dimension in Google Analytics
-                        $result = $service->management_customDimensions->insert($accountId, $trackingId, $customDimension);
-                        $calls = $calls + 1;
-
-                    }
-                    catch (Exception $e) {
-
-                        $jsonError = json_decode($e->getMessage(), $assoc = true);
-                        $message = "Could not insert Custom Dimensions in Google " .
-                            "Analytics account.";
-                        
-                        if (strpos($e->getMessage(), "maximum allowed entities")
-                            !== false) {
-                            $message = $message . " Your Analytics account " .
-                                "allows a maximum of " .
-                                $this->get_custom_dimensions()['max_cust_dim_index'] .
-                                " Custom Dimensions.";
-                        }
-                        update_option(
-                            Options::GA_ERROR,
-                            $message . " Error message from Google was: '" .
-                            $jsonError["error"]["message"] . "'");
-                        error_log($e->getMessage());
-                        return -1;
-                    }
-                }
-            }    
-        }
-        else {
-            error_log("User is not authenticated.");
-            return -1;
-        }  
-
-        return $calls;
+        return true;
     }
     
     /**
@@ -372,12 +368,6 @@ class Fiftyonedegrees_Google_Analytics {
         // (Legacy OOB Access Code admin_init hook removed during the
         // OAuth refactor — the UI input that produced its POST is gone
         // and the handler method was unreachable code.)
-        //
-        // The Custom Dimensions handlers below (_update_cd_indices and
-        // _enable_tracking) still call into UA Management API code paths
-        // that the v3 schema migration leaves non-functional. They stay
-        // registered to keep this commit buildable; a later commit
-        // rewrites them on the GA4 Admin API.
         add_action(
             'admin_init',
             array($this, 'fiftyonedegrees_ga_logout'));
@@ -506,27 +496,27 @@ class Fiftyonedegrees_Google_Analytics {
     }
 
     /**
-     * Sets up the options needed to add custom dimentions to Google Analytics.
-     * 
-     * @return void
+     * Wires up the GA4 Custom Dimensions side of "Enable Google
+     * Analytics Tracking": refreshes the CD-map option from the
+     * latest 51Degrees property metadata, regenerates the inline
+     * gtag head fragment, and creates any missing GA4 Custom
+     * Dimensions on the property via the Ga4DimensionService.
+     *
+     * Only marks tracking enabled when every step succeeds —
+     * apply_custom_dimensions_to_ga4 sets Options::GA_ERROR on
+     * failure, which the admin UI surfaces as a one-shot notice.
      */
     function execute_ga_tracking_steps() {
-
-        //Prepare Custom Dimensions
+        // Refresh GA_CUSTOM_DIMENSIONS_MAP from the current Pipeline
+        // property list + admin-saved mappings.
         $customDimensionsTable = new Fiftyonedegrees_Custom_Dimensions();
-        $customDimensionsTable->prepare_items();           
+        $customDimensionsTable->prepare_items();
 
-        // Get Google analytics Tracking Javascript to be added to the
-        // header. 
         $gtag_code = $this->gtag_tracking_inst->output_ga_tracking_code();
         update_option(Options::GA_JS, $gtag_code);
 
-        // Insert Custom Dimensions in Google Analytics
-        $added = $this->insert_custom_dimensions();
-        
-        // Mark tracking is enabled.
-        if ($added >= 0) {
-            update_option(Options::ENABLE_GA, "enabled");
+        if ($this->apply_custom_dimensions_to_ga4()) {
+            update_option(Options::ENABLE_GA, 'enabled');
         }
     }
 
@@ -712,6 +702,17 @@ class Fiftyonedegrees_Google_Analytics {
      * and this method uses the superset for full uninstall.
      */
     function delete_ga_options() {
+        // CD list cache transient — best-effort against the current
+        // property; stale entries for prior properties expire via
+        // TTL. Done first so the read of GA_PROPERTY_ID below still
+        // sees the row. Prefix inlined; keep in sync with
+        // Fiftyonedegrees_Custom_Dimensions::CACHE_TRANSIENT_PREFIX
+        // (see comment in apply_custom_dimensions_to_ga4).
+        $current_property_id = get_option(Options::GA_PROPERTY_ID);
+        if (!empty($current_property_id)) {
+            delete_transient('fiftyonedegrees_ga_cd_cache_' . $current_property_id);
+        }
+
         // auth artifacts
         delete_option(Options::GA_AUTH_CODE);
         delete_option(Options::GA_TOKEN);
@@ -720,13 +721,11 @@ class Fiftyonedegrees_Google_Analytics {
         // selected property / account
         delete_option(Options::GA_PROPERTIES);
         delete_transient(self::GA_PROPERTIES_FRESHNESS_TRANSIENT);
-        delete_option(Options::GA_TRACKING_ID);
         delete_option(Options::GA_MEASUREMENT_ID);
         delete_option(Options::GA_PROPERTY_ID);
         delete_option(Options::GA_ACCOUNT_ID);
 
         // settings + dimensions
-        delete_option(Options::GA_MAX_DIMENSIONS);
         delete_option(Options::GA_SEND_PAGE_VIEW);
         delete_option(Options::GA_JS);
         delete_option(Options::ENABLE_GA);

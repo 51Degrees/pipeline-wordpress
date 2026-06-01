@@ -512,7 +512,10 @@ class FiftyoneService {
             
         }
 
-        if ($option === Options::GA_TRACKING_ID &&
+        // GA4 property selection invalidates any saved
+        // property->parameter dimension mapping — the new property
+        // may not share Custom Dimensions with the old one.
+        if ($option === Options::GA_PROPERTY_ID &&
             $old_value !== $new_value) {
             update_option(Options::GA_ID_UPDATED, true);
             delete_option(Options::GA_DIMENSIONS);

@@ -89,11 +89,11 @@ class OAuthMigrationTests extends TestCase
             Options::GA_OAUTH_VERSION         => '2',
             Options::GA_TOKEN                 => '{"access_token":"ua-token","refresh_token":"r"}',
             Options::GA_AUTH_DATE             => 1700000000,
-            Options::GA_TRACKING_ID           => 'UA-12345-1',
+            'fiftyonedegrees_ga_tracking_id'           => 'UA-12345-1',
             Options::GA_ACCOUNT_ID            => '12345',
             Options::GA_PROPERTIES            => [['accountId' => '12345', 'id' => 'UA-12345-1']],
             Options::GA_CUSTOM_DIMENSIONS_MAP => [['custom_dimension_index' => 1]],
-            Options::GA_MAX_DIMENSIONS        => 200,
+            'fiftyonedegrees_ga_max_cust_dim_index'        => 200,
         ];
     }
 
@@ -110,11 +110,11 @@ class OAuthMigrationTests extends TestCase
         $sweptKeys = [
             Options::GA_TOKEN,
             Options::GA_AUTH_DATE,
-            Options::GA_TRACKING_ID,
+            'fiftyonedegrees_ga_tracking_id',
             Options::GA_ACCOUNT_ID,
             Options::GA_PROPERTIES,
             Options::GA_CUSTOM_DIMENSIONS_MAP,
-            Options::GA_MAX_DIMENSIONS,
+            'fiftyonedegrees_ga_max_cust_dim_index',
         ];
         foreach ($sweptKeys as $key) {
             $this->assertArrayNotHasKey(
@@ -146,7 +146,7 @@ class OAuthMigrationTests extends TestCase
         $options = $this->stub_option_store([
             Options::GA_AUTH_CODE   => 'legacy-oob-code',
             Options::GA_TOKEN       => '{"access_token":"oob-token"}',
-            Options::GA_TRACKING_ID => 'UA-99-1',
+            'fiftyonedegrees_ga_tracking_id' => 'UA-99-1',
         ]);
         $transients = $this->stub_transients();
 
@@ -154,7 +154,7 @@ class OAuthMigrationTests extends TestCase
 
         $this->assertArrayNotHasKey(Options::GA_AUTH_CODE, $options->data);
         $this->assertArrayNotHasKey(Options::GA_TOKEN, $options->data);
-        $this->assertArrayNotHasKey(Options::GA_TRACKING_ID, $options->data);
+        $this->assertArrayNotHasKey('fiftyonedegrees_ga_tracking_id', $options->data);
         $this->assertSame('3', $options->data[Options::GA_OAUTH_VERSION]);
         $this->assertArrayHasKey(
             FiftyOneDegreesOauthMigration::NOTICE_TRANSIENT,

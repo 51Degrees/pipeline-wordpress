@@ -100,6 +100,13 @@ oauth:
     # with a placeholder relay URL. OAuth is hard-disabled until a real URL is wired in.
     placeholder_url: 'OAuth is disabled — this build of the plugin shipped with a placeholder redirect URL. Google Analytics cannot be connected until a real relay URL is configured. Please contact 51Degrees support.'
 
-    # (Used by S-6 oauth-migration) One-shot notice after the migration cleared
+    # (Used by oauth-migration) One-shot notice after the migration cleared
     # OOB-era access tokens. Visible once, then auto-dismissed.
     migration_done: 'Google Analytics connection settings were upgraded. Please reconnect to Google Analytics to continue using it.'
+
+    # Set by GA tab render paths when a GA4 Admin API call returned 401 / 403
+    # mid-render (token revoked or scope insufficient since last consent).
+    # The admin needs to reconnect Google Analytics; surfaced as a top-of-tab
+    # banner so an empty CD list or property dropdown is not misread as
+    # "nothing to show".
+    reconnect_required: 'Google Analytics access was revoked or has expired. Please reconnect Google Analytics on the Google Analytics tab to continue.'

@@ -102,13 +102,12 @@ class Fiftyonedegrees_Tracking_Gtag {
      *     controlled and Pipeline-sourced today, but a single bad
      *     row would otherwise become executable JS in wp_head.
      *
-     * Backward-compat shim: pre-CD-UI-migration CD-map rows do not
-     * carry an explicit `parameter_name` field. We fall back to the
-     * lowercased `property_name` slug so a half-populated install
-     * (the GA schema migration ran but the CD admin UI has not yet
-     * been rewritten) still emits a sensible payload. The fallback
-     * is transitional — TODO: remove once the GA4 CD admin UI ships
-     * and backfills `parameter_name` for every map row.
+     * The CD-map row must carry an explicit `parameter_name`; rows
+     * without one are skipped. The v3 schema migration sweeps any
+     * legacy v2-shape map on upgrade, and the CD admin UI writes
+     * the new shape on every save, so a row missing parameter_name
+     * is a corrupted DB write rather than a routine transitional
+     * state.
      */
     public function get_event_parameters() {
         $custom_dimensions = get_option(Options::GA_CUSTOM_DIMENSIONS_MAP);
@@ -153,9 +152,8 @@ class Fiftyonedegrees_Tracking_Gtag {
 
     /**
      * Resolves the GA4 parameter name for a single CD-map row.
-     * Returns '' when the row carries neither an explicit
-     * `parameter_name` (post-CD-UI-migration shape) nor a fallback-
-     * derivable `property_name` (pre-CD-UI-migration shape).
+     * Returns '' when the row does not carry a usable
+     * `parameter_name` (missing, non-scalar, or empty string).
      */
     private function extract_parameter_name(array $dimension)
     {
@@ -164,13 +162,6 @@ class Fiftyonedegrees_Tracking_Gtag {
             && (string) $dimension['parameter_name'] !== ''
         ) {
             return (string) $dimension['parameter_name'];
-        }
-        // TODO: remove once the CD-UI rewrite backfills parameter_name.
-        if (isset($dimension['property_name'])
-            && is_scalar($dimension['property_name'])
-            && (string) $dimension['property_name'] !== ''
-        ) {
-            return strtolower((string) $dimension['property_name']);
         }
         return '';
     }

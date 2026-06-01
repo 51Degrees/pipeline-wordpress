@@ -80,20 +80,19 @@ class FiftyOneDegreesOauthMigration
         Options::GA_AUTH_CODE, // OOB-era leftover; v3 sweeps it just in case
 
         // property / account context — UA shapes; GA4 stores
-        // GA_MEASUREMENT_ID + GA_PROPERTY_ID instead
-        Options::GA_TRACKING_ID,
+        // GA_MEASUREMENT_ID + GA_PROPERTY_ID instead.
+        'fiftyonedegrees_ga_tracking_id', // UA-only Options::* constant removed in v3; literal preserved so the v2 wp_options row still gets swept
         Options::GA_ACCOUNT_ID,
         Options::GA_PROPERTIES,
 
         // dimensions — UA used a numeric `custom_dimension_index`;
         // GA4 keys by parameter_name. Map shape is incompatible.
         Options::GA_CUSTOM_DIMENSIONS_MAP,
-        Options::GA_MAX_DIMENSIONS,
+        'fiftyonedegrees_ga_max_cust_dim_index', // UA-only Options::* constant removed in v3; literal preserved so the v2 wp_options row still gets swept
         Options::GA_DIMENSIONS,
         Options::GA_DIMENSIONS_UPDATED,
 
-        // UA tracking-id-derived JavaScript snippet cache — would
-        // emit UA tags if read before the C3 frontend rewrite lands.
+        // UA tracking-id-derived JavaScript snippet cache.
         Options::GA_JS,
 
         // UI / error flags tied to the UA tracking-id text input

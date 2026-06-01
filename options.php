@@ -74,20 +74,9 @@ class Options
     const GA_PROPERTIES = "fiftyonedegrees_ga_properties_list";
 
     /**
-     * Key for storing the Google Analytics tracking id.
-     */
-    const GA_TRACKING_ID = "fiftyonedegrees_ga_tracking_id";
-
-    /**
      * Key for storing the Google Analytics account id.
      */
     const GA_ACCOUNT_ID = "fiftyonedegrees_ga_account_id";
-
-    /**
-     * Key for storing the maximum number of custom dimensions
-     * that can be set for Google Analytics.
-     */
-    const GA_MAX_DIMENSIONS = "fiftyonedegrees_ga_max_cust_dim_index";
 
     // ─── GA4 — populated on property selection ──────────────────────
 

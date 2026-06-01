@@ -112,15 +112,14 @@ class GaHookTests extends TestCase {
             "ga_log_out" => ""
         );
         Functions\when('get_admin_url')->justReturn('admin/');
+        Functions\when('get_option')->justReturn('');
         Functions\when('delete_transient')->justReturn(true);
 
         $service = new Fiftyonedegrees_Google_Analytics();
         Functions\expect('delete_option')->once()->with(Options::GA_AUTH_CODE);
         Functions\expect('delete_option')->once()->with(Options::GA_TOKEN);
         Functions\expect('delete_option')->once()->with(Options::GA_PROPERTIES);
-        Functions\expect('delete_option')->once()->with(Options::GA_TRACKING_ID);
         Functions\expect('delete_option')->once()->with(Options::GA_ACCOUNT_ID);
-        Functions\expect('delete_option')->once()->with(Options::GA_MAX_DIMENSIONS);
         Functions\expect('delete_option')->once()->with(Options::GA_SEND_PAGE_VIEW);
         Functions\expect('delete_option')->once()->with(Options::GA_JS);
         Functions\expect('delete_option')->once()->with(Options::ENABLE_GA);

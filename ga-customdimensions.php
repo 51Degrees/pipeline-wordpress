@@ -91,7 +91,7 @@ else {
                         <b>Enable Google Analytics Tracking</b> to send them as
                         Custom Dimensions to
                         <b>
-                            <?php echo esc_html(get_option(Options::GA_TRACKING_ID));?>
+                            <?php echo esc_html(get_option(Options::GA_MEASUREMENT_ID));?>
                         </b>
                         Google Analytics Property or <b>Go Back</b> to change.
                     </p>
