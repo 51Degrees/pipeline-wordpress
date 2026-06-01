@@ -1,3 +1,10 @@
+= 1.0.13 =
+* Migrated the Google Analytics integration from Universal Analytics to Google Analytics 4. Universal Analytics was retired by Google on 2024-07-01 and the previous integration could no longer reach the underlying API; this release replaces it with GA4 Admin API + GA4 gtag.
+* OAuth scope expanded from `analytics.readonly` to `analytics.edit` so the plugin can create the required Custom Dimensions on your GA4 property automatically. After upgrade, reconnect Google Analytics from the Google Analytics tab — the consent screen will ask you to authorize the new permission.
+* Custom Dimensions admin screen rebuilt around the GA4 model. The numeric "Index" column is gone; each 51Degrees property maps onto a GA4 event-parameter name. Existing Custom Dimensions on the selected property are listed so you can map onto them or auto-create new ones.
+* Frontend tracking is now emitted entirely inline in `<head>`. The previous release wrote two JavaScript files to `assets/js/` on every page render, which was race-prone under concurrent admin activity; that filesystem write is gone.
+* GA4's per-property limit of 50 Custom Dimensions (free tier) is enforced upfront. The Enable Tracking action refuses to start a batch that would exceed it, with a notice explaining which properties to deselect.
+
 = 1.0.12 =
 * Replaced the deprecated Google "Out-of-Band" (OOB) OAuth flow (Google sunset January 2023) with a HMAC + PKCE-signed redirect through the 51Degrees relay.
 * Existing Google Analytics connections must be reconnected after this upgrade. The plugin will surface an admin notice on first wp-admin load post-update.

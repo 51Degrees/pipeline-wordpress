@@ -6,7 +6,7 @@ Tags: 51degrees, device detection, location, Google Analytics, device, detect, d
 Requires at least: 4.7
 Tested up to: 6.9.1
 Requires PHP: 8.2
-Stable tag: 1.0.0
+Stable tag: 1.0.13
 License: EUPL
 
 The best plugin for WordPress to send Device properties as Custom Dimensions to Google Analytics to get richer insights of device specifications and capabilities.
@@ -70,14 +70,18 @@ For instructions on how to install the plugin manually or by uploading a zip fil
 
 For a demo video on how to use our configurator, [click here](https://51degrees.com/documentation/_concepts__configurator.html).
 
-= Integration with Google Analytics =
+= Integration with Google Analytics (GA4) =
 
-1. To integrate with Google Analytics go to the `Google Analytics` tab and click `Log in with Google Analytics Account` button, then follow the steps to give the 51Degrees plugin the required permissions. Copy the provided Google Analytics `Access Code’.
-2. Enter the copied Code in the `Access Code` text field and click `Authenticate`. This will connect your Google Analytics Account to the 51Degrees Plugin.
-3. After authentication, select your preferred profiles for which you want to enable Custom Dimensions Tracking via the `Google Analytics Property` dropdown.
-4. Check `Send Page View` if you want to send Default Page View hit along with Custom Dimensions. It is only recommended if you have not already integrated with any other Google Analytics plugin to avoid data duplication.
-5. Click `Save Changes`. This will prompt to the new Custom Dimensions Screen where you can find all the Custom Dimensions available with your Resource Key.
-6. Click on `Enable Google Analytics Tracking` to enable tracking of all the Device Data Properties as Custom Dimensions.
+The plugin uses Google Analytics 4. If your property still uses the deprecated Universal Analytics, create a GA4 property and a Web data stream in Google Analytics first; Universal Analytics was retired by Google on 2024-07-01 and is no longer reachable by this plugin.
+
+1. Open the `Google Analytics` tab in `Settings > 51Degrees` and click `Connect Google Analytics`. You will be redirected to Google's consent screen — accept the requested permissions to give the 51Degrees plugin access to your GA4 properties (read + the ability to create Custom Dimensions).
+2. On return, select your GA4 property from the `Analytics Account/Property` dropdown. The plugin automatically resolves your property's first Web data stream and stores both the Property ID and the Measurement ID (`G-XXXXXXX`).
+3. Check `Send Page View` if you want a default Page View event to fire on each page along with the Custom Dimensions event. Skip this if another plugin already sends page views for the same property — otherwise events will duplicate.
+4. Click `Save Changes`. The Custom Dimensions screen appears.
+5. Review the mapping. Each 51Degrees property gets a default GA4 parameter name (`<engine>_<property>`) plus a dropdown of Custom Dimensions that already exist on the property — pick the default to auto-create, or pick an existing dimension to map onto it.
+6. Click `Enable Google Analytics Tracking`. The plugin creates the missing GA4 Custom Dimensions on the property (up to GA4's per-property cap of 50 in the free tier) and starts emitting the inline gtag snippet on every page render. Custom Dimension values arrive as parameters on the `fod` event.
+
+The OAuth redirect is single-site only in this release. Multisite OAuth support is on the roadmap.
 
 
 == Screenshots ==
@@ -104,10 +108,17 @@ If you're experiencing any issues, use the WordPress.org [support forums](https:
 
 == Changelog ==
 
+= 1.0.13 =
+* Migrated the Google Analytics integration from Universal Analytics to Google Analytics 4. Universal Analytics was retired by Google on 2024-07-01 and the previous integration could no longer reach the underlying API; this release replaces it with GA4 Admin API + GA4 gtag.
+* OAuth scope expanded from `analytics.readonly` to `analytics.edit` so the plugin can create the required Custom Dimensions on your GA4 property automatically. After upgrade, reconnect Google Analytics from the Google Analytics tab — the consent screen will ask you to authorize the new permission.
+* Custom Dimensions admin screen rebuilt around the GA4 model. The numeric "Index" column is gone; each 51Degrees property maps onto a GA4 event-parameter name. Existing Custom Dimensions on the selected property are listed so you can map onto them or auto-create new ones.
+* Frontend tracking is now emitted entirely inline in `<head>`. The previous release wrote two JavaScript files to `assets/js/` on every page render, which was race-prone under concurrent admin activity; that filesystem write is gone.
+* GA4's per-property limit of 50 Custom Dimensions (free tier) is enforced upfront. The Enable Tracking action refuses to start a batch that would exceed it, with a notice explaining which properties to deselect.
+
 = 1.0.12 =
 * Replaced the deprecated Google "Out-of-Band" (OOB) OAuth flow (Google sunset January 2023) with a HMAC + PKCE-signed redirect through the 51Degrees relay.
 * Existing Google Analytics connections must be reconnected after this upgrade. The plugin will surface an admin notice on first wp-admin load post-update.
-* The new OAuth flow is single-site only in this release. Multisite OAuth support is on the roadmap for 1.0.13.
+* The new OAuth flow is single-site only in this release. Multisite OAuth support is on the roadmap.
 * Hardened plugin uninstall: the OAuth state secret, migration version stamp, and the Google Analytics auth-date row are now removed on uninstall. Plugin deactivation is reversible and no longer wipes persistent OAuth data.
 * Added a daily cleanup of orphan OAuth pending transients to keep wp_options small on sites with abandoned authorization attempts.
 
@@ -115,6 +126,9 @@ If you're experiencing any issues, use the WordPress.org [support forums](https:
 * Initial Release.
 
 == Upgrade Notice ==
+
+= 1.0.13 =
+This release migrates the plugin from Universal Analytics to GA4. After updating, reconnect Google Analytics from Settings > 51Degrees > Google Analytics — the consent screen will request a broader scope so the plugin can create GA4 Custom Dimensions on your behalf. Required to restore tracking; Universal Analytics is no longer reachable.
 
 = 1.0.12 =
 After updating, reconnect Google Analytics from Settings > 51Degrees > Google Analytics. Required to restore tracking — Google has retired the previous OAuth flow.
