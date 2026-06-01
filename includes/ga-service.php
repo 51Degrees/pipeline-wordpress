@@ -68,6 +68,20 @@ class Fiftyonedegrees_Google_Analytics {
         $client = FiftyOneDegreesGoogleClientFactory::make();
         $client->setAccessToken($ga_google_authtoken);
 
+        if ($client->isAccessTokenExpired()) {
+            $refresh = $client->getRefreshToken();
+            if (empty($refresh)) {
+                return false;
+            }
+            $new_token = $client->fetchAccessTokenWithRefreshToken($refresh);
+            if (isset($new_token['error'])) {
+                error_log('51Degrees GA token refresh failed: ' . $new_token['error']);
+                return false;
+            }
+            update_option(Options::GA_TOKEN, $client->getAccessToken());
+            update_option(Options::GA_AUTH_DATE, time());
+        }
+
         return $client;
     }
 

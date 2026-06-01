@@ -138,7 +138,25 @@ else if (get_option(Options::GA_CUSTOM_DIMENSIONS_SCREEN)) {
     include plugin_dir_path(__FILE__) . "/ga-customdimensions.php";
 
 }
-else { ?>
+else {
+    // Seed GA properties list when connected but cache is empty. The
+    // legacy OOB flow used to populate Options::GA_PROPERTIES inside the
+    // token-exchange path; that path was removed during the OAuth refactor
+    // along with the only call site of get_analytics_properties_list,
+    // so without this lazy-load the property dropdown would stay empty.
+    // ga-service::authenticate() also drives the silent access_token
+    // refresh path, so an expired token gets refreshed here transparently.
+    if (empty(get_option(Options::GA_PROPERTIES))) {
+        $fiftyonedegrees_ga_svc = new Fiftyonedegrees_Google_Analytics();
+        $fiftyonedegrees_ga_client = $fiftyonedegrees_ga_svc->authenticate();
+        if ($fiftyonedegrees_ga_client) {
+            $fiftyonedegrees_ga_service = $fiftyonedegrees_ga_svc->get_google_analytics_service($fiftyonedegrees_ga_client);
+            if ($fiftyonedegrees_ga_service) {
+                $fiftyonedegrees_ga_svc->get_analytics_properties_list($fiftyonedegrees_ga_service);
+            }
+        }
+    }
+    ?>
 
     <form method="post" action="options.php">
         <table class="form-table">

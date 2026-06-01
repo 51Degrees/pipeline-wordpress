@@ -96,7 +96,7 @@ class Fiftyonedegrees {
         // Setting Global Values.
         define('FIFTYONEDEGREES_PLUGIN_DIR', plugin_dir_path( __FILE__ ));
         define('FIFTYONEDEGREES_PLUGIN_URL', plugin_dir_url(__FILE__));
-        define('FIFTYONEDEGREES_PROMPT', 'force');
+        define('FIFTYONEDEGREES_PROMPT', 'consent');
         define('FIFTYONEDEGREES_ACCESS_TYPE', 'offline');
         // Production credentials. Local dev can override these by defining
         // FIFTYONEDEGREES_DEV_CLIENT_ID / _SECRET / _REDIRECT earlier in

@@ -104,6 +104,14 @@ class GoogleAnalyticsTabRenderTests extends TestCase
                 dirname(__DIR__) . DIRECTORY_SEPARATOR
             );
         }
+
+        // Pre-seed GA_PROPERTIES so the connected-state render skips the
+        // lazy properties-fetch branch (which would otherwise try to
+        // instantiate Fiftyonedegrees_Google_Analytics and reach the
+        // Google_Client factory — out of scope for render tests).
+        $this->options[Options::GA_PROPERTIES] = [
+            ['id' => 'UA-test', 'name' => 'Test Property'],
+        ];
     }
 
     public function tear_down()
@@ -182,7 +190,7 @@ class GoogleAnalyticsTabRenderTests extends TestCase
         // multisite_unsupported rejection with no prior context.
         Functions\when('is_multisite')->justReturn(true);
         $this->options[Options::GA_TOKEN] = ['access_token' => 'legacy-token'];
-        $this->options[Options::GA_PROPERTIES] = [];
+        $this->options[Options::GA_PROPERTIES] = [["id" => "UA-test", "name" => "Test"]]; // non-empty: skip the lazy properties-fetch branch
         $this->options[Options::GA_TRACKING_ID] = '';
 
         $html = $this->render();
@@ -236,7 +244,7 @@ class GoogleAnalyticsTabRenderTests extends TestCase
         // token to back it up (see testSuccessQueryMarkerIgnoredWithoutToken).
         $_GET = ['oauth-success' => '1'];
         $this->options[Options::GA_TOKEN] = ['access_token' => 'real-token'];
-        $this->options[Options::GA_PROPERTIES] = [];
+        $this->options[Options::GA_PROPERTIES] = [["id" => "UA-test", "name" => "Test"]]; // non-empty: skip the lazy properties-fetch branch
         $this->options[Options::GA_TRACKING_ID] = '';
 
         $html = $this->render();
@@ -281,7 +289,7 @@ class GoogleAnalyticsTabRenderTests extends TestCase
     public function testConnectedStateRendersPropertySelectorAndLogout()
     {
         $this->options[Options::GA_TOKEN] = ['access_token' => 'real-token'];
-        $this->options[Options::GA_PROPERTIES] = [];
+        $this->options[Options::GA_PROPERTIES] = [["id" => "UA-test", "name" => "Test"]]; // non-empty: skip the lazy properties-fetch branch
         $this->options[Options::GA_TRACKING_ID] = '';
 
         $html = $this->render();

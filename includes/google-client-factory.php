@@ -56,7 +56,7 @@ class FiftyOneDegreesGoogleClientFactory
     public static function make()
     {
         $client = new Google_Client();
-        $client->setApprovalPrompt(FIFTYONEDEGREES_PROMPT);
+        $client->setPrompt(FIFTYONEDEGREES_PROMPT);
         $client->setAccessType(FIFTYONEDEGREES_ACCESS_TYPE);
         $client->setClientId(FIFTYONEDEGREES_CLIENT_ID);
         $client->setClientSecret(FIFTYONEDEGREES_CLIENT_SECRET);
