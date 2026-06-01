@@ -57,8 +57,8 @@ class TestableOauthCallback extends FiftyOneDegreesOauthCallback
  * in the real Google_Client.
  *
  * fetchAccessTokenWithAuthCode is the non-deprecated form; the older
- * authenticate($code) alias drops the verifier silently. S-10 migrated
- * the callback to the non-deprecated method so PKCE actually works.
+ * authenticate($code) alias drops the verifier silently. The callback
+ * uses the non-deprecated method so PKCE actually works.
  */
 class FakeGoogleClient
 {
@@ -121,7 +121,8 @@ class OAuthCallbackTests extends TestCase
      * stdClass so individual tests can mutate / assert against them.
      *
      * Each WP write is appended to $this->call_log as [fn, key] so order
-     * assertions are possible (used by the GAP-4 / R-1 happy-path test).
+     * assertions are possible (used by the happy-path ordering test that
+     * confirms verify -> delete_transient -> exchange -> save_token).
      */
     private function stub_wp(array $overrides = [])
     {
@@ -490,7 +491,7 @@ class OAuthCallbackTests extends TestCase
         $this->assertSame(
             [$this->transient_key()],
             $this->log_keys_of('delete_transient'),
-            'transient is consumed BEFORE exchange (Pre-mortem R-1); exception leaves it gone — retry needs fresh state'
+            'transient is consumed BEFORE exchange; exception leaves it gone — retry needs fresh state'
         );
         $this->assertSame([], array_filter(
             $this->log_keys_of('update_option'),
@@ -519,7 +520,7 @@ class OAuthCallbackTests extends TestCase
         );
     }
 
-    // ─── Branch: missing_code (R-1 fix follow-up) ───────────────────────
+    // ─── Branch: missing_code ───────────────────────────────────────────
 
     public function testMissingCodeRejection()
     {
@@ -593,7 +594,7 @@ class OAuthCallbackTests extends TestCase
             }
         }
         $this->assertSame(['delete_transient', 'update_token'], $seen,
-            'Pre-mortem R-1: transient consumed BEFORE the exchange + token save');
+            'transient consumed BEFORE the exchange + token save');
         // authenticate was called between the two log points — assert via the
         // recorded code value, which only the FakeGoogleClient could set.
         $this->assertSame('auth-code-xyz', $client->code_seen);

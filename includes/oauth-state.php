@@ -200,7 +200,8 @@ class FiftyOneDegreesOauthState
      * transient (existence + user_id match). Does NOT delete the transient
      * — that is the caller's responsibility. The callback handler must
      * delete the transient atomically with respect to the code exchange
-     * to prevent state replay (see Pre-mortem R-1 in the S-7 topic).
+     * to prevent state replay (see the callback handler's class-level
+     * comment for the ordering rationale).
      *
      * The secret is read but never created on this path: an absent
      * secret option surfaces as 'secret_corrupt' rather than being

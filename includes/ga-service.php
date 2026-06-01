@@ -312,9 +312,9 @@ class Fiftyonedegrees_Google_Analytics {
      * @return      void
      */
     public function setup_wp_actions() {
-        // (Legacy OOB Access Code admin_init hook removed in S-10. The UI
-        // input that produced its POST disappeared in S-9; the method
-        // itself was unreachable code and was deleted alongside.)
+        // (Legacy OOB Access Code admin_init hook removed during the
+        // OAuth refactor — the UI input that produced its POST is gone
+        // and the handler method was unreachable code.)
         add_action(
             'admin_init',
             array($this, 'fiftyonedegrees_ga_logout'));

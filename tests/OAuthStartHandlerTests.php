@@ -380,7 +380,7 @@ class OAuthStartHandlerTests extends TestCase
             'PKCE verifier must be stashed alongside the user_id'
         );
 
-        // Redirect URI is set inside the factory (S-10) rather than in the
+        // Redirect URI is set inside the factory rather than in the
         // handler. Filter coverage lives in GoogleClientFactoryTests; tests
         // here only assert that the handler does not also re-set it.
         $this->assertNull($client->redirect_uri,

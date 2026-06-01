@@ -42,7 +42,8 @@ require_once __DIR__ . '/google-client-factory.php';
  * setCodeChallenge/setCodeChallengeMethod here without first removing
  * the createAuthUrl second-arg branch; both would otherwise duplicate.
  *
- * The matching code_verifier travels via the transient set in S-3 and is
+ * The matching code_verifier travels via the transient set in the state
+ * engine (oauth-state.php) and is
  * consumed on the callback side through
  * Google_Client::fetchAccessTokenWithAuthCode($code, $codeVerifier), which
  * forwards it as code_verifier= in the token POST. See oauth-callback.php.
@@ -54,15 +55,13 @@ require_once __DIR__ . '/google-client-factory.php';
  * target URL is built entirely from trusted constants + vendored
  * library + our own state — no user input flows in.
  *
- * GAPs closed by this handler:
- *   - GAP-2 (transient bloat): state is created only on actual click,
- *     not on every admin page render.
- *   - GAP-3 (CSRF on start): WP nonce + check_admin_referer().
- *   - GAP-5 (ambiguous site_url): admin_url() is the single source.
- *   - GAP-6 (HTTP-site OAuth): scheme check via home_url() before
- *     creating any state.
- *   - Multisite guard: OAuth flow is single-site only in this release;
- *     see [[#57 S-9 google-analytics-ui]] roadmap.
+ * Properties guaranteed by this handler:
+ *   - No transient bloat: state is created only on actual click, not on
+ *     every admin page render.
+ *   - CSRF defence on start: WP nonce + check_admin_referer().
+ *   - Unambiguous site URL: admin_url() is the single source.
+ *   - HTTPS only: scheme check via home_url() before creating any state.
+ *   - Multisite guard: OAuth flow is single-site only in this release.
  *
  * See oauth-callback.php for the consumer side of the flow (verify_state
  * -> delete_transient -> authenticate -> save_token).
@@ -70,7 +69,8 @@ require_once __DIR__ . '/google-client-factory.php';
 class FiftyOneDegreesOauthStart
 {
     /**
-     * WP nonce action shared with the Connect button render (S-9). The
+     * WP nonce action shared with the Connect button render in
+     * google-analytics.php. The
      * button calls wp_nonce_field(self::NONCE_ACTION) and this handler
      * verifies the same slug via check_admin_referer.
      */

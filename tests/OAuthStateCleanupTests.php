@@ -155,7 +155,7 @@ class OAuthStateCleanupTests extends TestCase
     }
 
     /**
-     * M-1: locks in the cutoff semantics — only rows whose timeout is
+     * Locks in the cutoff semantics — only rows whose timeout is
      * strictly less than `now()` are eligible. We freeze the clock via
      * TestableOauthStateForCleanup and confirm the same value is bound
      * into the prepared %d slot, so a regression in the cutoff (e.g.
@@ -173,7 +173,7 @@ class OAuthStateCleanupTests extends TestCase
     }
 
     /**
-     * M-2: the LIKE pattern must be anchored on the OAuth prefix and not
+     * The LIKE pattern must be anchored on the OAuth prefix and not
      * match unrelated plugins' transients. Pre-anchor check + simulated
      * MySQL LIKE evaluation against a handful of foreign keys.
      */

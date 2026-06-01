@@ -213,7 +213,7 @@ class OAuthStateTests extends TestCase
         $this->assertArrayHasKey(
             $key,
             $store->data,
-            'verify_state must NOT delete transient — that is the callback\'s job after token save (GAP-4)'
+            'verify_state must NOT delete transient — that is the callback\'s job after token save'
         );
     }
 

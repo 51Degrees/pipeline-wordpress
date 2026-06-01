@@ -24,7 +24,7 @@
  * that both need to surface a short-lived notice to the next admin page
  * render in the Google Analytics tab. This class owns the transient
  * name + TTL so neither handler depends on the other and the UI render
- * layer (S-9) has one canonical location to read from.
+ * layer has one canonical location to read from.
  *
  * Stored value is a branch slug ('success', 'multisite_unsupported',
  * 'exchange_failed', etc.) matching a leaf key under oauth.notice.* in

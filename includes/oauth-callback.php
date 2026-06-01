@@ -33,7 +33,7 @@ require_once __DIR__ . '/google-client-factory.php';
  * token, and PRG-redirects to a clean URL so a browser refresh does
  * not replay the exchange.
  *
- * Order of operations on the happy path (Pre-mortem R-1):
+ * Order of operations on the happy path:
  *
  *   verify_state -> delete_transient(nonce) -> authenticate($code)
  *     -> update_option(GA_TOKEN) -> update_option(GA_AUTH_DATE) -> PRG
@@ -48,7 +48,7 @@ require_once __DIR__ . '/google-client-factory.php';
  * later-arriving racer (e.g. a browser refresh) by collapsing them onto
  * the cheap `missing_transient` branch. The cost is that an exception
  * inside authenticate() also burns the transient (deliberate) — the user
- * simply restarts the flow via S-8 and gets a fresh state.
+ * simply restarts the flow via the start handler and gets a fresh state.
  *
  * Each rejection branch fires do_action('fiftyonedegrees_oauth_rejection',
  * $branch, $user_id, $context) for observability, sets a short-lived
@@ -134,7 +134,8 @@ class FiftyOneDegreesOauthCallback
         // k. Exchange the authorization code for an access token. Refuse an
         // empty code up front so the user sees the right diagnostic instead
         // of a generic "exchange_failed" caused by the library rejecting ''.
-        // The transient is already gone — retry needs a fresh state from S-8.
+        // The transient is already gone — retry needs a fresh state
+        // initiated by the start handler.
         $code = isset($_GET['code']) ? (string) $_GET['code'] : '';
         if ($code === '') {
             self::reject('missing_code', $user_id);
@@ -153,7 +154,8 @@ class FiftyOneDegreesOauthCallback
         // fetchAccessTokenWithAuthCode (not the deprecated `authenticate`
         // alias) accepts the PKCE verifier as a second argument and forwards
         // it as code_verifier= in the token POST. The alias drops the
-        // verifier silently and would defeat the PKCE binding from S-8.
+        // verifier silently and would defeat the PKCE binding set in the
+        // start handler.
         try {
             $token = $client->fetchAccessTokenWithAuthCode($code, $code_verifier);
         } catch (\Throwable $e) {

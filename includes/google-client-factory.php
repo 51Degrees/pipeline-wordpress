@@ -21,8 +21,8 @@
  * Builds a configured Google_Client. Single source of truth for the
  * credentials / scope / redirect-uri block so the three call sites that
  * need a configured client (OAuth start, OAuth callback, ga-service
- * token reuse) cannot drift. S-10 collapsed an earlier 3-way duplication
- * into this factory. Two of the three call sites are OAuth-flow specific;
+ * token reuse) cannot drift. The factory collapses an earlier 3-way
+ * duplication into one definition. Two of the three call sites are OAuth-flow specific;
  * the third (token reuse) just needs an authenticated API client — hence
  * the class name omits the Oauth prefix that sibling classes carry.
  *

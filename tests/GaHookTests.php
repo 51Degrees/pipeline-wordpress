@@ -51,7 +51,7 @@ class GaHookTests extends TestCase {
     public function testAdminInitActions() {
         (new Fiftyonedegrees_Google_Analytics())->setup_wp_actions();
         // Note: the legacy `fiftyonedegrees_ga_authentication` admin_init
-        // hook was removed in S-10. has_action() with an unresolvable
+        // hook was removed during the OAuth refactor. has_action() with an unresolvable
         // callable string throws inside Brain Monkey validation, so the
         // negative assertion lives in testLegacyOauthOobSurfaceIsRemoved
         // below (`method_exists` check) instead.
@@ -85,10 +85,10 @@ class GaHookTests extends TestCase {
     /**
      * Legacy OOB OAuth surface — the Access Code POST handler
      * (`fiftyonedegrees_ga_authentication`) and the sibling
-     * `google_analytics_authenticate` exchange helper — was removed in
-     * S-10. The UI input that produced the POST disappeared in S-9, the
-     * methods + admin_init hook were unreachable code, and S-10 deleted
-     * them outright. This test pins the removal so a future refactor
+     * `google_analytics_authenticate` exchange helper — was removed
+     * during the OAuth refactor. The UI input that produced the POST is
+     * gone, and the methods + admin_init hook were unreachable code that
+     * was deleted outright. This test pins the removal so a future refactor
      * cannot accidentally resurrect either symbol.
      */
     public function testLegacyOauthOobSurfaceIsRemoved() {

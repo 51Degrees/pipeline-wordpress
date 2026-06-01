@@ -62,13 +62,9 @@ class ReleaseReadinessTests extends TestCase
     /**
      * readme.txt Stable tag follows the convention "main branch = dev
      * snapshot": Stable tag stays at the last released version until the
-     * release PR (S-15) bumps it. Pre-release we expect it to match the
+     * release PR bumps it. Pre-release we expect it to match the
      * Version: header in fiftyonedegrees.php. This test guards that the
      * Stable tag has been bumped to the new version before tagging.
-     *
-     * Implemented as a placeholder for now — refines in S-15 once the
-     * target version (1.0.12) is committed to fiftyonedegrees.php's
-     * Version: header.
      */
     public function testReadmeStableTagMatchesPluginVersion()
     {
@@ -94,7 +90,7 @@ class ReleaseReadinessTests extends TestCase
             $stable,
             sprintf(
                 'readme.txt Stable tag (%s) must match fiftyonedegrees.php Version (%s). '
-                . 'Bump Stable tag in the release PR (S-15) before tagging.',
+                . 'Bump Stable tag in the release PR before tagging.',
                 $stable,
                 $version
             )
