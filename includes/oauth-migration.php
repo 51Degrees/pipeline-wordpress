@@ -19,31 +19,31 @@
 require_once __DIR__ . '/../options.php';
 
 /**
- * One-time migration off the deprecated OOB OAuth flow (Google sunset
- * Jan 2023) onto the new HMAC + PKCE state engine.
+ * One-shot, idempotent generation gate for the GA-side schema. Each
+ * release that requires the admin to reconnect Google Analytics bumps
+ * the target version and wipes the relevant rows here, then surfaces
+ * a single "please reconnect" admin notice.
  *
- * Wired on admin_init at priority 10 (after the OAuth callback at
- * priority 5, so a successful callback in the same request gets its
- * token saved before this code looks at GA_AUTH_CODE).
+ * Generations:
  *
- * Behaviour is gated on a token-shape check rather than blanket-wiping
- * every install:
+ *   - v2 — HMAC+PKCE OAuth, Universal Analytics. Shipped in 1.0.12,
+ *     itself a migration off the deprecated OOB flow (Google sunset
+ *     Jan 2023).
+ *   - v3 — GA4 Admin API + analytics.edit scope + new option keys
+ *     (GA_MEASUREMENT_ID, GA_PROPERTY_ID; UA-only fields removed).
+ *     Existing tokens cannot satisfy the broader scope so they have
+ *     to be reissued, and the UA Management API the v2 token was
+ *     paired with has been shut down since 2024-07-01 anyway. v3
+ *     therefore wipes every GA-related option unconditionally.
  *
- *   - If GA_OAUTH_VERSION is already '2', the migration has run; do
- *     nothing on this and every subsequent request.
- *   - Otherwise, GA_AUTH_CODE is the marker of an OOB-era install. If
- *     present, wipe the access token and auth date and surface a notice
- *     telling the admin to reconnect Google Analytics. If absent,
- *     preserve GA_TOKEN as-is — the documented assumption is that no
- *     working OOB-authenticated clients exist (OOB sunset > 3 years ago),
- *     and this gate prevents a backup-restored DB without the matching
- *     AUTH_CODE row from burning a freshly-issued post-migration token.
- *   - In both branches, drop GA_AUTH_CODE (the new flow has no successor
- *     for it) and stamp GA_OAUTH_VERSION = '2'.
+ * Wired on plugins_loaded at priority 10 — earlier than admin_init
+ * so a frontend page view served between the upgrade and the first
+ * wp-admin visit does not emit a stale UA snippet built from
+ * pre-migration option values.
  */
 class FiftyOneDegreesOauthMigration
 {
-    public const VERSION             = '2';
+    public const VERSION             = '3';
     public const NOTICE_TRANSIENT    = 'fiftyonedegrees_oauth_migration_notice';
 
     /**
@@ -57,8 +57,56 @@ class FiftyOneDegreesOauthMigration
     public const NOTICE_TTL_SECONDS  = MONTH_IN_SECONDS;
 
     /**
-     * Idempotent entry point for the migration. Safe to call on every
-     * admin_init — early-returns once the install is marked as v2.
+     * GA options removed or with changed shape between v2 (UA) and
+     * v3 (GA4). Anything keyed here is deleted unconditionally on
+     * upgrade. Keep in sync with the GA delete sweep in
+     * Fiftyonedegrees_Google_Analytics::delete_ga_options — both
+     * lists encode "this is GA state owned by the integration".
+     *
+     * New GA4-only keys (GA_MEASUREMENT_ID, GA_PROPERTY_ID) are
+     * deliberately excluded — they cannot exist on v2 installs, and
+     * sweeping them on the v2 -> v3 path would only matter to beta
+     * testers who ran a pre-release v3 build and then downgraded.
+     *
+     * The constant is named for the current target version rather
+     * than version-generically because the contents are specific to
+     * what a v2 -> v3 upgrade needs to clear. A future v4 will swap
+     * the list rather than amend it.
+     */
+    private const SWEEP_KEYS = [
+        // auth artifacts — token cannot satisfy the new scope set
+        Options::GA_TOKEN,
+        Options::GA_AUTH_DATE,
+        Options::GA_AUTH_CODE, // OOB-era leftover; v3 sweeps it just in case
+
+        // property / account context — UA shapes; GA4 stores
+        // GA_MEASUREMENT_ID + GA_PROPERTY_ID instead
+        Options::GA_TRACKING_ID,
+        Options::GA_ACCOUNT_ID,
+        Options::GA_PROPERTIES,
+
+        // dimensions — UA used a numeric `custom_dimension_index`;
+        // GA4 keys by parameter_name. Map shape is incompatible.
+        Options::GA_CUSTOM_DIMENSIONS_MAP,
+        Options::GA_MAX_DIMENSIONS,
+        Options::GA_DIMENSIONS,
+        Options::GA_DIMENSIONS_UPDATED,
+
+        // UA tracking-id-derived JavaScript snippet cache — would
+        // emit UA tags if read before the C3 frontend rewrite lands.
+        Options::GA_JS,
+
+        // UI / error flags tied to the UA tracking-id text input
+        Options::GA_TRACKING_ID_ERROR,
+        Options::GA_ID_UPDATED,
+        Options::GA_CUSTOM_DIMENSIONS_SCREEN,
+        Options::GA_ERROR,
+    ];
+
+    /**
+     * Idempotent entry point. Safe to call on every plugins_loaded —
+     * early-returns once the install is marked at the current
+     * VERSION.
      */
     public static function run()
     {
@@ -66,19 +114,27 @@ class FiftyOneDegreesOauthMigration
             return;
         }
 
-        // Non-empty string gate. A plain `!== false` check would also fire
-        // for rows holding '' / '0' / null — and ga-service.php writes
-        // GA_AUTH_CODE straight from user input, so an admin who opened
-        // the OAuth screen and submitted a blank code can leave an empty
-        // row behind. Treating that as an OOB-era marker would wipe a
-        // perfectly good (possibly post-migration) GA_TOKEN for no reason.
-        $auth_code = get_option(Options::GA_AUTH_CODE, '');
-        if (is_string($auth_code) && $auth_code !== '') {
-            // OOB-era install detected via a non-empty legacy auth-code.
-            // Wipe the paired token state so the admin is forced through
-            // the new flow, and queue a notice so they know why.
-            delete_option(Options::GA_TOKEN);
-            delete_option(Options::GA_AUTH_DATE);
+        $had_state = false;
+        foreach (self::SWEEP_KEYS as $key) {
+            if (delete_option($key)) {
+                $had_state = true;
+            }
+        }
+
+        // Best-effort sweep + unconditional version stamp. Per-row
+        // delete_option failures are silent and indistinguishable
+        // from "row didn't exist", so we don't gate the stamp on
+        // them — a half-cleaned install lands in a state the admin
+        // diagnoses via the reconnect notice and the GA settings
+        // screen rather than via repeated migration retries. A
+        // total DB outage that breaks update_option below leaves
+        // the version stamp untouched, which DOES retry the
+        // migration on the next request as intended.
+        if ($had_state) {
+            // Surface the reconnect notice only if there was real
+            // state to wipe. Fresh installs (no GA configured yet)
+            // silently bump the version stamp without bothering the
+            // admin.
             set_transient(
                 self::NOTICE_TRANSIENT,
                 '1',
@@ -86,22 +142,16 @@ class FiftyOneDegreesOauthMigration
             );
         }
 
-        // Stamp the version marker even if one of the deletes above failed
-        // silently — retrying every admin_init forever is a worse failure
-        // mode than leaving one stale row. A failed delete leaves the row
-        // visible to the GA settings screen, which is where the admin
-        // would diagnose the problem anyway.
-        delete_option(Options::GA_AUTH_CODE);
         update_option(Options::GA_OAUTH_VERSION, self::VERSION);
     }
 
     /**
-     * Uninstall hook contribution — removes the migration version stamp
-     * and any leftover one-shot notice transient. Symmetric with
-     * FiftyOneDegreesOauthState::delete_options.
+     * Uninstall hook contribution — removes the migration version
+     * stamp and any leftover one-shot notice transient. Symmetric
+     * with FiftyOneDegreesOauthState::delete_options.
      *
      * Single-blog scope on multisite — same precedent as
-     * cleanup_expired_pending; multisite cleanup deferred to 1.0.13.
+     * cleanup_expired_pending; multisite cleanup deferred.
      */
     public static function delete_options()
     {

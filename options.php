@@ -89,6 +89,24 @@ class Options
      */
     const GA_MAX_DIMENSIONS = "fiftyonedegrees_ga_max_cust_dim_index";
 
+    // ─── GA4 — populated on property selection ──────────────────────
+
+    /**
+     * GA4 Measurement ID (e.g. "G-XXXXXXX") emitted in the frontend
+     * gtag snippet. Fetched from the selected property's first
+     * WEB_DATA_STREAM at the point the admin picks a property in the
+     * settings dropdown — never user-edited directly.
+     */
+    const GA_MEASUREMENT_ID = "fiftyonedegrees_ga_measurement_id";
+
+    /**
+     * GA4 Property ID (numeric resource id, e.g. "123456789") used as
+     * the parent for Admin API calls (dataStreams, customDimensions).
+     * Stored alongside GA_MEASUREMENT_ID when the admin submits the
+     * property dropdown.
+     */
+    const GA_PROPERTY_ID = "fiftyonedegrees_ga_property_id";
+
     /**
      * Key for storing an error message from Google Analytics if one
      * occurred during configuration.
@@ -175,11 +193,20 @@ class Options
     const OAUTH_STATE_SECRET = "fiftyonedegrees_oauth_state_secret";
 
     /**
-     * Current OAuth schema version marker.
-     * Absent (or any value other than '2') means the install predates
-     * the HMAC+PKCE migration and Fiftyonedegrees::maybe_migrate_oauth_options()
-     * will run a one-time cleanup of OOB-era state (gated by token-shape
-     * check on GA_AUTH_CODE). Set to '2' after migration.
+     * Current OAuth + GA schema version marker. Used as a generation
+     * gate by FiftyOneDegreesOauthMigration to wipe stale GA state on
+     * upgrade.
+     *
+     * History:
+     *   - Absent / not '2' and not '3': OOB-era install (Google sunset
+     *     Jan 2023). Migration to v2 cleared OOB state.
+     *   - '2': HMAC + PKCE OAuth, Universal Analytics API (UA).
+     *   - '3': GA4 schema (Admin API + analytics.edit scope + new
+     *     option keys). Upgrade from v2 wipes every GA-related option
+     *     to force re-consent under the broader scope and to drop UA
+     *     fields that have no GA4 equivalent.
+     *
+     * See FiftyOneDegreesOauthMigration::run for the gate.
      */
     const GA_OAUTH_VERSION = "fiftyonedegrees_ga_oauth_version";
 

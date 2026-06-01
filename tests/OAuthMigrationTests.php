@@ -38,8 +38,6 @@ class OAuthMigrationTests extends TestCase
     /**
      * In-memory option store so a single test can observe the full
      * delete + update sequence without juggling individual expect() calls.
-     * Returns the closures so the test can also assert against the final
-     * state.
      */
     private function stub_option_store(array $initial)
     {
@@ -80,105 +78,120 @@ class OAuthMigrationTests extends TestCase
         return $store;
     }
 
-    // ─── Case 1: OOB-active install → wipe + notice + mark migrated ─────
-
-    public function testWipesOobTokenWhenAuthCodePresent()
+    /**
+     * Realistic v2 install snapshot — what an admin who connected GA
+     * on 1.0.12 would have in wp_options. Every key here is part of
+     * the v3 sweep list and must be gone after migration.
+     */
+    private function v2_install_state(): array
     {
-        $options = $this->stub_option_store([
-            Options::GA_AUTH_CODE => 'legacy-oob-code',
-            Options::GA_TOKEN     => '{"access_token":"legacy"}',
-            Options::GA_AUTH_DATE => 1700000000,
-            // GA_OAUTH_VERSION absent
-        ]);
-        $transients = $this->stub_transients();
-
-        FiftyOneDegreesOauthMigration::run();
-
-        $this->assertArrayNotHasKey(Options::GA_TOKEN, $options->data,
-            'OOB-era access token must be wiped so the user reconnects');
-        $this->assertArrayNotHasKey(Options::GA_AUTH_DATE, $options->data,
-            'auth date must be wiped together with the token');
-        $this->assertArrayNotHasKey(Options::GA_AUTH_CODE, $options->data,
-            'GA_AUTH_CODE has no successor in the new flow; remove unconditionally');
-        $this->assertSame('2', $options->data[Options::GA_OAUTH_VERSION],
-            'version marker must be set so the migration is idempotent');
-        $this->assertArrayHasKey('fiftyonedegrees_oauth_migration_notice', $transients->data,
-            'admin must see a notice explaining the reconnect requirement');
+        return [
+            Options::GA_OAUTH_VERSION         => '2',
+            Options::GA_TOKEN                 => '{"access_token":"ua-token","refresh_token":"r"}',
+            Options::GA_AUTH_DATE             => 1700000000,
+            Options::GA_TRACKING_ID           => 'UA-12345-1',
+            Options::GA_ACCOUNT_ID            => '12345',
+            Options::GA_PROPERTIES            => [['accountId' => '12345', 'id' => 'UA-12345-1']],
+            Options::GA_CUSTOM_DIMENSIONS_MAP => [['custom_dimension_index' => 1]],
+            Options::GA_MAX_DIMENSIONS        => 200,
+        ];
     }
 
-    // ─── Case 2: token-shape gate — no AUTH_CODE → no wipe ──────────────
+    // ─── Case 1: v2 install → full sweep + reconnect notice ─────────────
 
-    public function testDoesNotWipeWhenAuthCodeAbsent()
+    public function testV2InstallIsFullySweptAndStampedV3()
     {
-        // GA_TOKEN may be present (e.g. backup-restored DB without the
-        // matching AUTH_CODE row), but if the token-shape gate fails we
-        // must NOT wipe — the documented assumption is that no working
-        // OOB clients exist, but we don't want a backup-restore to also
-        // burn a freshly-issued post-migration token.
-        $options = $this->stub_option_store([
-            Options::GA_TOKEN => '{"access_token":"new-shape"}',
-            // GA_AUTH_CODE absent, GA_OAUTH_VERSION absent
-        ]);
+        $options = $this->stub_option_store($this->v2_install_state());
         $transients = $this->stub_transients();
 
         FiftyOneDegreesOauthMigration::run();
 
-        $this->assertSame('{"access_token":"new-shape"}', $options->data[Options::GA_TOKEN],
-            'token must be preserved when GA_AUTH_CODE is absent (token-shape gate)');
-        $this->assertSame('2', $options->data[Options::GA_OAUTH_VERSION],
-            'version marker still gets set so we do not re-evaluate next request');
-        $this->assertArrayNotHasKey('fiftyonedegrees_oauth_migration_notice', $transients->data,
-            'no migration happened — do not show a misleading reconnect notice');
-    }
-
-    // ─── Case 2a: empty-string GA_AUTH_CODE row → still no wipe ─────────
-
-    public function testDoesNotWipeWhenAuthCodeIsEmptyString()
-    {
-        // ga-service.php writes GA_AUTH_CODE straight from a form submit,
-        // so an admin who opened the OAuth tab and submitted blank input
-        // leaves '' (or '0') in the row. That is NOT an OOB-era marker —
-        // no real authorization ever happened. The gate must distinguish
-        // 'row absent / empty-row noise' from 'row holds a real code'.
-        $options = $this->stub_option_store([
-            Options::GA_AUTH_CODE => '',
-            Options::GA_TOKEN     => '{"access_token":"keepme"}',
-            Options::GA_AUTH_DATE => 1700000000,
-        ]);
-        $transients = $this->stub_transients();
-
-        FiftyOneDegreesOauthMigration::run();
+        // Every UA-era / shape-changed option must be gone.
+        $sweptKeys = [
+            Options::GA_TOKEN,
+            Options::GA_AUTH_DATE,
+            Options::GA_TRACKING_ID,
+            Options::GA_ACCOUNT_ID,
+            Options::GA_PROPERTIES,
+            Options::GA_CUSTOM_DIMENSIONS_MAP,
+            Options::GA_MAX_DIMENSIONS,
+        ];
+        foreach ($sweptKeys as $key) {
+            $this->assertArrayNotHasKey(
+                $key,
+                $options->data,
+                "$key must be deleted on v2 -> v3 sweep"
+            );
+        }
 
         $this->assertSame(
-            '{"access_token":"keepme"}',
-            $options->data[Options::GA_TOKEN],
-            'empty-string AUTH_CODE must not trigger the OOB wipe path'
+            '3',
+            $options->data[Options::GA_OAUTH_VERSION],
+            'version marker must be bumped to 3 after a successful sweep'
         );
-        $this->assertSame(
-            1700000000,
-            $options->data[Options::GA_AUTH_DATE],
-            'AUTH_DATE must also be preserved when AUTH_CODE is empty'
-        );
-        $this->assertArrayNotHasKey(Options::GA_AUTH_CODE, $options->data,
-            'empty AUTH_CODE row is still cleaned up — there is no successor for it');
-        $this->assertSame('2', $options->data[Options::GA_OAUTH_VERSION]);
-        $this->assertArrayNotHasKey(
-            'fiftyonedegrees_oauth_migration_notice',
+        $this->assertArrayHasKey(
+            FiftyOneDegreesOauthMigration::NOTICE_TRANSIENT,
             $transients->data,
-            'no wipe happened — no reconnect notice'
+            'admin must see a reconnect notice — token is gone, scope expanded'
         );
     }
 
-    // ─── Case 3: already migrated → fully no-op ─────────────────────────
+    // ─── Case 2: pre-v2 (OOB-era) install upgrading directly to v3 ─────
 
-    public function testNoOpWhenAlreadyMigrated()
+    public function testPreV2InstallIsAlsoSweptToV3()
+    {
+        // Install that never received the 1.0.12 v2 migration — still
+        // has a GA_AUTH_CODE around. v3 sweeps it together with the
+        // rest of the GA state regardless of v2-era logic.
+        $options = $this->stub_option_store([
+            Options::GA_AUTH_CODE   => 'legacy-oob-code',
+            Options::GA_TOKEN       => '{"access_token":"oob-token"}',
+            Options::GA_TRACKING_ID => 'UA-99-1',
+        ]);
+        $transients = $this->stub_transients();
+
+        FiftyOneDegreesOauthMigration::run();
+
+        $this->assertArrayNotHasKey(Options::GA_AUTH_CODE, $options->data);
+        $this->assertArrayNotHasKey(Options::GA_TOKEN, $options->data);
+        $this->assertArrayNotHasKey(Options::GA_TRACKING_ID, $options->data);
+        $this->assertSame('3', $options->data[Options::GA_OAUTH_VERSION]);
+        $this->assertArrayHasKey(
+            FiftyOneDegreesOauthMigration::NOTICE_TRANSIENT,
+            $transients->data
+        );
+    }
+
+    // ─── Case 3: fresh install (no GA state) → stamp only, no notice ───
+
+    public function testFreshInstallStampsVersionWithoutBotheringTheAdmin()
+    {
+        // Plugin activated but GA never configured. Bumping the
+        // version stamp is still required (so we don't re-evaluate
+        // every request), but firing a "please reconnect" notice
+        // would be misleading.
+        $options = $this->stub_option_store([]);
+        $transients = $this->stub_transients();
+
+        FiftyOneDegreesOauthMigration::run();
+
+        $this->assertSame('3', $options->data[Options::GA_OAUTH_VERSION]);
+        $this->assertArrayNotHasKey(
+            FiftyOneDegreesOauthMigration::NOTICE_TRANSIENT,
+            $transients->data,
+            'no state to migrate -> no reconnect notice'
+        );
+    }
+
+    // ─── Case 4: already at v3 → fully no-op ───────────────────────────
+
+    public function testNoOpWhenAlreadyAtV3()
     {
         $options = $this->stub_option_store([
-            Options::GA_OAUTH_VERSION => '2',
-            Options::GA_TOKEN         => '{"access_token":"current"}',
-            // GA_AUTH_CODE could in theory still be lingering — make sure
-            // we don't touch ANYTHING once version=='2', not even cleanup.
-            Options::GA_AUTH_CODE     => 'stale',
+            Options::GA_OAUTH_VERSION => '3',
+            Options::GA_TOKEN         => '{"access_token":"ga4-token"}',
+            Options::GA_MEASUREMENT_ID => 'G-XXXXXXX',
+            Options::GA_PROPERTY_ID   => '123456789',
         ]);
         $transients = $this->stub_transients();
         Functions\expect('update_option')->never();
@@ -186,34 +199,81 @@ class OAuthMigrationTests extends TestCase
 
         FiftyOneDegreesOauthMigration::run();
 
-        $this->assertSame('{"access_token":"current"}', $options->data[Options::GA_TOKEN]);
-        $this->assertSame('stale', $options->data[Options::GA_AUTH_CODE]);
-        $this->assertArrayNotHasKey('fiftyonedegrees_oauth_migration_notice', $transients->data);
+        $this->assertSame('{"access_token":"ga4-token"}', $options->data[Options::GA_TOKEN]);
+        $this->assertSame('G-XXXXXXX', $options->data[Options::GA_MEASUREMENT_ID]);
+        $this->assertArrayNotHasKey(
+            FiftyOneDegreesOauthMigration::NOTICE_TRANSIENT,
+            $transients->data
+        );
     }
 
-    // ─── Case 4: idempotency — run twice, second call is a no-op ───────
+    // ─── Case 5: idempotency — second invocation no-ops ────────────────
 
     public function testIdempotentSecondInvocation()
     {
-        $options = $this->stub_option_store([
-            Options::GA_AUTH_CODE => 'legacy-oob-code',
-            Options::GA_TOKEN     => '{"access_token":"legacy"}',
-        ]);
+        $options = $this->stub_option_store($this->v2_install_state());
         $this->stub_transients();
 
         FiftyOneDegreesOauthMigration::run();
-        // After the first run, version is '2', AUTH_CODE/TOKEN are gone.
         $snapshot = $options->data;
 
-        // Re-issue the notice transient so we can tell whether the second
-        // run incorrectly fires again.
-        unset($options->data['fiftyonedegrees_oauth_migration_notice']);
+        // Re-issue the notice transient so we can tell whether the
+        // second run incorrectly fires again.
+        unset($options->data[FiftyOneDegreesOauthMigration::NOTICE_TRANSIENT]);
+
+        // Second run must not just produce the same end-state — it
+        // must do zero DB work. Parity with testNoOpWhenAlreadyAtV3.
+        Functions\expect('update_option')->never();
+        Functions\expect('delete_option')->never();
 
         FiftyOneDegreesOauthMigration::run();
 
-        $this->assertSame($snapshot, $options->data,
-            'second run must not change anything once version is "2"');
+        $this->assertSame(
+            $snapshot,
+            $options->data,
+            'second run must not change anything once version is "3"'
+        );
     }
+
+    // ─── update_option failure path leaves version unstamped ───────────
+
+    public function testUpdateOptionFailureLeavesVersionUnstampedForRetry()
+    {
+        // A DB outage that breaks the version-stamp write (but lets
+        // the sweep delete_option calls succeed) must NOT mark the
+        // install as migrated. The next request's run() should
+        // re-attempt the migration rather than locking the install
+        // at the pre-stamp half-state.
+        $store = new \stdClass();
+        $store->data = $this->v2_install_state();
+        Functions\when('get_option')->alias(function ($key, $default = false) use ($store) {
+            return array_key_exists($key, $store->data) ? $store->data[$key] : $default;
+        });
+        Functions\when('delete_option')->alias(function ($key) use ($store) {
+            $existed = array_key_exists($key, $store->data);
+            unset($store->data[$key]);
+            return $existed;
+        });
+        // Simulate a DB write failure for the version stamp only.
+        Functions\when('update_option')->alias(function ($key, $value) {
+            return false;
+        });
+        $this->stub_transients();
+
+        FiftyOneDegreesOauthMigration::run();
+
+        // The original v2 marker still reads from the stubbed store
+        // because update_option silently no-op'd. Next page load
+        // will re-enter the sweep — already-deleted rows are
+        // no-ops, version stamp retries.
+        $this->assertSame(
+            '2',
+            $store->data[Options::GA_OAUTH_VERSION],
+            'failed update_option must leave version at the pre-migration value so the next request retries'
+        );
+    }
+
+    // ─── delete_options (uninstall hook contribution) ──────────────────
 
     public function testDeleteOptionsRemovesVersionAndNoticeTransient()
     {

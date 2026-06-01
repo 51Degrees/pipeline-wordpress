@@ -61,7 +61,7 @@ class FiftyOneDegreesGoogleClientFactory
         $client->setClientId(FIFTYONEDEGREES_CLIENT_ID);
         $client->setClientSecret(FIFTYONEDEGREES_CLIENT_SECRET);
         $client->setRedirectUri(self::resolve_redirect_uri());
-        $client->setScopes(Google_Service_Analytics::ANALYTICS_READONLY);
+        $client->setScopes(Google_Service_GoogleAnalyticsAdmin::ANALYTICS_EDIT);
 
         return $client;
     }

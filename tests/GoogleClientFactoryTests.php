@@ -165,9 +165,11 @@ class GoogleClientFactoryTests extends TestCase
         $this->assertInstanceOf(Google_Client::class, $client);
         $this->assertSame(FIFTYONEDEGREES_CLIENT_ID, $client->getClientId());
         $this->assertSame(FIFTYONEDEGREES_REDIRECT, $client->getRedirectUri());
-        // getScopes is a setter-mirror; expect the readonly analytics scope.
+        // getScopes is a setter-mirror; expect the GA4 Admin edit scope.
+        // The plugin needs write access to programmatically create
+        // GA4 Custom Dimensions on behalf of the admin.
         $this->assertContains(
-            Google_Service_Analytics::ANALYTICS_READONLY,
+            Google_Service_GoogleAnalyticsAdmin::ANALYTICS_EDIT,
             $client->getScopes()
         );
     }

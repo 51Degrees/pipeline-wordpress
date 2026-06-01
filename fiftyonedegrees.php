@@ -205,7 +205,14 @@ class Fiftyonedegrees {
      * checks pick them up without further changes to this file.
      */
     private function setup_oauth_actions() {
-        add_action('admin_init', ['FiftyOneDegreesOauthMigration', 'run'], 10);
+        // Migration runs on plugins_loaded (earlier than admin_init)
+        // so a frontend page view served between the upgrade and the
+        // first wp-admin visit does not emit a stale UA snippet built
+        // from pre-migration option values. The v3 sweep is version-
+        // gated and order-independent w.r.t. the OAuth callback at
+        // admin_init priority 5, but future additions that read
+        // request-time state need to re-verify hook ordering.
+        add_action('plugins_loaded', ['FiftyOneDegreesOauthMigration', 'run'], 10);
         add_action(
             'fiftyonedegrees_refresh_robots_txt',
             ['FiftyOneDegreesOauthState', 'cron_cleanup']

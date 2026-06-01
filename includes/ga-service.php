@@ -551,6 +551,11 @@ class Fiftyonedegrees_Google_Analytics {
     /**
      * Delete all the options relating to Google Analytics. This will disable
      * the Google Analytics feature.
+     *
+     * Keep the option set in sync with FiftyOneDegreesOauthMigration::SWEEP_KEYS
+     * — both lists encode "this is GA state owned by the integration",
+     * the migration uses its subset to force re-consent on schema bump
+     * and this method uses the superset for full uninstall.
      */
     function delete_ga_options() {
         // auth artifacts
@@ -561,6 +566,8 @@ class Fiftyonedegrees_Google_Analytics {
         // selected property / account
         delete_option(Options::GA_PROPERTIES);
         delete_option(Options::GA_TRACKING_ID);
+        delete_option(Options::GA_MEASUREMENT_ID);
+        delete_option(Options::GA_PROPERTY_ID);
         delete_option(Options::GA_ACCOUNT_ID);
 
         // settings + dimensions
