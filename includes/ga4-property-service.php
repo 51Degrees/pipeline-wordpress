@@ -16,17 +16,7 @@
     clause in Article 5 of the EUPL shall not apply.
 */
 
-/**
- * Thrown by FiftyOneDegreesGa4PropertyService when the GA4 Admin API
- * rejects a call with an auth-related HTTP status (401 / 403). Lifted
- * to a typed exception so callers can distinguish "the user revoked
- * the scope or the token is no longer valid" from "this property has
- * no Web data stream" — the two would otherwise both surface as a
- * null return and confuse the admin-facing error copy.
- */
-class FiftyOneDegreesGa4AuthError extends RuntimeException
-{
-}
+require_once __DIR__ . '/ga4-auth-error.php';
 
 /**
  * GA4 Admin API surface for property discovery + Measurement ID lookup.
@@ -81,7 +71,7 @@ class FiftyOneDegreesGa4PropertyService
             $response = $admin->accountSummaries->listAccountSummaries();
         }
         catch (Throwable $e) {
-            if (self::is_auth_error($e)) {
+            if (FiftyOneDegreesGa4AuthError::matches($e)) {
                 error_log(
                     '51Degrees GA4 accountSummaries.list rejected as unauthorized: '
                     . $e->getMessage()
@@ -153,7 +143,7 @@ class FiftyOneDegreesGa4PropertyService
                 ->listPropertiesDataStreams($parent);
         }
         catch (Throwable $e) {
-            if (self::is_auth_error($e)) {
+            if (FiftyOneDegreesGa4AuthError::matches($e)) {
                 error_log(
                     '51Degrees GA4 dataStreams.list rejected as unauthorized for '
                     . $parent . ': ' . $e->getMessage()
@@ -218,17 +208,4 @@ class FiftyOneDegreesGa4PropertyService
         return ($tail === false) ? '' : $tail;
     }
 
-    /**
-     * Returns true when the API exception's HTTP status indicates an
-     * authentication / authorization problem (token expired, scope
-     * revoked, insufficient scope for the call). Used by the public
-     * methods to lift such failures into FiftyOneDegreesGa4AuthError
-     * so callers can surface a reconnect-account notice instead of
-     * a misleading "property has no Web stream" message.
-     */
-    private static function is_auth_error(\Throwable $e)
-    {
-        $code = $e->getCode();
-        return $code === 401 || $code === 403;
-    }
 }
