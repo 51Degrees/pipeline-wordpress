@@ -105,13 +105,20 @@ class GoogleAnalyticsTabRenderTests extends TestCase
             );
         }
 
-        // Pre-seed GA_PROPERTIES so the connected-state render skips the
-        // lazy properties-fetch branch (which would otherwise try to
-        // instantiate Fiftyonedegrees_Google_Analytics and reach the
-        // Google_Client factory — out of scope for render tests).
+        // Pre-seed GA_PROPERTIES plus the freshness transient so the
+        // connected-state render skips the lazy properties-fetch
+        // branch (which would otherwise try to instantiate
+        // Fiftyonedegrees_Google_Analytics and reach the Google_Client
+        // factory — out of scope for render tests).
         $this->options[Options::GA_PROPERTIES] = [
-            ['id' => 'UA-test', 'name' => 'Test Property'],
+            [
+                'property_id'   => '123456789',
+                'property_name' => 'Test Property',
+                'account_id'    => '12345',
+                'account_name'  => 'Test Account',
+            ],
         ];
+        $this->transients[Fiftyonedegrees_Google_Analytics::GA_PROPERTIES_FRESHNESS_TRANSIENT] = '1';
     }
 
     public function tear_down()
@@ -190,8 +197,13 @@ class GoogleAnalyticsTabRenderTests extends TestCase
         // multisite_unsupported rejection with no prior context.
         Functions\when('is_multisite')->justReturn(true);
         $this->options[Options::GA_TOKEN] = ['access_token' => 'legacy-token'];
-        $this->options[Options::GA_PROPERTIES] = [["id" => "UA-test", "name" => "Test"]]; // non-empty: skip the lazy properties-fetch branch
-        $this->options[Options::GA_TRACKING_ID] = '';
+        $this->options[Options::GA_PROPERTIES] = [[
+            'property_id'   => '123456789',
+            'property_name' => 'Test',
+            'account_id'    => '12345',
+            'account_name'  => 'Test Account',
+        ]]; // non-empty: skip the lazy properties-fetch branch
+        $this->options[Options::GA_PROPERTY_ID] = '';
 
         $html = $this->render();
 
@@ -244,8 +256,13 @@ class GoogleAnalyticsTabRenderTests extends TestCase
         // token to back it up (see testSuccessQueryMarkerIgnoredWithoutToken).
         $_GET = ['oauth-success' => '1'];
         $this->options[Options::GA_TOKEN] = ['access_token' => 'real-token'];
-        $this->options[Options::GA_PROPERTIES] = [["id" => "UA-test", "name" => "Test"]]; // non-empty: skip the lazy properties-fetch branch
-        $this->options[Options::GA_TRACKING_ID] = '';
+        $this->options[Options::GA_PROPERTIES] = [[
+            'property_id'   => '123456789',
+            'property_name' => 'Test',
+            'account_id'    => '12345',
+            'account_name'  => 'Test Account',
+        ]]; // non-empty: skip the lazy properties-fetch branch
+        $this->options[Options::GA_PROPERTY_ID] = '';
 
         $html = $this->render();
 
@@ -289,8 +306,13 @@ class GoogleAnalyticsTabRenderTests extends TestCase
     public function testConnectedStateRendersPropertySelectorAndLogout()
     {
         $this->options[Options::GA_TOKEN] = ['access_token' => 'real-token'];
-        $this->options[Options::GA_PROPERTIES] = [["id" => "UA-test", "name" => "Test"]]; // non-empty: skip the lazy properties-fetch branch
-        $this->options[Options::GA_TRACKING_ID] = '';
+        $this->options[Options::GA_PROPERTIES] = [[
+            'property_id'   => '123456789',
+            'property_name' => 'Test',
+            'account_id'    => '12345',
+            'account_name'  => 'Test Account',
+        ]]; // non-empty: skip the lazy properties-fetch branch
+        $this->options[Options::GA_PROPERTY_ID] = '';
 
         $html = $this->render();
 

@@ -139,21 +139,27 @@ else if (get_option(Options::GA_CUSTOM_DIMENSIONS_SCREEN)) {
 
 }
 else {
-    // Seed GA properties list when connected but cache is empty. The
-    // legacy OOB flow used to populate Options::GA_PROPERTIES inside the
-    // token-exchange path; that path was removed during the OAuth refactor
-    // along with the only call site of get_analytics_properties_list,
-    // so without this lazy-load the property dropdown would stay empty.
-    // ga-service::authenticate() also drives the silent access_token
-    // refresh path, so an expired token gets refreshed here transparently.
-    if (empty(get_option(Options::GA_PROPERTIES))) {
+    // Lazy seed of the property dropdown. Gated on a freshness
+    // transient (not on `empty(GA_PROPERTIES)`) because the option
+    // value is written as an empty array both when the admin
+    // genuinely has zero GA4 properties and when the Admin API
+    // returned a transient failure — `empty([])` is true in both
+    // cases and would otherwise burn quota on every page render.
+    // The transient carries no payload; its existence alone is the
+    // "fetched recently" signal, with TTL set in ga-service.
+    // ga-service::authenticate() also drives the silent access-token
+    // refresh path, so an expired token gets refreshed here
+    // transparently.
+    if (get_transient(Fiftyonedegrees_Google_Analytics::GA_PROPERTIES_FRESHNESS_TRANSIENT) === false) {
         $fiftyonedegrees_ga_svc = new Fiftyonedegrees_Google_Analytics();
         $fiftyonedegrees_ga_client = $fiftyonedegrees_ga_svc->authenticate();
         if ($fiftyonedegrees_ga_client) {
-            $fiftyonedegrees_ga_service = $fiftyonedegrees_ga_svc->get_google_analytics_service($fiftyonedegrees_ga_client);
-            if ($fiftyonedegrees_ga_service) {
-                $fiftyonedegrees_ga_svc->get_analytics_properties_list($fiftyonedegrees_ga_service);
-            }
+            // get_ga4_admin_service always returns a configured
+            // instance; auth-error mapping (revoked scope etc.)
+            // lives inside get_analytics_properties_list, which
+            // sets GA_ERROR before re-throwing as needed.
+            $fiftyonedegrees_ga_admin = $fiftyonedegrees_ga_svc->get_ga4_admin_service($fiftyonedegrees_ga_client);
+            $fiftyonedegrees_ga_svc->get_analytics_properties_list($fiftyonedegrees_ga_admin);
         }
     }
     ?>
@@ -184,31 +190,42 @@ else {
                 </tr>
                 <tr>
                     <th scope="row" >
-                        <label class="pt-20" for="<?php echo Options::GA_TRACKING_ID; ?>">
+                        <label class="pt-20" for="<?php echo Options::GA_PROPERTY_ID; ?>">
                             Analytics Account/Property
                         </label>
                     </th>
                     <td>
-                        <select id="<?php echo Options::GA_TRACKING_ID; ?>" name = "<?php echo Options::GA_TRACKING_ID; ?>">
-                            <option >Select Analytics Property</option>
+                        <select id="<?php echo Options::GA_PROPERTY_ID; ?>" name = "<?php echo Options::GA_PROPERTY_ID; ?>">
+                            <option value="">Select Analytics Property</option>
                             <script>
-                                var preSelectedTrackingId = "<?php echo esc_html(get_option(Options::GA_TRACKING_ID)); ?>";
+                                var preSelectedPropertyId = "<?php echo esc_html(get_option(Options::GA_PROPERTY_ID)); ?>";
                                 var propertiesList = <?php echo sprintf(esc_html('%1$s'), json_encode(get_option(Options::GA_PROPERTIES)));?>;
-                                for (i = 0; i<propertiesList.length; i++) {
-                                    if (preSelectedTrackingId == propertiesList[i]["id"]) {
-                                        document.write('<option value="' +
-                                            propertiesList[i]["id"] +
-                                            '" selected>' +
-                                            propertiesList[i]["name"] +
-                                            '</option>');
-                                    }
-                                    else {
-                                        document.write(
-                                            '<option value="' +
-                                            propertiesList[i]["id"] +
-                                            '">' +
-                                            propertiesList[i]["name"] +
-                                            '</option>');
+                                if (Array.isArray(propertiesList)) {
+                                    for (var i = 0, len = propertiesList.length; i < len; i++) {
+                                        var row = propertiesList[i];
+                                        // Defense against stale pre-upgrade
+                                        // option shape: skip rows without a
+                                        // GA4-shaped property_id.
+                                        if (!row || !row["property_id"]) {
+                                            continue;
+                                        }
+                                        var label = row["property_name"] +
+                                            " (" + row["account_name"] + ")";
+                                        if (preSelectedPropertyId == row["property_id"]) {
+                                            document.write('<option value="' +
+                                                row["property_id"] +
+                                                '" selected>' +
+                                                label +
+                                                '</option>');
+                                        }
+                                        else {
+                                            document.write(
+                                                '<option value="' +
+                                                row["property_id"] +
+                                                '">' +
+                                                label +
+                                                '</option>');
+                                        }
                                     }
                                 }
                             </script>

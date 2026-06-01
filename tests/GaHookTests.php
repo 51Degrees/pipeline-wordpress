@@ -60,7 +60,7 @@ class GaHookTests extends TestCase {
             'Fiftyonedegrees_Google_Analytics->fiftyonedegrees_ga_logout()'));
         self::assertNotFalse(has_action(
             'admin_init',
-            'Fiftyonedegrees_Google_Analytics->fiftyonedegrees_ga_set_tracking_id()'));
+            'Fiftyonedegrees_Google_Analytics->fiftyonedegrees_ga_set_property()'));
         self::assertNotFalse(has_action(
             'admin_init',
             'Fiftyonedegrees_Google_Analytics->fiftyonedegrees_ga_update_cd_indices()'));
@@ -112,6 +112,7 @@ class GaHookTests extends TestCase {
             "ga_log_out" => ""
         );
         Functions\when('get_admin_url')->justReturn('admin/');
+        Functions\when('delete_transient')->justReturn(true);
 
         $service = new Fiftyonedegrees_Google_Analytics();
         Functions\expect('delete_option')->once()->with(Options::GA_AUTH_CODE);
@@ -157,6 +158,189 @@ class GaHookTests extends TestCase {
 
         $result = $service->fiftyonedegrees_ga_add_analytics_code();
         
+    }
+
+    // ─── fiftyonedegrees_ga_set_property handler (6 branches) ────────────
+
+    /**
+     * In-memory option store + the redirect/sanitize stubs needed by
+     * fiftyonedegrees_ga_set_property. Returns the store reference so
+     * the test can assert against the final option state.
+     */
+    private function set_property_handler_fixtures(array $initial) {
+        $store = new \stdClass();
+        $store->data = $initial;
+
+        Functions\when('get_option')->alias(function ($key, $default = false) use ($store) {
+            return array_key_exists($key, $store->data) ? $store->data[$key] : $default;
+        });
+        Functions\when('update_option')->alias(function ($key, $value) use ($store) {
+            $store->data[$key] = $value;
+            return true;
+        });
+        Functions\when('delete_option')->alias(function ($key) use ($store) {
+            unset($store->data[$key]);
+            return true;
+        });
+        Functions\when('set_transient')->justReturn(true);
+        Functions\when('delete_transient')->justReturn(true);
+        Functions\when('get_transient')->justReturn(false);
+        Functions\when('wp_redirect')->justReturn(null);
+        Functions\when('get_admin_url')->justReturn('admin/');
+
+        return $store;
+    }
+
+    private function admin_with_dataStreams($response_or_thrower) {
+        $resource = Mockery::mock();
+        if ($response_or_thrower instanceof \Throwable) {
+            $resource->shouldReceive('listPropertiesDataStreams')->andThrow($response_or_thrower);
+        }
+        else {
+            $resource->shouldReceive('listPropertiesDataStreams')->andReturn($response_or_thrower);
+        }
+        $admin = new \stdClass();
+        $admin->properties_dataStreams = $resource;
+        return $admin;
+    }
+
+    private function dataStreams_response(array $streams) {
+        $response = Mockery::mock();
+        $response->shouldReceive('getDataStreams')->andReturn($streams);
+        return $response;
+    }
+
+    private function web_stream($mid) {
+        $webData = Mockery::mock();
+        $webData->shouldReceive('getMeasurementId')->andReturn($mid);
+        $stream = Mockery::mock();
+        $stream->shouldReceive('getType')->andReturn('WEB_DATA_STREAM');
+        $stream->shouldReceive('getWebStreamData')->andReturn($webData);
+        return $stream;
+    }
+
+    public function testSetPropertyBailsOnSentinelEmptyValue() {
+        $_POST = [
+            'submit' => 'Save Changes',
+            Options::GA_PROPERTY_ID => '',
+        ];
+        $store = $this->set_property_handler_fixtures([Options::GA_TOKEN => 'tok']);
+
+        $service = new Fiftyonedegrees_Google_Analytics();
+        $service->fiftyonedegrees_ga_set_property();
+
+        $this->assertSame(true, $store->data[Options::GA_TRACKING_ID_ERROR] ?? null);
+        $this->assertArrayNotHasKey(Options::GA_PROPERTY_ID, $store->data);
+        $this->assertArrayNotHasKey(Options::GA_MEASUREMENT_ID, $store->data);
+        $this->assertArrayNotHasKey(Options::GA_CUSTOM_DIMENSIONS_SCREEN, $store->data);
+    }
+
+    public function testSetPropertyBailsOnNonNumericValue() {
+        // Defense against a hand-crafted POST or stale browser markup.
+        // GA4 property ids are strict numeric strings.
+        $_POST = [
+            'submit' => 'Save Changes',
+            Options::GA_PROPERTY_ID => 'properties/123/dataStreams',
+        ];
+        $store = $this->set_property_handler_fixtures([Options::GA_TOKEN => 'tok']);
+
+        $service = new Fiftyonedegrees_Google_Analytics();
+        $service->fiftyonedegrees_ga_set_property();
+
+        $this->assertSame(true, $store->data[Options::GA_TRACKING_ID_ERROR] ?? null);
+        $this->assertArrayNotHasKey(Options::GA_PROPERTY_ID, $store->data);
+    }
+
+    public function testSetPropertyFailsWhenAuthenticateReturnsFalse() {
+        $_POST = [
+            'submit' => 'Save Changes',
+            Options::GA_PROPERTY_ID => '123456',
+        ];
+        $store = $this->set_property_handler_fixtures([Options::GA_TOKEN => 'tok']);
+
+        $service = Mockery::mock('Fiftyonedegrees_Google_Analytics')->makePartial();
+        $service->shouldReceive('authenticate')->andReturn(false);
+
+        $service->fiftyonedegrees_ga_set_property();
+
+        $this->assertArrayHasKey(Options::GA_ERROR, $store->data,
+            'expired auth must surface GA_ERROR copy');
+        $this->assertStringContainsString('reconnect', strtolower($store->data[Options::GA_ERROR]));
+        $this->assertArrayNotHasKey(Options::GA_PROPERTY_ID, $store->data,
+            'no partial write — property id must not land without measurement id');
+        $this->assertArrayNotHasKey(Options::GA_MEASUREMENT_ID, $store->data);
+    }
+
+    public function testSetPropertyMapsAuthErrorToReconnectCopy() {
+        // GA4 Admin API 403'd (scope revoked at Google's end). Handler
+        // must surface a reconnect-account notice rather than the
+        // misleading no-Web-stream copy, and must not persist
+        // GA_PROPERTY_ID for a property whose ownership we can't verify.
+        $_POST = [
+            'submit' => 'Save Changes',
+            Options::GA_PROPERTY_ID => '123456',
+        ];
+        $store = $this->set_property_handler_fixtures([Options::GA_TOKEN => 'tok']);
+
+        $admin = $this->admin_with_dataStreams(new \Exception('forbidden', 403));
+
+        $service = Mockery::mock('Fiftyonedegrees_Google_Analytics')->makePartial();
+        $service->shouldReceive('authenticate')->andReturn(Mockery::mock(\stdClass::class));
+        $service->shouldReceive('get_ga4_admin_service')->andReturn($admin);
+
+        $service->fiftyonedegrees_ga_set_property();
+
+        $this->assertArrayHasKey(Options::GA_ERROR, $store->data);
+        $this->assertStringContainsString('reconnect', strtolower($store->data[Options::GA_ERROR]),
+            'auth-revoked must say reconnect, not "no Web stream"');
+        $this->assertArrayNotHasKey(Options::GA_PROPERTY_ID, $store->data);
+        $this->assertArrayNotHasKey(Options::GA_MEASUREMENT_ID, $store->data);
+    }
+
+    public function testSetPropertyFailsWhenPropertyHasNoWebStream() {
+        $_POST = [
+            'submit' => 'Save Changes',
+            Options::GA_PROPERTY_ID => '123456',
+        ];
+        $store = $this->set_property_handler_fixtures([Options::GA_TOKEN => 'tok']);
+
+        $admin = $this->admin_with_dataStreams($this->dataStreams_response([]));
+
+        $service = Mockery::mock('Fiftyonedegrees_Google_Analytics')->makePartial();
+        $service->shouldReceive('authenticate')->andReturn(Mockery::mock(\stdClass::class));
+        $service->shouldReceive('get_ga4_admin_service')->andReturn($admin);
+
+        $service->fiftyonedegrees_ga_set_property();
+
+        $this->assertArrayHasKey(Options::GA_ERROR, $store->data);
+        $this->assertStringContainsString('Web data stream', $store->data[Options::GA_ERROR]);
+        $this->assertArrayNotHasKey(Options::GA_PROPERTY_ID, $store->data,
+            'no Web stream is a per-property failure — no half-write of GA_PROPERTY_ID');
+        $this->assertArrayNotHasKey(Options::GA_MEASUREMENT_ID, $store->data);
+    }
+
+    public function testSetPropertyHappyPathPersistsBothIdsAndEnablesCdScreen() {
+        $_POST = [
+            'submit' => 'Save Changes',
+            Options::GA_PROPERTY_ID => '123456',
+        ];
+        $store = $this->set_property_handler_fixtures([Options::GA_TOKEN => 'tok']);
+
+        $admin = $this->admin_with_dataStreams(
+            $this->dataStreams_response([$this->web_stream('G-ABC123')])
+        );
+
+        $service = Mockery::mock('Fiftyonedegrees_Google_Analytics')->makePartial();
+        $service->shouldReceive('authenticate')->andReturn(Mockery::mock(\stdClass::class));
+        $service->shouldReceive('get_ga4_admin_service')->andReturn($admin);
+
+        $service->fiftyonedegrees_ga_set_property();
+
+        $this->assertSame('123456', $store->data[Options::GA_PROPERTY_ID]);
+        $this->assertSame('G-ABC123', $store->data[Options::GA_MEASUREMENT_ID]);
+        $this->assertSame('enabled', $store->data[Options::GA_CUSTOM_DIMENSIONS_SCREEN]);
+        $this->assertArrayNotHasKey(Options::GA_ERROR, $store->data);
+        $this->assertArrayNotHasKey(Options::GA_TRACKING_ID_ERROR, $store->data);
     }
 
     /**

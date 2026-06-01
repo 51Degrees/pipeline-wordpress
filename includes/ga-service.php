@@ -86,75 +86,124 @@ class Fiftyonedegrees_Google_Analytics {
     }
 
     /**
-     * Retrieves Google Analytics Object
-	 * @param Google_Client $client
-     * @return Google_Service_Analytics service service object
-     */	
+     * Builds the UA Management API service. Still wired live via the
+     * Custom Dimensions admin_init handlers below — those reach the UA
+     * Management API which Google shut down on 2024-07-01, so any call
+     * lands a 404 / dead-API error. The methods are retained until a
+     * later commit replaces them with their GA4 Admin API equivalents
+     * so each intermediate commit on the branch still compiles. After
+     * the v3 schema migration the UA-paired option rows are gone, so
+     * the live code paths are non-functional at runtime until that
+     * later commit lands.
+     *
+     * @param Google_Client $client
+     * @return Google_Service_Analytics
+     */
     public function get_google_analytics_service ($client) {
         try {
-            
+
             // Create an authorized analytics service object.
             $service = new Google_Service_Analytics($client);
-             
+
         }
         catch (Google_Service_Exception $e) {
-            
+
             error_log($e->getMessage());
         }
         catch (Exception $e) {
-            
+
             error_log($e->getMessage());
         }
 
-        return $service;		
+        return $service;
     }
 
     /**
-     * Retrieves web properties list for the authorized user.
-	 * @param Google_Service_Analytics $analytics_service
-     * @return array properties list
-     */	
-    public function get_analytics_properties_list($analytics_service) {
-  
+     * Builds the GA4 Admin API service. Sits behind a method (rather
+     * than being inlined into the caller) so tests can Mockery-mock
+     * the GA4 admin client without instantiating the real apiclient
+     * service class.
+     *
+     * @param Google_Client $client
+     * @return Google_Service_GoogleAnalyticsAdmin
+     */
+    public function get_ga4_admin_service($client) {
+        return new Google_Service_GoogleAnalyticsAdmin($client);
+    }
+
+    /**
+     * Cache freshness marker for Options::GA_PROPERTIES. Lazy-fetch
+     * call sites must use this transient to gate API calls — a bare
+     * `empty(get_option(GA_PROPERTIES))` check would keep re-hitting
+     * accountSummaries.list on every render for accounts that
+     * genuinely have zero GA4 properties.
+     */
+    public const GA_PROPERTIES_FRESHNESS_TRANSIENT = 'fiftyonedegrees_ga_properties_fresh';
+
+    /**
+     * TTL on the freshness marker. Five minutes is short enough that
+     * newly-created GA4 properties show up in the dropdown within
+     * one admin-page reload, and long enough that an admin who
+     * leaves the settings tab open does not burn quota on every
+     * keypress-triggered re-render.
+     */
+    public const GA_PROPERTIES_FRESHNESS_TTL = 300;
+
+    /**
+     * Populates Options::GA_PROPERTIES with the GA4 properties the
+     * authenticated admin can see and stamps the freshness transient
+     * so subsequent renders within the TTL window do not re-fetch.
+     *
+     * Returns the stored array on success; an empty array means the
+     * API returned no properties (the dropdown renders its empty
+     * branch). On auth failure (401 / 403) the property service
+     * throws FiftyOneDegreesGa4AuthError — we catch and propagate to
+     * Options::GA_ERROR so the admin sees a reconnect prompt rather
+     * than an unexplained empty dropdown.
+     *
+     * See FiftyOneDegreesGa4PropertyService for the per-row shape.
+     *
+     * @param Google_Service_GoogleAnalyticsAdmin $admin
+     * @return array<int,array<string,string>>
+     */
+    public function get_analytics_properties_list($admin) {
         if (!get_option(Options::GA_TOKEN)) {
-            echo "You must authenticate to access your Analytics Account.";
-            return;
+            return [];
         }
-      
-		try {
-			// Get the list of accounts for the authorized user.
-			$properties = $analytics_service->management_webproperties->listManagementWebproperties('~all');
-			$propertiesList = array();
-			if (count($properties->getItems()) > 0) {
-				foreach ($properties->getItems() as $property) {
-					$propertyId = $property->getId();
-					$propertyName = $property->getName();
-					$property = array();
-					$property["id"] = $propertyId;
-					$property["name"] = $propertyName . " (" . $propertyId . ") "; 
-					array_push($propertiesList, $property);           
-				}
-			}
-			else {
-				echo 'No Properties found for this user.';
-				return;
-			}  
-		}
-		catch (Exception $e) {
-			error_log($e->getMessage());
-		}
 
-        update_option(Options::GA_PROPERTIES , $propertiesList);
-    
-        return $propertiesList;
+        try {
+            $properties = FiftyOneDegreesGa4PropertyService::list_account_summaries($admin);
+        }
+        catch (FiftyOneDegreesGa4AuthError $e) {
+            update_option(
+                Options::GA_ERROR,
+                'Google Analytics permission was revoked or the access '
+                . 'token is no longer valid. Please reconnect Google '
+                . 'Analytics.'
+            );
+            return [];
+        }
+
+        update_option(Options::GA_PROPERTIES, $properties);
+        set_transient(
+            self::GA_PROPERTIES_FRESHNESS_TRANSIENT,
+            '1',
+            self::GA_PROPERTIES_FRESHNESS_TTL
+        );
+        return $properties;
     }
 
     /**
-     * Retrieves account id for the web property being used.
-	 * @param Google_Service_Analytics $analytics_service
+     * UA Management API account-id lookup. Still wired live via the
+     * Custom Dimensions code path below; non-functional at runtime
+     * after the v3 schema migration sweeps the UA tracking-id row.
+     * Removed in a later commit alongside the Custom Dimensions
+     * migration to the GA4 Admin API.
+     *
+     * @param Google_Service_Analytics $analytics_service
      * @param string $trackingId
-     * @return string accountId 
-     */	
+     * @return string accountId
+     */
     public function get_account_id($analytics_service, $trackingId) {
 
         if (!empty($trackingId)) {
@@ -188,11 +237,15 @@ class Fiftyonedegrees_Google_Analytics {
     }
 
     /**
-     * Retrieves custom dimensions for the authorized user.
-     * 
+     * UA Management API custom-dimensions read. Still wired live but
+     * non-functional after the v3 schema migration (depends on
+     * GA_TRACKING_ID which is swept) and on a Google API that was
+     * shut down on 2024-07-01. Removed in a later commit alongside
+     * the Custom Dimensions migration to the GA4 Admin API.
+     *
      * @return array array containing custom dimensions list
-     * and max available custom dimension index 
-     */	
+     * and max available custom dimension index
+     */
     public function get_custom_dimensions() {
         $trackingId = get_option(Options::GA_TRACKING_ID);
         $maxCustomDimIndex = get_option(Options::GA_MAX_DIMENSIONS);
@@ -232,10 +285,14 @@ class Fiftyonedegrees_Google_Analytics {
     }
 
     /**
-     * Inserts Custom Dimension into analytics account.
-     * 
+     * UA Management API custom-dimensions write. Still wired live but
+     * non-functional after the v3 schema migration (depends on
+     * GA_TRACKING_ID + GA_ACCOUNT_ID which are swept) and on a Google
+     * API that was shut down on 2024-07-01. Removed in a later commit
+     * alongside the Custom Dimensions migration to the GA4 Admin API.
+     *
      * @return int number of new custom dimensions inserted.
-     */	
+     */
     public function insert_custom_dimensions() {
 
         $calls = 0;        
@@ -315,12 +372,18 @@ class Fiftyonedegrees_Google_Analytics {
         // (Legacy OOB Access Code admin_init hook removed during the
         // OAuth refactor — the UI input that produced its POST is gone
         // and the handler method was unreachable code.)
+        //
+        // The Custom Dimensions handlers below (_update_cd_indices and
+        // _enable_tracking) still call into UA Management API code paths
+        // that the v3 schema migration leaves non-functional. They stay
+        // registered to keep this commit buildable; a later commit
+        // rewrites them on the GA4 Admin API.
         add_action(
             'admin_init',
             array($this, 'fiftyonedegrees_ga_logout'));
         add_action(
             'admin_init',
-            array($this, 'fiftyonedegrees_ga_set_tracking_id'));
+            array($this, 'fiftyonedegrees_ga_set_property'));
         add_action(
             'admin_init',
             array($this, 'fiftyonedegrees_ga_update_cd_indices'));
@@ -483,52 +546,143 @@ class Fiftyonedegrees_Google_Analytics {
     }   
 
     /**
-     * If a change is made to the Google Analytics token, then update all
-     * the relevant options.
-     * 
+     * Handles the GA4 property dropdown form submission. On a valid
+     * pick we persist the chosen Property ID plus the Measurement ID
+     * of its first WEB_DATA_STREAM (resolved via a second Admin API
+     * call) so the frontend gtag emission has both pieces ready
+     * without further round-trips.
+     *
+     * Four failure surfaces, all routed through a one-shot admin
+     * notice (GA_TRACKING_ID_ERROR / GA_ERROR) so the admin sees a
+     * concrete cause rather than a silently-failing form:
+     *
+     *   - sentinel selected or non-numeric value (admin clicked Save
+     *     without picking a real property, or a hand-crafted POST):
+     *     GA_TRACKING_ID_ERROR flag
+     *   - authentication expired with no refresh path available:
+     *     GA_ERROR + clear CD screen
+     *   - GA4 Admin API rejects the call as unauthorized (token scope
+     *     revoked at Google's end): GA_ERROR with reconnect copy +
+     *     clear CD screen
+     *   - property has no Web data stream (mobile-only / Firebase-
+     *     only property): GA_ERROR + clear CD screen
+     *
+     * GA_TRACKING_ID_ERROR is reused as the "no property selected"
+     * sentinel — the underlying option-key name predates the GA4
+     * migration but is kept to avoid a schema change in the middle
+     * of this commit series; renames live in the final cleanup pass.
+     *
+     * Side effects on success are deferred to the end so a failure
+     * along the way (no Web stream, auth error) does not leave
+     * GA_PROPERTY_ID half-written without its paired Measurement ID.
+     *
      * @return void
      */
-    function fiftyonedegrees_ga_set_tracking_id() {         
-        if (get_option(Options::GA_TOKEN)) {
-            if (isset($_POST['submit']) &&
-                "Save Changes" === $_POST['submit']) {
-
-                delete_option(Options::GA_TRACKING_ID_ERROR);
-                update_option(Options::GA_CUSTOM_DIMENSIONS_SCREEN, "enabled");
-
-                if (isset($_POST[Options::GA_TRACKING_ID]) &&
-                    "Select Analytics Property" ===
-                    $_POST[Options::GA_TRACKING_ID]) {
-
-                    update_option(Options::GA_TRACKING_ID_ERROR, true);
-                    delete_option(Options::GA_CUSTOM_DIMENSIONS_SCREEN);                        
-                }
-                else if (isset($_POST[Options::GA_TRACKING_ID])) {
-
-                    $ga_tracking_id = sanitize_text_field(wp_unslash(
-                        $_POST[Options::GA_TRACKING_ID]));
-                    
-                    update_option(
-                        Options::GA_TRACKING_ID,
-                        $ga_tracking_id);
-
-                    if (isset($_POST[Options::GA_SEND_PAGE_VIEW]) &&
-                        "on" === $_POST[Options::GA_SEND_PAGE_VIEW]) {
-                        update_option(
-                            Options::GA_SEND_PAGE_VIEW,
-                            'true');
-                        update_option(Options::GA_SEND_PAGE_VIEW_VAL, "On");
-                    }  
-                    else {
-                        delete_option(Options::GA_SEND_PAGE_VIEW);
-                        update_option(Options::GA_SEND_PAGE_VIEW_VAL, "Off");                   
-                    }
-                    
-                }					
-                wp_redirect(get_admin_url() .
-                    'options-general.php?page=51Degrees&tab=google-analytics' );
-            }     
+    function fiftyonedegrees_ga_set_property() {
+        if (!get_option(Options::GA_TOKEN)) {
+            return;
         }
+        if (!isset($_POST['submit']) || 'Save Changes' !== $_POST['submit']) {
+            return;
+        }
+        if (!isset($_POST[Options::GA_PROPERTY_ID])) {
+            return;
+        }
+
+        delete_option(Options::GA_TRACKING_ID_ERROR);
+
+        $property_id = sanitize_text_field(wp_unslash(
+            $_POST[Options::GA_PROPERTY_ID]));
+
+        // Sentinel — admin pressed Save without picking a real
+        // property. The dropdown's "Select Analytics Property"
+        // option carries an empty value attribute so the browser
+        // sends '', but we also catch the literal display text in
+        // case a stale browser cached the pre-fix markup. Anything
+        // non-numeric is rejected here too: GA4 property ids are
+        // numeric strings and a hand-crafted POST shouldn't leak
+        // arbitrary text into a Google API resource path.
+        if ($property_id === ''
+            || $property_id === 'Select Analytics Property'
+            || !ctype_digit($property_id)
+        ) {
+            update_option(Options::GA_TRACKING_ID_ERROR, true);
+            delete_option(Options::GA_CUSTOM_DIMENSIONS_SCREEN);
+            wp_redirect(get_admin_url() .
+                'options-general.php?page=51Degrees&tab=google-analytics');
+            return;
+        }
+
+        $client = $this->authenticate();
+        if (!$client) {
+            update_option(
+                Options::GA_ERROR,
+                'Google Analytics authentication expired. Please reconnect.'
+            );
+            delete_option(Options::GA_CUSTOM_DIMENSIONS_SCREEN);
+            wp_redirect(get_admin_url() .
+                'options-general.php?page=51Degrees&tab=google-analytics');
+            return;
+        }
+
+        $admin = $this->get_ga4_admin_service($client);
+
+        try {
+            $measurement_id = FiftyOneDegreesGa4PropertyService::get_measurement_id(
+                $admin,
+                $property_id
+            );
+        }
+        catch (FiftyOneDegreesGa4AuthError $e) {
+            update_option(
+                Options::GA_ERROR,
+                'Google Analytics permission was revoked or the access '
+                . 'token is no longer valid. Please reconnect Google '
+                . 'Analytics.'
+            );
+            delete_option(Options::GA_CUSTOM_DIMENSIONS_SCREEN);
+            wp_redirect(get_admin_url() .
+                'options-general.php?page=51Degrees&tab=google-analytics');
+            return;
+        }
+
+        if ($measurement_id === null) {
+            update_option(
+                Options::GA_ERROR,
+                'The selected GA4 property has no Web data stream. '
+                . 'Add a Web stream in Google Analytics Admin, '
+                . 'then reload this page.'
+            );
+            delete_option(Options::GA_CUSTOM_DIMENSIONS_SCREEN);
+            wp_redirect(get_admin_url() .
+                'options-general.php?page=51Degrees&tab=google-analytics');
+            return;
+        }
+
+        // All checks passed — persist the paired ids together so the
+        // intermediate render state cannot ever see a property id
+        // without its measurement id (or vice versa).
+        update_option(Options::GA_PROPERTY_ID, $property_id);
+        update_option(Options::GA_MEASUREMENT_ID, $measurement_id);
+
+        // Invalidate the dropdown-freshness transient so the next
+        // render re-pulls account summaries — picks up any GA4
+        // changes the admin made between connect and submit.
+        delete_transient(self::GA_PROPERTIES_FRESHNESS_TRANSIENT);
+
+        if (isset($_POST[Options::GA_SEND_PAGE_VIEW]) &&
+            'on' === $_POST[Options::GA_SEND_PAGE_VIEW]) {
+            update_option(Options::GA_SEND_PAGE_VIEW, 'true');
+            update_option(Options::GA_SEND_PAGE_VIEW_VAL, 'On');
+        }
+        else {
+            delete_option(Options::GA_SEND_PAGE_VIEW);
+            update_option(Options::GA_SEND_PAGE_VIEW_VAL, 'Off');
+        }
+
+        update_option(Options::GA_CUSTOM_DIMENSIONS_SCREEN, 'enabled');
+        wp_redirect(get_admin_url() .
+            'options-general.php?page=51Degrees&tab=google-analytics');
     }
 
     /**
@@ -565,6 +719,7 @@ class Fiftyonedegrees_Google_Analytics {
 
         // selected property / account
         delete_option(Options::GA_PROPERTIES);
+        delete_transient(self::GA_PROPERTIES_FRESHNESS_TRANSIENT);
         delete_option(Options::GA_TRACKING_ID);
         delete_option(Options::GA_MEASUREMENT_ID);
         delete_option(Options::GA_PROPERTY_ID);

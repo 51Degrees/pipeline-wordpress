@@ -156,6 +156,7 @@ class GaServiceTests extends TestCase {
             $deleted[] = $key;
             return true;
         });
+        Functions\when('delete_transient')->justReturn(true);
 
         $svc = new Fiftyonedegrees_Google_Analytics();
         $svc->delete_ga_options();

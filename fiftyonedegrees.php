@@ -144,6 +144,7 @@ class Fiftyonedegrees {
         require_once __DIR__ . '/includes/oauth-state.php';
         require_once __DIR__ . '/includes/oauth-notice.php';
         require_once __DIR__ . '/includes/google-client-factory.php';
+        require_once __DIR__ . '/includes/ga4-property-service.php';
         require_once __DIR__ . '/includes/oauth-migration.php';
 
         // OAuth callback and start handlers land in later commits. Guard
