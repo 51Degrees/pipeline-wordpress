@@ -134,7 +134,16 @@ class Fiftyonedegrees_Tracking_Gtag {
                 continue;
             }
 
-            $parameters[$param] = 'data.' . $datakey . '.' . $propName;
+            // Guard the namespace lookup with `(data.<key> || {})` so a
+            // missing engine slot (e.g. Resource Key without idprob /
+            // robotstxt entitlements, or a cloud-side failure that
+            // drops the namespace) does not throw `Cannot read
+            // properties of undefined` from inside the gtag event
+            // call and silently break the whole tracking emission.
+            // Optional chaining (`data?.<key>?.<prop>`) would read
+            // cleaner but is unavailable in the older browsers a
+            // WordPress plugin still has to support.
+            $parameters[$param] = '(data.' . $datakey . ' || {}).' . $propName;
 
             if ($datakey === 'location') {
                 // The location engine resolves asynchronously; the

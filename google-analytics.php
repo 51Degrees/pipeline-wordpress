@@ -82,16 +82,21 @@ if ($fiftyonedegrees_is_multisite && class_exists('FiftyOneDegreesStrings')) {
 
 // ─── Tab body ───────────────────────────────────────────────────────────
 
-if ((!get_option(Options::GA_TOKEN) &&
-    empty(get_option(Options::GA_TOKEN))) ||
-    get_option(Options::GA_ERROR)) {
+// Show any pending GA_ERROR notice independently of the body branch.
+// Coupling it to the no-token branch would force the pre-auth UI
+// (Connect button) every time a connected-state operation failed —
+// e.g. a failed customDimensions.create — which misleads the admin
+// into thinking they were disconnected. Token state alone drives the
+// body branch; the error message is presentation overlay.
+if (get_option(Options::GA_ERROR)) {
+    echo '<p></p><span class="fod-pipeline-status error">' .
+        esc_html(get_option(Options::GA_ERROR)) .
+        '</span>';
+    delete_option(Options::GA_ERROR);
+}
 
-    if (get_option(Options::GA_ERROR)) {
-        echo '<p></p><span class="fod-pipeline-status error">' .
-            esc_html(get_option(Options::GA_ERROR)) .
-            '</span>';
-        delete_option(Options::GA_ERROR);
-    }
+if (!get_option(Options::GA_TOKEN) ||
+    empty(get_option(Options::GA_TOKEN))) {
     ?>
 
     <p>

@@ -86,8 +86,8 @@ class Ga4DimensionServiceTests extends TestCase
     {
         $admin = $this->admin_with_dimensions(
             $this->dimensions_response([
-                $this->dimension_row('device_type',   '51Degrees DeviceType'),
-                $this->dimension_row('hardware_name', '51Degrees HardwareName'),
+                $this->dimension_row('device_type',   'Fifty One Degrees DeviceType'),
+                $this->dimension_row('hardware_name', 'Fifty One Degrees HardwareName'),
             ])
         );
 
@@ -95,8 +95,8 @@ class Ga4DimensionServiceTests extends TestCase
 
         $this->assertSame(
             [
-                ['parameter_name' => 'device_type',   'display_name' => '51Degrees DeviceType',   'scope' => 'EVENT'],
-                ['parameter_name' => 'hardware_name', 'display_name' => '51Degrees HardwareName', 'scope' => 'EVENT'],
+                ['parameter_name' => 'device_type',   'display_name' => 'Fifty One Degrees DeviceType',   'scope' => 'EVENT'],
+                ['parameter_name' => 'hardware_name', 'display_name' => 'Fifty One Degrees HardwareName', 'scope' => 'EVENT'],
             ],
             $result
         );
@@ -237,7 +237,7 @@ class Ga4DimensionServiceTests extends TestCase
     public function testCreatePayloadCarriesPrefixedDisplayNameAndEventScope()
     {
         // Verify the create() call receives a payload with the
-        // expected parameter_name, scope=EVENT, and the "51Degrees "
+        // expected parameter_name, scope=EVENT, and the "Fifty One Degrees "
         // prefix on the displayName. Argument matcher pulls the
         // model setters back out via Mockery::on().
         $captured = null;
@@ -259,7 +259,7 @@ class Ga4DimensionServiceTests extends TestCase
         $this->assertTrue($result);
         $this->assertSame('properties/100', $captured['parent']);
         $this->assertSame('device_type', $captured['payload']->getParameterName());
-        $this->assertSame('51Degrees DeviceType', $captured['payload']->getDisplayName());
+        $this->assertSame('Fifty One Degrees DeviceType', $captured['payload']->getDisplayName());
         $this->assertSame('EVENT', $captured['payload']->getScope());
     }
 
@@ -270,7 +270,7 @@ class Ga4DimensionServiceTests extends TestCase
         // property. Service re-fetches the list, sees the match,
         // promotes the failure to idempotent success.
         $listResponse = $this->dimensions_response([
-            $this->dimension_row('device_type', '51Degrees DeviceType'),
+            $this->dimension_row('device_type', 'Fifty One Degrees DeviceType'),
         ]);
         $resource = Mockery::mock();
         $resource->shouldReceive('create')->andThrow(new \Exception('already exists', 409));
@@ -296,7 +296,7 @@ class Ga4DimensionServiceTests extends TestCase
         // our prefix). Surface as failure so the admin knows to
         // resolve at the GA4 console.
         $listResponse = $this->dimensions_response([
-            $this->dimension_row('hardware_name', '51Degrees HardwareName'),
+            $this->dimension_row('hardware_name', 'Fifty One Degrees HardwareName'),
         ]);
         $resource = Mockery::mock();
         $resource->shouldReceive('create')->andThrow(new \Exception('already exists', 409));
@@ -319,7 +319,7 @@ class Ga4DimensionServiceTests extends TestCase
         // The list shows a row with the same parameter_name but a
         // USER scope (we always create EVENT-scope). Not idempotent.
         $listResponse = $this->dimensions_response([
-            $this->dimension_row('device_type', '51Degrees DeviceType', 'USER'),
+            $this->dimension_row('device_type', 'Fifty One Degrees DeviceType', 'USER'),
         ]);
         $resource = Mockery::mock();
         $resource->shouldReceive('create')->andThrow(new \Exception('already exists', 409));
@@ -453,7 +453,7 @@ class Ga4DimensionServiceTests extends TestCase
 
         $this->assertSame('properties/100', $captured['parent']);
         $this->assertSame('device_type', $captured['payload']->getParameterName());
-        $this->assertSame('51Degrees DeviceType', $captured['payload']->getDisplayName());
+        $this->assertSame('Fifty One Degrees DeviceType', $captured['payload']->getDisplayName());
     }
 
     public function testCreate409WithAuthErrorOnListRefetchPropagates()
@@ -542,7 +542,18 @@ class Ga4DimensionServiceTests extends TestCase
 
     public function testDisplayNamePrefixIsCanonical()
     {
-        $this->assertSame('51Degrees ', FiftyOneDegreesGa4DimensionService::DISPLAY_NAME_PREFIX);
+        $this->assertSame('Fifty One Degrees ', FiftyOneDegreesGa4DimensionService::DISPLAY_NAME_PREFIX);
+    }
+
+    public function testDisplayNamePrefixStartsWithLetter()
+    {
+        // GA4 rejects display_name values that do not start with a
+        // letter (INVALID_ARGUMENT). The brand "51Degrees" begins with
+        // a digit, so the spelt-out "Fifty One Degrees " form is used.
+        // Lock the invariant so a future "shorten the prefix" edit
+        // does not silently reintroduce the bug.
+        $prefix = FiftyOneDegreesGa4DimensionService::DISPLAY_NAME_PREFIX;
+        $this->assertSame(1, preg_match('/^[A-Za-z]/', $prefix));
     }
 
     public function testMaxDimensionsPerPropertyMatchesGa4FreeTierLimit()

@@ -29,10 +29,13 @@ require_once __DIR__ . '/ga4-auth-error.php';
  * only — `USER` and `ITEM` scopes are out of scope for a
  * device-detection plugin emitting per-pageview event parameters.
  *
- * Created dimensions get a "51Degrees " prefix on their displayName
- * so they remain identifiable in the admin's GA4 console even when
- * the underlying parameter_name overlaps with something the admin
- * defined for their own analytics.
+ * Created dimensions get a "Fifty One Degrees " prefix on their
+ * displayName so they remain identifiable in the admin's GA4 console
+ * even when the underlying parameter_name overlaps with something the
+ * admin defined for their own analytics. The prefix must start with a
+ * letter — GA4 rejects display_name values that begin with a digit
+ * with INVALID_ARGUMENT, which is why the spelt-out "Fifty One" form
+ * is used instead of the brand's "51Degrees".
  *
  * GA4 enforces a hard per-property cap (50 in the free tier, 125 for
  * GA4 360). The plugin pre-checks against the free-tier limit before
@@ -60,7 +63,7 @@ class FiftyOneDegreesGa4DimensionService
      * survives the case where a parameter_name collision is benign
      * (admin opted to map their own dim onto the same key).
      */
-    public const DISPLAY_NAME_PREFIX = '51Degrees ';
+    public const DISPLAY_NAME_PREFIX = 'Fifty One Degrees ';
 
     /**
      * GA4 free-tier per-property limit. The 360 tier raises this to
@@ -179,15 +182,15 @@ class FiftyOneDegreesGa4DimensionService
      *
      * Input validation: all three string arguments are required to
      * be non-empty after trim; whitespace-only inputs would emit
-     * either an invalid payload (e.g. displayName="51Degrees ") or
+     * either an invalid payload (e.g. displayName="Fifty One Degrees ") or
      * an opaque GA4 INVALID_ARGUMENT and are refused locally.
      *
      * @param Google_Service_GoogleAnalyticsAdmin $admin
      * @param string $propertyId numeric (e.g. "123456789")
      * @param string $parameterName GA4 event-parameter key, e.g. "device_type"
      * @param string $displayLabel human label that will be prefixed
-     *                              with "51Degrees " in GA4, e.g.
-     *                              "DeviceType" -> "51Degrees DeviceType"
+     *                              with "Fifty One Degrees " in GA4, e.g.
+     *                              "DeviceType" -> "Fifty One Degrees DeviceType"
      * @return bool true on success or idempotent re-create; false on
      *              real conflict or non-auth API failure
      * @throws FiftyOneDegreesGa4AuthError on auth / scope failure

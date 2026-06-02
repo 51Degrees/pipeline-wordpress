@@ -73,7 +73,7 @@ class GaTrackingGtagTests extends TestCase
 
         $result = (new Fiftyonedegrees_Tracking_Gtag())->get_event_parameters();
 
-        $this->assertSame(['device_type' => 'data.device.devicetype'], $result['parameters']);
+        $this->assertSame(['device_type' => '(data.device || {}).devicetype'], $result['parameters']);
         $this->assertFalse($result['delayed_evidence']);
     }
 
@@ -99,7 +99,7 @@ class GaTrackingGtagTests extends TestCase
         $result = (new Fiftyonedegrees_Tracking_Gtag())->get_event_parameters();
 
         $this->assertSame(
-            ['device_type' => 'data.device.devicetype'],
+            ['device_type' => '(data.device || {}).devicetype'],
             $result['parameters']
         );
     }
@@ -133,7 +133,7 @@ class GaTrackingGtagTests extends TestCase
 
         $result = (new Fiftyonedegrees_Tracking_Gtag())->get_event_parameters();
 
-        $this->assertSame(['good' => 'data.device.good'], $result['parameters']);
+        $this->assertSame(['good' => '(data.device || {}).good'], $result['parameters']);
     }
 
     public function testEventParametersSkipsNonScalarFieldsWithoutWarning()
@@ -156,7 +156,7 @@ class GaTrackingGtagTests extends TestCase
         $errorAfter = error_get_last();
 
         $this->assertSame(
-            ['good' => 'data.device.good'],
+            ['good' => '(data.device || {}).good'],
             $result['parameters'],
             'rows with non-scalar or missing parameter_name must be dropped, not fallback-derived'
         );
@@ -181,7 +181,7 @@ class GaTrackingGtagTests extends TestCase
 
         $result = (new Fiftyonedegrees_Tracking_Gtag())->get_event_parameters();
 
-        $this->assertSame(['ok' => 'data.device.devicetype'], $result['parameters'],
+        $this->assertSame(['ok' => '(data.device || {}).devicetype'], $result['parameters'],
             'rows with non-[a-z0-9_] datakey/property_name segments must be dropped'
         );
     }
@@ -271,7 +271,7 @@ class GaTrackingGtagTests extends TestCase
 
         $this->assertStringContainsString("gtag('event', 'fod'", $result);
         $this->assertStringContainsString("'send_to': fodMeasurementId", $result);
-        $this->assertStringContainsString("'device_type': data.device.devicetype", $result);
+        $this->assertStringContainsString("'device_type': (data.device || {}).devicetype", $result);
     }
 
     public function testFreshBranchOmitsRowWithoutParameterName()
@@ -417,7 +417,7 @@ class GaTrackingGtagTests extends TestCase
         // sibling plugin's already-emitted config instead of
         // redefining it.
         $this->assertStringContainsString("gtag('set', fodMeasurementId", $result);
-        $this->assertStringContainsString("'device_type': data.device.devicetype", $result);
+        $this->assertStringContainsString("'device_type': (data.device || {}).devicetype", $result);
         // Tagged branch must never call config — that would override
         // the sibling's settings.
         $this->assertStringNotContainsString("gtag('config'", $result);
