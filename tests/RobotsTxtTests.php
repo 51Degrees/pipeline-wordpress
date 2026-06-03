@@ -155,6 +155,10 @@ class RobotsTxtTests extends TestCase {
     private function mockGuardsPassed() {
         Functions\when('is_admin')->justReturn(false);
         Patchwork\redefine('php_sapi_name', Patchwork\always('apache2handler'));
+        Functions\when('wp_parse_url')->alias(function ($url, $component = -1) {
+            return parse_url($url, $component);
+        });
+        Functions\when('wp_unslash')->returnArg();
     }
 
     public function testEnforceSkippedWhenPipelineDisabled() {
@@ -362,6 +366,108 @@ class RobotsTxtTests extends TestCase {
         FiftyOneDegreesRobotsTxt::enforce_crawler_redirect();
 
         $this->assertFalse($redirected);
+    }
+
+    /**
+     * Helper: stage a configuration where enforce_crawler_redirect() would
+     * redirect (disallowed crawler) and capture whether wp_redirect fires.
+     * Used by the /robots.txt exclusion tests (#60).
+     */
+    private function stageDisallowedCrawlerCapture(&$redirected) {
+        $this->mockGuardsPassed();
+        $this->mockOptions([
+            Options::ROBOTS_ENFORCE => 'on',
+            Options::ROBOTS_ALLOWED_CATEGORIES => array_diff(self::ALL_TEST_CATEGORIES, ['Search']),
+            Options::ROBOTS_REDIRECT_URL => 'https://example.com/denied',
+            Options::ROBOTS_PLAINTEXT_CACHE => "User-agent: *\nDisallow: /\n",
+        ]);
+        Patchwork\redefine('Pipeline::get', function ($engine, $prop) {
+            if ($prop === 'iscrawler') return true;
+            if ($prop === 'crawlerusage') return ['Search'];
+            return null;
+        });
+        Patchwork\redefine(
+            'FiftyOneDegreesCloudMetadata::supports_crawler_usage',
+            Patchwork\always(true)
+        );
+        Patchwork\redefine('exit', Patchwork\always(null));
+
+        Functions\when('sanitize_text_field')->returnArg();
+        Functions\when('wp_unslash')->returnArg();
+
+        $redirected = false;
+        Functions\when('wp_redirect')->alias(function () use (&$redirected) {
+            $redirected = true;
+        });
+    }
+
+    public function testEnforceCrawlerRedirectSkipsRobotsTxtPath() {
+        // Issue #60: /robots.txt must be reachable to crawlers regardless of
+        // the crawler-category gate, otherwise the policy contradicts itself.
+        $this->stageDisallowedCrawlerCapture($redirected);
+        $_SERVER['REQUEST_URI'] = '/robots.txt';
+
+        FiftyOneDegreesRobotsTxt::enforce_crawler_redirect();
+
+        $this->assertFalse($redirected);
+    }
+
+    public function testEnforceCrawlerRedirectSkipsRobotsTxtWithQueryString() {
+        $this->stageDisallowedCrawlerCapture($redirected);
+        $_SERVER['REQUEST_URI'] = '/robots.txt?ver=1';
+
+        FiftyOneDegreesRobotsTxt::enforce_crawler_redirect();
+
+        $this->assertFalse($redirected);
+    }
+
+    public function testEnforceCrawlerRedirectSkipsRobotsTxtCaseInsensitive() {
+        $this->stageDisallowedCrawlerCapture($redirected);
+        $_SERVER['REQUEST_URI'] = '/Robots.TXT';
+
+        FiftyOneDegreesRobotsTxt::enforce_crawler_redirect();
+
+        $this->assertFalse($redirected);
+    }
+
+    public function testEnforceCrawlerRedirectSkipsRobotsTxtTrailingSlash() {
+        $this->stageDisallowedCrawlerCapture($redirected);
+        $_SERVER['REQUEST_URI'] = '/robots.txt/';
+
+        FiftyOneDegreesRobotsTxt::enforce_crawler_redirect();
+
+        $this->assertFalse($redirected);
+    }
+
+    public function testEnforceCrawlerRedirectHandlesMissingRequestUri() {
+        // Covers the `?? '/'` fallback when $_SERVER['REQUEST_URI'] is unset
+        // (some SAPI configs / CLI-like contexts). '/' is not /robots.txt so
+        // enforcement proceeds normally and the disallowed crawler is redirected.
+        $this->stageDisallowedCrawlerCapture($redirected);
+        unset($_SERVER['REQUEST_URI']);
+        Functions\when('home_url')->justReturn('https://example.com/');
+        Functions\when('trailingslashit')->alias(function ($u) {
+            return rtrim($u, '/') . '/';
+        });
+
+        FiftyOneDegreesRobotsTxt::enforce_crawler_redirect();
+
+        $this->assertTrue($redirected);
+    }
+
+    public function testEnforceCrawlerRedirectStillFiresOnOtherPaths() {
+        // Regression sanity for the /robots.txt early-return: the guard must
+        // only match the exact path, not substrings or unrelated URLs.
+        $this->stageDisallowedCrawlerCapture($redirected);
+        $_SERVER['REQUEST_URI'] = '/about/robots.txt-explained';
+        Functions\when('home_url')->justReturn('https://example.com/about/robots.txt-explained');
+        Functions\when('trailingslashit')->alias(function ($u) {
+            return rtrim($u, '/') . '/';
+        });
+
+        FiftyOneDegreesRobotsTxt::enforce_crawler_redirect();
+
+        $this->assertTrue($redirected);
     }
 
     public function testRedirectLoopPreventionSkipsRedirect() {
