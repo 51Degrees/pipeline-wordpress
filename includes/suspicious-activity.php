@@ -272,6 +272,12 @@ class SuspiciousActivity
      * /page-slug/ to / for the home request, and a plain path comparison
      * would treat them as different and loop.
      *
+     * Note: FiftyoneService::current_page_is_pmp_exempt() (issue #61) does
+     * structurally similar URL-vs-options matching with a couple of bug-
+     * fix improvements (lowercase + URL-decode + root foot-gun guard +
+     * subdir-multisite path stripping). If a third call-site appears the
+     * two should be consolidated into a shared helper.
+     *
      * @access private
      *
      * @return bool
