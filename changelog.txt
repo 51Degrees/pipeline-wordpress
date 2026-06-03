@@ -1,2 +1,5 @@
+= 1.0.12 =
+* FIX: /robots.txt is now always reachable to crawlers regardless of the configured robots-enforce policy. Previously, disallowed crawlers were 302-redirected when fetching /robots.txt itself, defeating the policy the file advertises (issue #60).
+
 = 1.0 =
 * Initial Release.

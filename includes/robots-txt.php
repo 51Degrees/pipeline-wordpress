@@ -238,6 +238,14 @@ class FiftyOneDegreesRobotsTxt {
             return;
         }
 
+        // /robots.txt must be reachable to crawlers regardless of crawler-
+        // category gating; redirecting it defeats the policy it advertises.
+        // Mirrors the matching skip in suspicious-activity.php.
+        $path = wp_parse_url(wp_unslash($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH);
+        if (is_string($path) && strtolower(rtrim($path, '/')) === '/robots.txt') {
+            return;
+        }
+
         $is_crawler = Pipeline::get('device', 'iscrawler');
         if ($is_crawler !== true) {
             return;
