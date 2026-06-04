@@ -222,9 +222,296 @@ class HookTests extends TestCase {
             ->with("fiftyonedegrees", Mockery::any(), "before");
 
         (new FiftyoneService())->fiftyonedegrees_javascript();
-       
+
         // We are asserting via the expect, so tell PHPUnit not
         // to worry.
+        $this->assertTrue(true);
+    }
+
+    // ====================================================================
+    // Issue #61 — PMP exemption on alt-button / terms pages
+    // ====================================================================
+
+    /**
+     * Common environment for the PMP-enqueue tests: PMP enabled, valid
+     * resource key, both PMP page options point at internal paths, plus
+     * stubs for the WP helpers used by current_page_is_pmp_exempt() and
+     * by the PMP enqueue block itself.
+     *
+     * url_to_postid defaults to 0 (no internal-post match) so the
+     * exemption decision falls through to canonical-path comparison —
+     * individual tests override this when they need a post-ID match.
+     *
+     * @param array  $optionOverrides  per-test option overrides
+     * @param string $requestUri       value placed in $_SERVER['REQUEST_URI']
+     */
+    private function stagePmpEnqueueEnv(array $optionOverrides = [], string $requestUri = '/about', bool $stubEnqueueHelpers = true) {
+        $options = array_merge([
+            Options::PMP_ENABLE         => 'on',
+            Options::RESOURCE_KEY       => 'valid-resource-key',
+            Options::PMP_ALT_URL        => '/subscribe',
+            Options::PMP_BRAND_TERMS_URL => '/terms',
+        ], $optionOverrides);
+
+        Functions\when('get_option')->alias(function ($arg, $default = null) use ($options) {
+            if (array_key_exists($arg, $options)) {
+                return $options[$arg];
+            }
+            if ($arg === Options::PIPELINE) {
+                return HookTests::$pipeline;
+            }
+            return $default;
+        });
+
+        Functions\when('plugin_dir_url')->justReturn('root/includes/');
+        Functions\when('home_url')->alias(function ($p = '/') {
+            return 'https://example.com' . $p;
+        });
+        Functions\when('trailingslashit')->alias(function ($u) {
+            return rtrim($u, '/') . '/';
+        });
+        Functions\when('wp_parse_url')->alias(function ($url, $component = -1) {
+            return parse_url($url, $component);
+        });
+        Functions\when('wp_unslash')->returnArg();
+        Functions\when('url_to_postid')->justReturn(0);
+        Functions\when('apply_filters')->alias(function ($tag, $value) {
+            return $value;
+        });
+        Functions\when('add_filter')->justReturn(true);
+
+        // fod.js + Pipeline JS are enqueued unconditionally above the PMP
+        // block; most PMP tests don't assert on those, so allow them through.
+        // testFodJsStillEnqueuedOnPmpExemptPage sets strict expectations and
+        // opts out of these default stubs.
+        if ($stubEnqueueHelpers) {
+            Functions\when('wp_enqueue_script')->justReturn(null);
+            Functions\when('wp_add_inline_script')->justReturn(null);
+        }
+
+        $_SERVER['REQUEST_URI'] = $requestUri;
+    }
+
+    private function expectPmpRegistered() {
+        Functions\expect('wp_register_script')
+            ->once()
+            ->with('fiftyonedegrees-pmp', Mockery::any(), Mockery::any(), Mockery::any(), Mockery::any());
+    }
+
+    private function expectPmpNotRegistered() {
+        Functions\expect('wp_register_script')->never();
+    }
+
+    public function testPmpEnqueuedOnNormalPage() {
+        $this->stagePmpEnqueueEnv([], '/about');
+        $this->expectPmpRegistered();
+
+        (new FiftyoneService())->fiftyonedegrees_javascript();
+
+        $this->assertTrue(true);
+    }
+
+    public function testPmpSkippedOnAltUrlPage() {
+        $this->stagePmpEnqueueEnv([], '/subscribe');
+        $this->expectPmpNotRegistered();
+
+        (new FiftyoneService())->fiftyonedegrees_javascript();
+
+        $this->assertTrue(true);
+    }
+
+    public function testPmpSkippedOnTermsUrlPage() {
+        $this->stagePmpEnqueueEnv([], '/terms');
+        $this->expectPmpNotRegistered();
+
+        (new FiftyoneService())->fiftyonedegrees_javascript();
+
+        $this->assertTrue(true);
+    }
+
+    public function testPmpSkippedOnAltUrlTrailingSlashVariation() {
+        $this->stagePmpEnqueueEnv([Options::PMP_ALT_URL => '/subscribe'], '/subscribe/');
+        $this->expectPmpNotRegistered();
+
+        (new FiftyoneService())->fiftyonedegrees_javascript();
+
+        $this->assertTrue(true);
+    }
+
+    public function testPmpSkippedOnAltUrlWithQueryString() {
+        $this->stagePmpEnqueueEnv([Options::PMP_ALT_URL => '/subscribe'], '/subscribe?utm_source=x');
+        $this->expectPmpNotRegistered();
+
+        (new FiftyoneService())->fiftyonedegrees_javascript();
+
+        $this->assertTrue(true);
+    }
+
+    public function testPmpSkippedWhenOptionStoredAsFullUrl() {
+        // Production storage form — admin pastes the canonical full URL
+        // from their address bar instead of a path-only value.
+        $this->stagePmpEnqueueEnv(
+            [Options::PMP_ALT_URL => 'https://example.com/subscribe/'],
+            '/subscribe'
+        );
+        $this->expectPmpNotRegistered();
+
+        (new FiftyoneService())->fiftyonedegrees_javascript();
+
+        $this->assertTrue(true);
+    }
+
+    public function testPmpSkippedCaseInsensitive() {
+        $this->stagePmpEnqueueEnv([Options::PMP_ALT_URL => '/Subscribe'], '/subscribe');
+        $this->expectPmpNotRegistered();
+
+        (new FiftyoneService())->fiftyonedegrees_javascript();
+
+        $this->assertTrue(true);
+    }
+
+    public function testPmpEnqueuedWhenAltUrlIsExternal() {
+        // External URL in PMP_ALT_URL — the current request is by definition
+        // on this site, so the paths can't collide.
+        $this->stagePmpEnqueueEnv(
+            [
+                Options::PMP_ALT_URL         => 'https://external-paywall.example.org/checkout',
+                Options::PMP_BRAND_TERMS_URL => '',
+            ],
+            '/about'
+        );
+        $this->expectPmpRegistered();
+
+        (new FiftyoneService())->fiftyonedegrees_javascript();
+
+        $this->assertTrue(true);
+    }
+
+    public function testPmpEnqueuedWhenBothPmpOptionsEmpty() {
+        $this->stagePmpEnqueueEnv(
+            [Options::PMP_ALT_URL => '', Options::PMP_BRAND_TERMS_URL => ''],
+            '/subscribe'
+        );
+        $this->expectPmpRegistered();
+
+        (new FiftyoneService())->fiftyonedegrees_javascript();
+
+        $this->assertTrue(true);
+    }
+
+    public function testPmpEnqueuedWhenAltUrlIsRoot() {
+        // Foot-gun guard: PMP_ALT_URL='/' (or full home URL) would otherwise
+        // exempt every page on the site. Treat as misconfigured.
+        $this->stagePmpEnqueueEnv(
+            [Options::PMP_ALT_URL => '/', Options::PMP_BRAND_TERMS_URL => 'https://example.com/'],
+            '/about'
+        );
+        $this->expectPmpRegistered();
+
+        (new FiftyoneService())->fiftyonedegrees_javascript();
+
+        $this->assertTrue(true);
+    }
+
+    public function testPmpEnqueuedOnCategoryArchive() {
+        // Archive / category / search URLs return url_to_postid() = 0, so
+        // the exemption falls through to canonical-path match. The archive
+        // path doesn't collide with any configured page → PMP fires.
+        $this->stagePmpEnqueueEnv([], '/category/news');
+        $this->expectPmpRegistered();
+
+        (new FiftyoneService())->fiftyonedegrees_javascript();
+
+        $this->assertTrue(true);
+    }
+
+    public function testPmpSkippedByPostIdMatchEvenIfPathsDiffer() {
+        // Same post served under two URLs (e.g. permalink rewrite, /?p=N
+        // pretty-URL aliasing). url_to_postid() collapses both sides to
+        // the same ID — PMP must be exempted.
+        $this->stagePmpEnqueueEnv(
+            [Options::PMP_ALT_URL => '/new-slug', Options::PMP_BRAND_TERMS_URL => ''],
+            '/old-slug'
+        );
+        // Override stagePmpEnqueueEnv's default url_to_postid stub (0) so
+        // both the current URI and the target option resolve to the same
+        // post ID, exercising the post-ID branch of the matcher.
+        Functions\when('url_to_postid')->justReturn(42);
+        $this->expectPmpNotRegistered();
+
+        (new FiftyoneService())->fiftyonedegrees_javascript();
+
+        $this->assertTrue(true);
+    }
+
+    public function testFodJsStillEnqueuedOnPmpExemptPage() {
+        // Sanity: on a PMP-exempt page the PMP script is gated off, but
+        // fod.js + Pipeline::getJavaScript() must still be enqueued.
+        $this->stagePmpEnqueueEnv([], '/subscribe', false);
+        $this->expectPmpNotRegistered();
+
+        Functions\expect('wp_enqueue_script')
+            ->once()
+            ->with('fiftyonedegrees', 'root/includes/../assets/js/fod.js');
+        Functions\expect('wp_add_inline_script')
+            ->once()
+            ->with('fiftyonedegrees', Mockery::any(), 'before');
+
+        (new FiftyoneService())->fiftyonedegrees_javascript();
+
+        $this->assertTrue(true);
+    }
+
+    public function testPmpSkippedOnSubdirMultisiteWithPathOnlyOption() {
+        // Issue #61 + reviewer R-1: on subdir multisite REQUEST_URI starts
+        // with the site path prefix ('/blog/terms/') while a path-only
+        // option stays '/terms'. The matcher exposes a home-stripped
+        // current path so both shapes still match.
+        $this->stagePmpEnqueueEnv(
+            [Options::PMP_ALT_URL => '/terms', Options::PMP_BRAND_TERMS_URL => ''],
+            '/blog/terms'
+        );
+        // home_url('/') returns the subsite root including the path prefix.
+        Functions\when('home_url')->alias(function ($p = '/') {
+            return 'https://example.com/blog' . $p;
+        });
+        $this->expectPmpNotRegistered();
+
+        (new FiftyoneService())->fiftyonedegrees_javascript();
+
+        $this->assertTrue(true);
+    }
+
+    public function testExemptCheckSkippedWhenPmpDisabled() {
+        // Ordering guarantee: when PMP_ENABLE='off' the function must short-
+        // circuit BEFORE current_page_is_pmp_exempt() runs — otherwise we
+        // pay url_to_postid + option reads on every front-end request on
+        // sites that don't use PMP at all.
+        $this->stagePmpEnqueueEnv([Options::PMP_ENABLE => 'off'], '/about');
+        Functions\expect('url_to_postid')->never();
+        $this->expectPmpNotRegistered();
+
+        (new FiftyoneService())->fiftyonedegrees_javascript();
+
+        $this->assertTrue(true);
+    }
+
+    public function testPmpExemptFilterCanForceFalse() {
+        // The fiftyonedegrees_pmp_exempt filter lets sites with i18n
+        // plugins (or any custom logic) override the path/ID-match result.
+        // Forcing the filter to return false re-enables PMP on an
+        // otherwise-exempt page.
+        $this->stagePmpEnqueueEnv([], '/subscribe');
+        Functions\when('apply_filters')->alias(function ($tag, $value) {
+            if ($tag === 'fiftyonedegrees_pmp_exempt') {
+                return false;
+            }
+            return $value;
+        });
+        $this->expectPmpRegistered();
+
+        (new FiftyoneService())->fiftyonedegrees_javascript();
+
         $this->assertTrue(true);
     }
 
