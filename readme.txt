@@ -121,6 +121,7 @@ If you're experiencing any issues, use the WordPress.org [support forums](https:
 * The new OAuth flow is single-site only in this release. Multisite OAuth support is on the roadmap.
 * Hardened plugin uninstall: the OAuth state secret, migration version stamp, and the Google Analytics auth-date row are now removed on uninstall. Plugin deactivation is reversible and no longer wipes persistent OAuth data.
 * Added a daily cleanup of orphan OAuth pending transients to keep wp_options small on sites with abandoned authorization attempts.
+* FIX: /robots.txt is now always reachable to crawlers regardless of the configured robots-enforce policy. Previously, disallowed crawlers were 302-redirected when fetching /robots.txt itself, defeating the policy the file advertises (issue #60).
 
 = 1.0.0 =
 * Initial Release.

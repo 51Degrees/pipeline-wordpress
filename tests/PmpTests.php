@@ -216,7 +216,7 @@ class PmpTests extends TestCase
 
         $service = new FiftyoneService();
         $result = $service->pmp_add_data_attributes(
-            '<script src="x"></script>',
+            '<script id="fiftyonedegrees-pmp-js" src="x"></script>',
             'fiftyonedegrees-pmp',
             'x'
         );
@@ -245,7 +245,7 @@ class PmpTests extends TestCase
     {
         $service = new FiftyoneService();
         $result = $service->pmp_add_data_attributes(
-            '<script src="x"></script>',
+            '<script id="fiftyonedegrees-pmp-js" src="x"></script>',
             'fiftyonedegrees-pmp',
             'x'
         );
@@ -275,7 +275,7 @@ class PmpTests extends TestCase
         $this->options[Options::PMP_SHOW_STANDARD] = 'on';
         $service = new FiftyoneService();
         $result = $service->pmp_add_data_attributes(
-            '<script src="x"></script>',
+            '<script id="fiftyonedegrees-pmp-js" src="x"></script>',
             'fiftyonedegrees-pmp',
             'x'
         );
@@ -291,7 +291,7 @@ class PmpTests extends TestCase
     {
         $service = new FiftyoneService();
         $result = $service->pmp_add_data_attributes(
-            '<script src="x"></script>',
+            '<script id="fiftyonedegrees-pmp-js" src="x"></script>',
             'fiftyonedegrees-pmp',
             'x'
         );

@@ -762,6 +762,15 @@ class FiftyoneService {
             return;
         }
 
+        // Issue #61: skip enqueue on the configured alt-button destination and
+        // terms/privacy pages — those are special-case for TCF/PMP (the visitor
+        // either landed there AS an alternative to PMP, or clicked the popup's
+        // own terms link to read them; wrapping such pages with PMP again is a
+        // UX/legal contradiction).
+        if (self::current_page_is_pmp_exempt()) {
+            return;
+        }
+
         // Footer load: PMP attaches its popup container as a sibling of this
         // script tag (see view.ts getRoot()). In <head> that container would
         // be unrenderable (head has display:none).
@@ -809,6 +818,85 @@ class FiftyoneService {
             '%s/api/v4/pmp?resource=%s',
             FiftyOneDegreesCloudMetadata::get_cloud_host_url(),
             rawurlencode($key));
+    }
+
+    /**
+     * Returns true when the current request matches the page configured as
+     * PMP_ALT_URL (alternative-button destination) or PMP_BRAND_TERMS_URL
+     * (terms/privacy linked from the PMP popup). On those pages the PMP
+     * script must not be enqueued — see issue #61.
+     *
+     * Match strategy mirrors SuspiciousActivity::is_on_redirect_target():
+     * post-ID match first (handles internal pages with pretty permalinks),
+     * canonical path match as fallback (handles trailing slash, query string,
+     * full-URL option storage).
+     *
+     * Returns false when both options are empty or normalize to '/' — a
+     * root-path target would otherwise exempt every page on the site.
+     *
+     * The result is filterable via 'fiftyonedegrees_pmp_exempt' so sites
+     * with i18n plugins (WPML / TranslatePress) can broaden the match
+     * across translated slugs.
+     */
+    private static function current_page_is_pmp_exempt() {
+        $targets = array_filter([
+            get_option(Options::PMP_ALT_URL),
+            get_option(Options::PMP_BRAND_TERMS_URL),
+        ]);
+
+        // Drop targets that normalize to root '/' — treating those as
+        // configured would exempt every page on the site (foot-gun guard).
+        $targets = array_filter($targets, function ($t) {
+            $p = trailingslashit(wp_parse_url($t, PHP_URL_PATH) ?: '/');
+            return strtolower($p) !== '/';
+        });
+
+        if (empty($targets)) {
+            return false;
+        }
+
+        $current_uri = wp_unslash($_SERVER['REQUEST_URI'] ?? '/');
+        $current_path = strtolower(rawurldecode(trailingslashit(strtok($current_uri, '?'))));
+        $current_id = function_exists('url_to_postid') && function_exists('home_url')
+            ? (int) url_to_postid(home_url($current_uri))
+            : 0;
+
+        // Subdir multisite / WP-in-subdir: REQUEST_URI starts with the site's
+        // path prefix (e.g. '/blog/terms/'), while an option stored as a path-
+        // only value ('/terms') would not. Also expose a stripped variant so
+        // both shapes match. Single-site $home_path is '/' and stripping is
+        // a no-op.
+        $home_path = function_exists('home_url')
+            ? strtolower(trailingslashit(wp_parse_url(home_url('/'), PHP_URL_PATH) ?: '/'))
+            : '/';
+        $current_path_stripped = ($home_path !== '/' && str_starts_with($current_path, $home_path))
+            ? '/' . substr($current_path, strlen($home_path))
+            : $current_path;
+
+        $match = false;
+        foreach ($targets as $target) {
+            if ($current_id > 0) {
+                $target_id = (int) url_to_postid($target);
+                if ($target_id > 0 && $current_id === $target_id) {
+                    $match = true;
+                    break;
+                }
+            }
+            $target_path = strtolower(rawurldecode(trailingslashit(wp_parse_url($target, PHP_URL_PATH) ?: '/')));
+            if ($current_path === $target_path || $current_path_stripped === $target_path) {
+                $match = true;
+                break;
+            }
+        }
+
+        /**
+         * Filter the PMP-exempt decision.
+         *
+         * @param bool   $match        Whether the current request matches an exempt URL.
+         * @param string $current_path Canonical lowercased trailing-slashed path of the current request.
+         * @param array  $targets      Non-empty exempt URLs (after the foot-gun filter).
+         */
+        return (bool) apply_filters('fiftyonedegrees_pmp_exempt', $match, $current_path, $targets);
     }
 
     /**
@@ -908,7 +996,7 @@ class FiftyoneService {
             }
             $attr_html .= sprintf(' %s="%s"', esc_attr($k), esc_attr($v));
         }
-        return str_replace('<script src=', '<script' . $attr_html . ' src=', $tag);
+        return str_replace('<script', '<script' . $attr_html, $tag);
     }
 
     /**

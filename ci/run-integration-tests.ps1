@@ -86,10 +86,15 @@ try {
         $serverStdout = "$PWD/php-server.stdout.log"
         $serverStderr = "$PWD/php-server.stderr.log"
         Remove-Item $serverStdout, $serverStderr -ErrorAction SilentlyContinue
+        # wp-cli spawns `php -S` as a child process that does not inherit
+        # parent -d directives, so raise max_execution_time by appending to
+        # the loaded php.ini directly. Last directive wins on PHP ini parse.
+        $phpIni = (php -r "echo php_ini_loaded_file();").Trim()
+        Add-Content -Path $phpIni -Value "`nmax_execution_time=120"
         # Start-Process with -RedirectStandard* writes directly to disk —
         # unlike PowerShell jobs, which drop native-process stderr.
         $server = Start-Process -FilePath "php" `
-            -ArgumentList @("-d", "max_execution_time=120", "$wp", "server") `
+            -ArgumentList @("$wp", "server") `
             -RedirectStandardOutput $serverStdout `
             -RedirectStandardError $serverStderr `
             -PassThru -NoNewWindow

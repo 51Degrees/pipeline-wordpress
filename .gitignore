@@ -8,3 +8,7 @@ node_modules/
 
 # OS noise.
 .DS_Store
+
+node_modules
+.phpunit.result.cache
+
