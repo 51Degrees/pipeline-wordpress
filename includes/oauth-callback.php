@@ -20,7 +20,7 @@
 require_once __DIR__ . '/../options.php';
 require_once __DIR__ . '/oauth-state.php';
 require_once __DIR__ . '/oauth-notice.php';
-require_once __DIR__ . '/google-client-factory.php';
+require_once __DIR__ . '/oauth-relay-client.php';
 
 /**
  * OAuth callback handler: admin_init priority 5.
@@ -142,34 +142,31 @@ class FiftyOneDegreesOauthCallback
             return;
         }
 
-        $client = static::build_client();
-
-        // Rejection context for the exchange failure paths is deliberately
-        // a small scalar: hook subscribers (logging plugins, error monitors)
-        // serialize whatever we hand them, and the Google client's exception
-        // messages / error-array responses can echo request bodies or
+        // Exchange the authorization code through the relay, which holds the
+        // client secret. We present the authorization code, the resource key
+        // (the relay re-validates it) and the PKCE verifier; the relay adds the
+        // secret and returns the token set as snake_case JSON (the same shape
+        // the Google client produces), which we store verbatim.
+        //
+        // Rejection context for the exchange failure paths is deliberately a
+        // small scalar: hook subscribers (logging plugins, error monitors)
+        // serialize whatever we hand them, and a token response can echo
         // partial token material. The branch slug alone is enough for the
         // admin-facing notice; ops diagnostics go through error_log.
-        //
-        // fetchAccessTokenWithAuthCode (not the deprecated `authenticate`
-        // alias) accepts the PKCE verifier as a second argument and forwards
-        // it as code_verifier= in the token POST. The alias drops the
-        // verifier silently and would defeat the PKCE binding set in the
-        // start handler.
+        $resource = (string) get_option(Options::RESOURCE_KEY);
         try {
-            $token = $client->fetchAccessTokenWithAuthCode($code, $code_verifier);
+            $token = static::exchange_code($code, $resource, $code_verifier);
         } catch (\Throwable $e) {
-            // \Throwable (not \Exception): google/apiclient v2.x can raise
-            // \TypeError / \Error from inside Guzzle on certain transport
-            // failures; we want all of them to land in exchange_failed.
+            // Defensive: the relay client maps failures to ['error' => ...]
+            // rather than throwing, but a future change or a fatal in the
+            // HTTP stack should still land in exchange_failed.
             error_log('51Degrees OAuth exchange exception: ' . $e->getMessage());
             self::reject('exchange_failed', $user_id);
             return;
         }
 
-        // Google's PHP client can return an array with an 'error' key
-        // instead of throwing on protocol-level failures. Treat it as
-        // an exchange failure.
+        // The relay client returns ['error' => slug] on any transport / non-2xx
+        // / malformed-response failure. Treat it as an exchange failure.
         if (!is_array($token) || isset($token['error'])) {
             $error_code = is_array($token) && isset($token['error'])
                 ? (string) $token['error']
@@ -215,16 +212,19 @@ class FiftyOneDegreesOauthCallback
     }
 
     /**
-     * Test seam over the Google_Client construction. Production delegates
-     * to the shared factory so the credentials/scope/redirect config stays
-     * in lockstep across the three call sites (start, callback, ga-service).
-     * Tests override to inject a mock without touching the real apiclient.
+     * Test seam over the relay code-for-token exchange. Production delegates
+     * to the relay client (which holds no secret locally — the relay does).
+     * Tests override to return a canned token array or ['error' => ...]
+     * without performing real HTTP.
      *
-     * @return Google_Client
+     * @param string      $code          the authorization code
+     * @param string      $resource      the site's resource key
+     * @param null|string $code_verifier the PKCE verifier
+     * @return array
      */
-    protected static function build_client()
+    protected static function exchange_code($code, $resource, $code_verifier)
     {
-        return FiftyOneDegreesGoogleClientFactory::make();
+        return FiftyOneDegreesOauthRelayClient::exchange($code, $resource, $code_verifier);
     }
 
     /**

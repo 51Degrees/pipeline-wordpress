@@ -55,6 +55,11 @@
         to get a 51Degrees Resource Key for the device detection properties you
         want to get access to.
         </br>
+        If you plan to use the Google Analytics feature, make sure the resource
+        key is restricted to this site's domain in the Configurator — Google
+        Analytics access is only authorized for resource keys whose registered
+        domains include this site.
+        </br>
         For more information on how to use our Configurator, view our explainer
         video
         <a href="https://51degrees.com/documentation/_concepts__configurator.html" target="_blank">

@@ -17,9 +17,10 @@
 */
 
 require_once __DIR__ . '/../options.php';
+require_once __DIR__ . '/oauth-relay-client.php';
 
 /**
- * Google Analytics Service class 
+ * Google Analytics Service class
  *
  * @since       1.0.0
  * 
@@ -71,16 +72,53 @@ class Fiftyonedegrees_Google_Analytics {
             if (empty($refresh)) {
                 return false;
             }
-            $new_token = $client->fetchAccessTokenWithRefreshToken($refresh);
-            if (isset($new_token['error'])) {
-                error_log('51Degrees GA token refresh failed: ' . $new_token['error']);
+            // Refresh through the relay (it holds the client secret), not
+            // directly against Google. Google's refresh grant does not return a
+            // new refresh token, so we preserve the stored one and merge the
+            // fresh access token / expiry back in.
+            $resource  = (string) get_option(Options::RESOURCE_KEY);
+            $new_token = $this->refresh_via_relay($refresh, $resource);
+            if (!is_array($new_token)
+                || isset($new_token['error'])
+                || !isset($new_token['access_token'])
+            ) {
+                $reason = is_array($new_token) && isset($new_token['error'])
+                    ? $new_token['error']
+                    : 'unknown';
+                error_log('51Degrees GA token refresh failed: ' . $reason);
                 return false;
             }
-            update_option(Options::GA_TOKEN, $client->getAccessToken());
+
+            $merged = is_array($ga_google_authtoken) ? $ga_google_authtoken : [];
+            $merged['access_token'] = $new_token['access_token'];
+            foreach (['expires_in', 'scope', 'token_type'] as $field) {
+                if (isset($new_token[$field])) {
+                    $merged[$field] = $new_token[$field];
+                }
+            }
+            $merged['created'] = time();
+            $merged['refresh_token'] = $refresh; // relay does not echo it back
+
+            $client->setAccessToken($merged);
+            update_option(Options::GA_TOKEN, $merged);
             update_option(Options::GA_AUTH_DATE, time());
         }
 
         return $client;
+    }
+
+    /**
+     * Test seam over the relay refresh call. Production delegates to the
+     * relay client; tests override to return a canned token array or
+     * ['error' => ...] without performing real HTTP.
+     *
+     * @param string $refresh_token the stored refresh token
+     * @param string $resource      the site's resource key
+     * @return array
+     */
+    protected function refresh_via_relay($refresh_token, $resource)
+    {
+        return FiftyOneDegreesOauthRelayClient::refresh($refresh_token, $resource);
     }
 
     /**

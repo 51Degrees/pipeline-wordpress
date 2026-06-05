@@ -24,51 +24,25 @@ use Yoast\PHPUnitPolyfills\TestCases\TestCase;
 
 /**
  * Test seam over FiftyOneDegreesOauthStart. Replaces `exit` with a
- * tracked flag and lets tests inject a fake Google_Client.
+ * tracked flag so handle() can run under PHPUnit without terminating
+ * the process.
+ *
+ * The handler no longer builds a Google client; it composes the relay
+ * /start URL and wp_redirect()s there. There is no client to inject —
+ * tests capture the redirect URL instead.
  */
 class TestableOauthStart extends FiftyOneDegreesOauthStart
 {
     public static $halt_called = false;
-    public static $mock_client = null;
 
     public static function reset_state()
     {
         self::$halt_called = false;
-        self::$mock_client = null;
     }
 
     protected static function halt()
     {
         self::$halt_called = true;
-    }
-
-    protected static function build_client()
-    {
-        return self::$mock_client;
-    }
-}
-
-/**
- * Minimal Google_Client stand-in for the start side. Records setter
- * calls so tests can assert the auth URL was built with the right
- * inputs without depending on the real Google library.
- */
-class FakeStartGoogleClient
-{
-    public $redirect_uri = null;
-    public $state = null;
-    public $auth_url_scope = null;
-    public $auth_url_query = null;
-    public $auth_url_return = 'https://accounts.google.com/o/oauth2/auth?CRAFTED_BY_FAKE';
-
-    public function setRedirectUri($uri) { $this->redirect_uri = $uri; }
-    public function setState($state) { $this->state = $state; }
-
-    public function createAuthUrl($scope = null, array $queryParams = [])
-    {
-        $this->auth_url_scope = $scope;
-        $this->auth_url_query = $queryParams;
-        return $this->auth_url_return;
     }
 }
 
@@ -76,6 +50,7 @@ class OAuthStartHandlerTests extends TestCase
 {
     private const FAKE_SECRET = 'a-test-secret-value-of-sufficient-length-for-hmac-1234';
     private const FAKE_USER = 42;
+    private const FAKE_RESOURCE = 'AQS-test-resource-key';
     private const HTTPS_HOME = 'https://example.test';
     private const HTTP_HOME = 'http://example.test';
 
@@ -89,13 +64,14 @@ class OAuthStartHandlerTests extends TestCase
         TestableOauthStart::reset_state();
         $this->call_log = [];
 
-        if (!defined('FIFTYONEDEGREES_REDIRECT')) {
-            define('FIFTYONEDEGREES_REDIRECT', 'https://relay.51degrees.example/oauth');
-        }
+        // The relay base is derived from the cloud API host (FOD_CLOUD_API_URL),
+        // so point it at a test host the URL assertions can match.
+        putenv('FOD_CLOUD_API_URL=https://relay.51degrees.example/api/v4/');
     }
 
     public function tear_down()
     {
+        putenv('FOD_CLOUD_API_URL');
         TestableOauthStart::reset_state();
         Brain\Monkey\tearDown();
         parent::tear_down();
@@ -103,15 +79,19 @@ class OAuthStartHandlerTests extends TestCase
 
     /**
      * Stubs the WP function surface. By default: logged-in admin,
-     * single site, HTTPS home_url, nonce verifies, secret + empty
-     * transient store. Returns the stores so tests can assert.
+     * single site, HTTPS home_url, nonce verifies, secret + resource
+     * key present + empty transient store. Returns the stores so tests
+     * can assert.
      */
     private function stub_wp(array $overrides = [])
     {
         $opts = new \stdClass();
         $opts->data = isset($overrides['options'])
             ? $overrides['options']
-            : [Options::OAUTH_STATE_SECRET => self::FAKE_SECRET];
+            : [
+                Options::OAUTH_STATE_SECRET => self::FAKE_SECRET,
+                Options::RESOURCE_KEY       => self::FAKE_RESOURCE,
+            ];
         $tr = new \stdClass();
         $tr->data = isset($overrides['transients']) ? $overrides['transients'] : [];
         $log = &$this->call_log;
@@ -137,9 +117,10 @@ class OAuthStartHandlerTests extends TestCase
             $log[] = ['wp_safe_redirect', $url];
             return true;
         });
-        // wp_redirect is used ONLY for the leg to accounts.google.com,
-        // because wp_safe_redirect would fall back to admin_url. Tracking
-        // these separately lets tests assert the right call on each path.
+        // wp_redirect is used ONLY for the leg to the relay /start URL,
+        // because wp_safe_redirect would fall back to admin_url (the relay
+        // is an external host). Tracking these separately lets tests assert
+        // the right call on each path.
         Functions\when('wp_redirect')->alias(function ($url) use (&$log) {
             $log[] = ['wp_redirect', $url];
             return true;
@@ -238,12 +219,33 @@ class OAuthStartHandlerTests extends TestCase
         return null;
     }
 
+    /**
+     * Returns the single relay /start URL captured from wp_redirect, or
+     * null if none fired. The handler hands off to the relay via
+     * wp_redirect (not wp_safe_redirect — the relay is an external host).
+     */
+    private function captured_relay_url()
+    {
+        $redirects = $this->log_keys_of('wp_redirect');
+        return isset($redirects[0]) ? $redirects[0] : null;
+    }
+
+    /**
+     * Parses the query string of a captured relay URL into an assoc array.
+     */
+    private function relay_query($url)
+    {
+        $query = parse_url($url, PHP_URL_QUERY);
+        $out = [];
+        parse_str((string) $query, $out);
+        return $out;
+    }
+
     // ─── 1. Login gate ──────────────────────────────────────────────────
 
     public function testRedirectsToLoginWhenNotLoggedIn()
     {
         $this->stub_wp(['logged_in' => false]);
-        TestableOauthStart::$mock_client = new FakeStartGoogleClient();
 
         TestableOauthStart::handle();
 
@@ -253,8 +255,8 @@ class OAuthStartHandlerTests extends TestCase
         $this->assertSame([], $this->log_keys_of('check_admin_referer'),
             'nonce check must not run before login check'
         );
-        $this->assertNull(TestableOauthStart::$mock_client->state,
-            'no state must be created when not logged in'
+        $this->assertNull($this->captured_relay_url(),
+            'no relay redirect must happen when not logged in'
         );
     }
 
@@ -263,7 +265,6 @@ class OAuthStartHandlerTests extends TestCase
     public function testRedirectsToLoginWhenNoManageCapability()
     {
         $this->stub_wp(['can_manage' => false]);
-        TestableOauthStart::$mock_client = new FakeStartGoogleClient();
 
         TestableOauthStart::handle();
 
@@ -276,7 +277,6 @@ class OAuthStartHandlerTests extends TestCase
     public function testBadNonceTerminatesViaWpDie()
     {
         $this->stub_wp(['nonce_fails' => true]);
-        TestableOauthStart::$mock_client = new FakeStartGoogleClient();
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('wp_die: invalid nonce');
@@ -284,8 +284,8 @@ class OAuthStartHandlerTests extends TestCase
         try {
             TestableOauthStart::handle();
         } finally {
-            $this->assertNull(TestableOauthStart::$mock_client->state,
-                'no state must be created when nonce fails'
+            $this->assertNull($this->captured_relay_url(),
+                'no relay redirect must happen when nonce fails'
             );
         }
     }
@@ -295,7 +295,6 @@ class OAuthStartHandlerTests extends TestCase
     public function testMultisiteRejection()
     {
         $this->stub_wp(['multisite' => true]);
-        TestableOauthStart::$mock_client = new FakeStartGoogleClient();
 
         TestableOauthStart::handle();
 
@@ -303,8 +302,8 @@ class OAuthStartHandlerTests extends TestCase
         $redirects = $this->log_keys_of('wp_safe_redirect');
         $this->assertStringContainsString('page=51Degrees', $redirects[0]);
         $this->assertStringContainsString('tab=google-analytics', $redirects[0]);
-        $this->assertNull(TestableOauthStart::$mock_client->state,
-            'multisite must reject before any state creation'
+        $this->assertNull($this->captured_relay_url(),
+            'multisite must reject before any relay redirect'
         );
 
         // Observability parity with callback: rejection action must fire.
@@ -319,13 +318,12 @@ class OAuthStartHandlerTests extends TestCase
     public function testHttpHomeUrlRejection()
     {
         $this->stub_wp(['home_url' => self::HTTP_HOME]);
-        TestableOauthStart::$mock_client = new FakeStartGoogleClient();
 
         TestableOauthStart::handle();
 
         $this->assertSame('https_required', $this->find_notice());
-        $this->assertNull(TestableOauthStart::$mock_client->state,
-            'plain-HTTP site must reject before any state creation'
+        $this->assertNull($this->captured_relay_url(),
+            'plain-HTTP site must reject before any relay redirect'
         );
     }
 
@@ -335,36 +333,88 @@ class OAuthStartHandlerTests extends TestCase
     {
         // OAUTH_STATE_SECRET is present but too short — get_or_create_secret
         // throws 'secret_corrupt'. The handler must catch and surface.
-        $this->stub_wp(['options' => [Options::OAUTH_STATE_SECRET => 'short']]);
-        TestableOauthStart::$mock_client = new FakeStartGoogleClient();
+        $this->stub_wp(['options' => [
+            Options::OAUTH_STATE_SECRET => 'short',
+            Options::RESOURCE_KEY       => self::FAKE_RESOURCE,
+        ]]);
 
         TestableOauthStart::handle();
 
         $this->assertSame('secret_corrupt', $this->find_notice());
-        $this->assertNull(TestableOauthStart::$mock_client->state);
+        $this->assertNull($this->captured_relay_url());
     }
 
-    // ─── 7. Happy path: state created, PKCE in URL, redirect to Google ──
+    // ─── 6b. Missing resource key surfaces as start_failed ──────────────
 
-    public function testHappyPathCreatesStateAndRedirectsToGoogle()
+    public function testMissingResourceKeyRejection()
     {
-        [$opts, $tr] = $this->stub_wp();
-        $client = new FakeStartGoogleClient();
-        TestableOauthStart::$mock_client = $client;
+        // With no resource key the relay would reject /start, so the handler
+        // short-circuits to the generic start branch instead of redirecting
+        // the admin into a relay 400.
+        $this->stub_wp(['options' => [
+            Options::OAUTH_STATE_SECRET => self::FAKE_SECRET,
+            // RESOURCE_KEY deliberately absent => get_option returns ''
+            Options::RESOURCE_KEY       => '',
+        ]]);
 
         TestableOauthStart::handle();
 
-        // State engine output: setState called with a b64.b64 string.
-        $this->assertNotNull($client->state, 'state must be set on the client');
-        $this->assertStringContainsString('.', $client->state,
+        $this->assertSame('start_failed', $this->find_notice());
+        $this->assertNull($this->captured_relay_url(),
+            'no relay redirect without a resource key'
+        );
+        $action = $this->find_rejection_action();
+        $this->assertNotNull($action);
+        $this->assertSame('start_failed', $action[1]);
+    }
+
+    // ─── 7. Happy path: state created, PKCE in URL, redirect to relay ───
+
+    public function testHappyPathCreatesStateAndRedirectsToRelay()
+    {
+        [$opts, $tr] = $this->stub_wp();
+
+        TestableOauthStart::handle();
+
+        // Final redirect goes to the relay /start URL via wp_redirect (NOT
+        // wp_safe_redirect). The latter would silently fall back to admin_url
+        // because the relay host is not in wp_allowed_redirect_hosts.
+        $url = $this->captured_relay_url();
+        $this->assertNotNull($url,
+            'happy path must use wp_redirect (not wp_safe_redirect) for the relay leg'
+        );
+        $this->assertSame([], $this->log_keys_of('wp_safe_redirect'),
+            'wp_safe_redirect must not be used for the relay leg — it would clamp to same-host'
+        );
+        $this->assertStringStartsWith(
+            'https://relay.51degrees.example/api/v4/oauth/start?',
+            $url,
+            'redirect must target the relay /start endpoint'
+        );
+
+        $q = $this->relay_query($url);
+
+        // Resource key + scope are carried for the relay.
+        $this->assertSame(self::FAKE_RESOURCE, $q['resource']);
+        $this->assertSame(
+            Google_Service_GoogleAnalyticsAdmin::ANALYTICS_EDIT,
+            $q['scope']
+        );
+
+        // The signed state travels in `nonce` and follows the b64.b64 format.
+        $this->assertArrayHasKey('nonce', $q);
+        $this->assertStringContainsString('.', $q['nonce'],
             'state must follow the b64payload.b64hmac wire format'
         );
 
-        // PKCE: code_challenge in createAuthUrl second arg, S256 method.
-        $this->assertArrayHasKey('code_challenge', $client->auth_url_query);
-        $this->assertArrayHasKey('code_challenge_method', $client->auth_url_query);
-        $this->assertSame('S256', $client->auth_url_query['code_challenge_method']);
-        $this->assertNotEmpty($client->auth_url_query['code_challenge']);
+        // The site callback URL the relay forwards the code to.
+        $this->assertArrayHasKey('redirect_uri', $q);
+        $this->assertStringContainsString('oauth=callback', $q['redirect_uri']);
+
+        // PKCE: code_challenge present, S256 method.
+        $this->assertArrayHasKey('code_challenge', $q);
+        $this->assertNotEmpty($q['code_challenge']);
+        $this->assertSame('S256', $q['code_challenge_method']);
 
         // Per-nonce transient was stashed with the verifier (paired with
         // the state's nonce, ready for the callback to read back).
@@ -380,24 +430,6 @@ class OAuthStartHandlerTests extends TestCase
             'PKCE verifier must be stashed alongside the user_id'
         );
 
-        // Redirect URI is set inside the factory rather than in the
-        // handler. Filter coverage lives in GoogleClientFactoryTests; tests
-        // here only assert that the handler does not also re-set it.
-        $this->assertNull($client->redirect_uri,
-            'handler must no longer call setRedirectUri directly — factory owns it'
-        );
-
-        // Final redirect goes to Google via wp_redirect (NOT wp_safe_redirect).
-        // The latter would silently fall back to admin_url because
-        // accounts.google.com is not in wp_allowed_redirect_hosts by default.
-        $google_redirects = $this->log_keys_of('wp_redirect');
-        $this->assertCount(1, $google_redirects,
-            'happy path must use wp_redirect (not wp_safe_redirect) for the Google leg'
-        );
-        $this->assertSame($client->auth_url_return, $google_redirects[0]);
-        $this->assertSame([], $this->log_keys_of('wp_safe_redirect'),
-            'wp_safe_redirect must not be used for the Google leg — it would clamp to same-host'
-        );
         $this->assertTrue(TestableOauthStart::$halt_called);
     }
 
@@ -406,18 +438,17 @@ class OAuthStartHandlerTests extends TestCase
     public function testRepeatedClicksProduceIndependentStates()
     {
         [, $tr] = $this->stub_wp();
-        $first = new FakeStartGoogleClient();
-        TestableOauthStart::$mock_client = $first;
         TestableOauthStart::handle();
-        $state_one = $first->state;
-        $challenge_one = $first->auth_url_query['code_challenge'];
+        $first = $this->relay_query($this->captured_relay_url());
+        $state_one = $first['nonce'];
+        $challenge_one = $first['code_challenge'];
 
-        $second = new FakeStartGoogleClient();
-        TestableOauthStart::$mock_client = $second;
+        $this->call_log = [];
         TestableOauthStart::$halt_called = false;
         TestableOauthStart::handle();
-        $state_two = $second->state;
-        $challenge_two = $second->auth_url_query['code_challenge'];
+        $second = $this->relay_query($this->captured_relay_url());
+        $state_two = $second['nonce'];
+        $challenge_two = $second['code_challenge'];
 
         $this->assertNotSame($state_one, $state_two,
             'each click must produce a fresh state (nonce + verifier are random per call)'
@@ -438,35 +469,22 @@ class OAuthStartHandlerTests extends TestCase
         );
     }
 
-    // ─── 9. (filter override coverage moved to GoogleClientFactoryTests) ─
+    // ─── 9. URL length sanity check ─────────────────────────────────────
 
-    // ─── 10. URL length sanity check ────────────────────────────────────
-
-    public function testGeneratedAuthUrlStaysUnderBrowserLimit()
+    public function testGeneratedRelayUrlStaysUnderBrowserLimit()
     {
         $this->stub_wp();
-        $client = new FakeStartGoogleClient();
-        // Force a realistic-ish URL: include everything that would land
-        // in production. The fake returns a fixed URL, so test the
-        // SUM of fields that would compose a real URL.
-        TestableOauthStart::$mock_client = $client;
 
         TestableOauthStart::handle();
 
-        // Synthesize the length the real client would produce: base URL
-        // plus the state and code_challenge sizes the engine generates.
-        $synthesized_len = strlen('https://accounts.google.com/o/oauth2/auth')
-            + strlen('?state=' . $client->state)
-            + strlen('&code_challenge=' . $client->auth_url_query['code_challenge'])
-            + strlen('&code_challenge_method=S256')
-            + 256; // padding for client_id/scope/redirect_uri/access_type
-
-        $this->assertLessThan(2000, $synthesized_len,
-            'synthesized auth URL must remain well under the 2KB browser limit'
+        $url = $this->captured_relay_url();
+        $this->assertNotNull($url);
+        $this->assertLessThan(2000, strlen($url),
+            'relay /start URL must remain well under the 2KB browser limit'
         );
     }
 
-    // ─── 11. encode_failure exception path surfaces as notice ───────────
+    // ─── 10. encode_failure exception path surfaces as notice ───────────
 
     public function testEncodeFailureSurfacesAsNotice()
     {
@@ -476,7 +494,6 @@ class OAuthStartHandlerTests extends TestCase
         // the right diagnostic; the oauth-strings.yaml key must exist.
         $this->stub_wp();
         Functions\when('wp_json_encode')->justReturn(false);
-        TestableOauthStart::$mock_client = new FakeStartGoogleClient();
 
         TestableOauthStart::handle();
 
@@ -484,9 +501,10 @@ class OAuthStartHandlerTests extends TestCase
         $action = $this->find_rejection_action();
         $this->assertNotNull($action);
         $this->assertSame('encode_failure', $action[1]);
+        $this->assertNull($this->captured_relay_url());
     }
 
-    // ─── 12. Throwable from CSPRNG surfaces as start_failed ─────────────
+    // ─── 11. Throwable from CSPRNG surfaces as start_failed ─────────────
 
     public function testThrowableInStateEngineSurfacesAsStartFailed()
     {
@@ -496,20 +514,15 @@ class OAuthStartHandlerTests extends TestCase
         // and the request must NOT propagate the exception up.
         //
         // We can't easily make random_bytes throw, so we instead drive
-        // the engine through a class that overrides generate_code_verifier
-        // to throw. This still exercises the catch.
+        // the engine through a class that overrides handle() to throw at
+        // the state-engine step. This still exercises the catch.
         $this->stub_wp();
-        TestableOauthStart::$mock_client = new FakeStartGoogleClient();
 
         // Pre-load the class that re-routes generate_code_verifier.
         if (!class_exists('ThrowingTestableOauthStart')) {
             eval(<<<'PHP'
 class ThrowingTestableOauthStart extends TestableOauthStart {
     public static function handle() {
-        // Borrow parent's body but swap state engine call paths via
-        // a wrapper closure isn't trivial in PHP; instead, simulate
-        // the same code path by re-stating the gauntlet up to the
-        // generate_code_verifier call and throwing there.
         if (!is_user_logged_in() || !current_user_can('manage_options')) {
             wp_safe_redirect(wp_login_url());
             static::halt();
@@ -525,7 +538,6 @@ class ThrowingTestableOauthStart extends TestableOauthStart {
             // unreachable
         } catch (\Throwable $e) {
             error_log('51Degrees OAuth start exception: ' . $e->getMessage());
-            // mirror parent reject() via the public Notice surface
             do_action('fiftyonedegrees_oauth_rejection', 'start_failed', $user_id, []);
             FiftyOneDegreesOauthNotice::set('start_failed');
             wp_safe_redirect(admin_url('options-general.php?page=51Degrees&tab=google-analytics'));
@@ -545,6 +557,4 @@ PHP
         $this->assertNotNull($action);
         $this->assertSame('start_failed', $action[1]);
     }
-
-    // ─── 13. (invalid-filter fallback coverage moved to GoogleClientFactoryTests) ─
 }

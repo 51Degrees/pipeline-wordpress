@@ -25,18 +25,38 @@ use Yoast\PHPUnitPolyfills\TestCases\TestCase;
 /**
  * Test seam over FiftyOneDegreesOauthCallback. Replaces `exit` with a
  * tracked flag so handle() can be invoked safely from PHPUnit, and
- * lets tests inject a mock Google_Client without touching the real
- * Google API library.
+ * overrides the relay exchange seam so tests can return a canned token
+ * array (or ['error' => ...], or throw) without performing real HTTP.
+ *
+ * The callback exchanges the code through the relay via
+ * exchange_code($code, $resource, $code_verifier) — there is no local
+ * Google client to mock. We record the args so the PKCE / code tests can
+ * assert what was forwarded to the relay.
  */
 class TestableOauthCallback extends FiftyOneDegreesOauthCallback
 {
     public static $halt_called = false;
-    public static $mock_client = null;
+
+    /** @var array canned return value from exchange_code */
+    public static $exchange_return = ['access_token' => 'fake-access'];
+    /** @var \Throwable|null thrown from exchange_code when set */
+    public static $exchange_throw = null;
+
+    /** @var string|null code seen by exchange_code */
+    public static $code_seen = null;
+    /** @var string|null resource seen by exchange_code */
+    public static $resource_seen = null;
+    /** @var string|null verifier seen by exchange_code */
+    public static $verifier_seen = null;
 
     public static function reset_state()
     {
         self::$halt_called = false;
-        self::$mock_client = null;
+        self::$exchange_return = ['access_token' => 'fake-access'];
+        self::$exchange_throw = null;
+        self::$code_seen = null;
+        self::$resource_seen = null;
+        self::$verifier_seen = null;
     }
 
     protected static function halt()
@@ -44,42 +64,15 @@ class TestableOauthCallback extends FiftyOneDegreesOauthCallback
         self::$halt_called = true;
     }
 
-    protected static function build_client()
+    protected static function exchange_code($code, $resource, $code_verifier)
     {
-        return self::$mock_client;
-    }
-}
-
-/**
- * Minimal Google_Client stand-in. Records the code passed to
- * fetchAccessTokenWithAuthCode() and the verifier passed as its second
- * argument so tests can assert the exchange contract without dragging
- * in the real Google_Client.
- *
- * fetchAccessTokenWithAuthCode is the non-deprecated form; the older
- * authenticate($code) alias drops the verifier silently. The callback
- * uses the non-deprecated method so PKCE actually works.
- */
-class FakeGoogleClient
-{
-    public $verifier = null;
-    public $code_seen = null;
-    public $return_value;
-    public $throw = null;
-
-    public function __construct($return_value = ['access_token' => 'fake-access'])
-    {
-        $this->return_value = $return_value;
-    }
-
-    public function fetchAccessTokenWithAuthCode($code, $codeVerifier = null)
-    {
-        $this->code_seen = $code;
-        $this->verifier = $codeVerifier;
-        if ($this->throw !== null) {
-            throw $this->throw;
+        self::$code_seen = $code;
+        self::$resource_seen = $resource;
+        self::$verifier_seen = $code_verifier;
+        if (self::$exchange_throw !== null) {
+            throw self::$exchange_throw;
         }
-        return $this->return_value;
+        return self::$exchange_return;
     }
 }
 
@@ -88,6 +81,7 @@ class OAuthCallbackTests extends TestCase
     private const FAKE_SECRET = 'a-test-secret-value-of-sufficient-length-for-hmac-1234';
     private const FAKE_HOST = 'example.test';
     private const FAKE_USER = 42;
+    private const FAKE_RESOURCE = 'AQS-test-resource-key';
     private const NONCE = '0123456789abcdef0123456789abcdef';
 
     /** @var array<int,array{string,mixed}> ordered call log shared across stubs */
@@ -234,7 +228,10 @@ class OAuthCallbackTests extends TestCase
         ];
 
         return $this->stub_wp([
-            'options' => [Options::OAUTH_STATE_SECRET => self::FAKE_SECRET],
+            'options' => [
+                Options::OAUTH_STATE_SECRET => self::FAKE_SECRET,
+                Options::RESOURCE_KEY       => self::FAKE_RESOURCE,
+            ],
             'transients' => [
                 $this->transient_key() => [
                     'user_id' => self::FAKE_USER,
@@ -478,12 +475,10 @@ class OAuthCallbackTests extends TestCase
 
     // ─── Branch: exchange_failed (authenticate throws) ──────────────────
 
-    public function testExchangeFailureWhenAuthenticateThrows()
+    public function testExchangeFailureWhenExchangeThrows()
     {
         $this->prime_happy_path();
-        $client = new FakeGoogleClient();
-        $client->throw = new \Exception('invalid_grant');
-        TestableOauthCallback::$mock_client = $client;
+        TestableOauthCallback::$exchange_throw = new \Exception('invalid_grant');
 
         TestableOauthCallback::handle();
 
@@ -501,14 +496,14 @@ class OAuthCallbackTests extends TestCase
 
     // ─── Branch: exchange_failed (Google returns error array) ───────────
 
-    public function testExchangeFailureWhenAuthenticateReturnsErrorArray()
+    public function testExchangeFailureWhenRelayReturnsErrorArray()
     {
         $this->prime_happy_path();
-        TestableOauthCallback::$mock_client = new FakeGoogleClient([
+        TestableOauthCallback::$exchange_return = [
             'error' => 'invalid_grant',
             'access_token' => 'leaked-partial-token',
             'error_description' => 'malformed auth response with PII',
-        ]);
+        ];
 
         TestableOauthCallback::handle();
 
@@ -555,7 +550,7 @@ class OAuthCallbackTests extends TestCase
     {
         [$opts, $tr] = $this->prime_happy_path();
         $token = ['access_token' => 'real-token', 'scope' => 'analytics'];
-        TestableOauthCallback::$mock_client = new FakeGoogleClient($token);
+        TestableOauthCallback::$exchange_return = $token;
 
         TestableOauthCallback::handle();
 
@@ -576,11 +571,10 @@ class OAuthCallbackTests extends TestCase
         $this->assertTrue(TestableOauthCallback::$halt_called);
     }
 
-    public function testHappyPathDeletesTransientBeforeAuthenticate()
+    public function testHappyPathDeletesTransientBeforeExchange()
     {
         $this->prime_happy_path();
-        $client = new FakeGoogleClient(['access_token' => 'ok']);
-        TestableOauthCallback::$mock_client = $client;
+        TestableOauthCallback::$exchange_return = ['access_token' => 'ok'];
 
         TestableOauthCallback::handle();
 
@@ -595,21 +589,22 @@ class OAuthCallbackTests extends TestCase
         }
         $this->assertSame(['delete_transient', 'update_token'], $seen,
             'transient consumed BEFORE the exchange + token save');
-        // authenticate was called between the two log points — assert via the
-        // recorded code value, which only the FakeGoogleClient could set.
-        $this->assertSame('auth-code-xyz', $client->code_seen);
+        // The exchange ran between the two log points — assert via the
+        // recorded code value, which only the exchange seam could set.
+        $this->assertSame('auth-code-xyz', TestableOauthCallback::$code_seen);
     }
 
     public function testHappyPathAppliesPkceCodeVerifier()
     {
         $this->prime_happy_path();
-        $client = new FakeGoogleClient();
-        TestableOauthCallback::$mock_client = $client;
 
         TestableOauthCallback::handle();
 
-        $this->assertSame('pkce-verifier-abc', $client->verifier,
-            'PKCE verifier from the transient must be passed to the client');
+        $this->assertSame('pkce-verifier-abc', TestableOauthCallback::$verifier_seen,
+            'PKCE verifier from the transient must be passed into the relay exchange');
+        // The resource key from the option store must also reach the relay.
+        $this->assertSame(self::FAKE_RESOURCE, TestableOauthCallback::$resource_seen,
+            'resource key must be forwarded to the relay exchange');
     }
 
     public function testHappyPathWithoutPkceVerifier()
@@ -620,7 +615,10 @@ class OAuthCallbackTests extends TestCase
             'code' => 'auth-code', 'state' => $state,
         ];
         $this->stub_wp([
-            'options' => [Options::OAUTH_STATE_SECRET => self::FAKE_SECRET],
+            'options' => [
+                Options::OAUTH_STATE_SECRET => self::FAKE_SECRET,
+                Options::RESOURCE_KEY       => self::FAKE_RESOURCE,
+            ],
             'transients' => [
                 $this->transient_key() => [
                     'user_id' => self::FAKE_USER,
@@ -628,13 +626,12 @@ class OAuthCallbackTests extends TestCase
                 ],
             ],
         ]);
-        $client = new FakeGoogleClient(['access_token' => 'ok']);
-        TestableOauthCallback::$mock_client = $client;
+        TestableOauthCallback::$exchange_return = ['access_token' => 'ok'];
 
         TestableOauthCallback::handle();
 
-        $this->assertNull($client->verifier,
-            'setCodeVerifier must not be called when the transient stored null verifier');
+        $this->assertNull(TestableOauthCallback::$verifier_seen,
+            'a null verifier must be forwarded as-is when the transient stored null');
     }
 
     // ─── Rejection action shape ─────────────────────────────────────────

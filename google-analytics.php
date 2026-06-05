@@ -113,6 +113,16 @@ if (!get_option(Options::GA_TOKEN) ||
         Google Analytics account.
     </p>
 
+    <div class="notice notice-warning inline">
+        <p>
+            <strong>Before connecting:</strong> access is only authorized for a
+            resource key whose registered domains include this site. In the
+            <a href="https://configure.51degrees.com/" target="_blank">Configurator</a>,
+            create the resource key with this site's domain added to it —
+            otherwise the Google Analytics connection will be refused.
+        </p>
+    </div>
+
     <?php
     // Connect button is hard-gated on !is_multisite() so a future refactor
     // that touches the Strings class loading order cannot accidentally

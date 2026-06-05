@@ -98,29 +98,6 @@ class Fiftyonedegrees {
         define('FIFTYONEDEGREES_PLUGIN_URL', plugin_dir_url(__FILE__));
         define('FIFTYONEDEGREES_PROMPT', 'consent');
         define('FIFTYONEDEGREES_ACCESS_TYPE', 'offline');
-        // Production credentials. Local dev can override these by defining
-        // FIFTYONEDEGREES_DEV_CLIENT_ID / _SECRET / _REDIRECT earlier in
-        // the request (e.g. via wp-config.php inside wp-env). The DEV
-        // constants are never committed to source control — see the
-        // dev-oauth-setup note in the project vault for setup.
-        define('FIFTYONEDEGREES_CLIENT_ID',
-            defined('FIFTYONEDEGREES_DEV_CLIENT_ID')
-                ? FIFTYONEDEGREES_DEV_CLIENT_ID
-                : '296335631462-e36u9us90puu4de17ct7rnklu3j8q63n.apps.googleusercontent.com');
-        define('FIFTYONEDEGREES_CLIENT_SECRET',
-            defined('FIFTYONEDEGREES_DEV_CLIENT_SECRET')
-                ? FIFTYONEDEGREES_DEV_CLIENT_SECRET
-                : 'V9lcL-V3SxtGSWWcGsFW9QeI');
-        // Production redirect URI is a TODO placeholder until 51Degrees
-        // provisions the real relay URL (release ship-gate). Until then
-        // the runtime guard in setup_oauth_actions() refuses to wire the
-        // OAuth handlers and surfaces an admin notice — accidental
-        // release with the placeholder produces a loud failure instead
-        // of a silent redirect to a non-existent host.
-        define('FIFTYONEDEGREES_REDIRECT',
-            defined('FIFTYONEDEGREES_DEV_REDIRECT')
-                ? FIFTYONEDEGREES_DEV_REDIRECT
-                : 'https://TODO-relay-url');
         define('FIFTYONEDEGREES_CUSTOM_DIMENSION_SCOPE', "HIT");
     }
 
@@ -143,6 +120,7 @@ class Fiftyonedegrees {
         require_once __DIR__ . '/includes/suspicious-activity.php';
         require_once __DIR__ . '/includes/oauth-state.php';
         require_once __DIR__ . '/includes/oauth-notice.php';
+        require_once __DIR__ . '/includes/oauth-relay-client.php';
         require_once __DIR__ . '/includes/google-client-factory.php';
         require_once __DIR__ . '/includes/ga4-auth-error.php';
         require_once __DIR__ . '/includes/ga4-property-service.php';
@@ -195,17 +173,8 @@ class Fiftyonedegrees {
      * Wires up the OAuth flow on admin_init / admin_post.
      *
      * Migration runs unconditionally and idempotently — it cleans up
-     * OOB-era state regardless of whether the new OAuth flow has a
-     * working redirect URL yet.
-     *
-     * The callback and start handlers are gated on FIFTYONEDEGREES_REDIRECT
-     * not being a placeholder. If the build shipped with the TODO URL
-     * (no real relay configured), we refuse to wire the handlers and
-     * surface a sticky admin notice instead — accidental release should
-     * fail loudly rather than redirect users to a non-existent host.
-     *
-     * Once the handler classes land in later commits, the class_exists
-     * checks pick them up without further changes to this file.
+     * legacy state regardless of the OAuth flow. The callback and start
+     * handlers are registered when their classes are available.
      */
     private function setup_oauth_actions() {
         // Migration runs on plugins_loaded (earlier than admin_init)
@@ -221,11 +190,6 @@ class Fiftyonedegrees {
             ['FiftyOneDegreesOauthState', 'cron_cleanup']
         );
 
-        if (strpos(FIFTYONEDEGREES_REDIRECT, 'TODO') !== false) {
-            add_action('admin_notices', [$this, 'render_placeholder_url_notice']);
-            return;
-        }
-
         if (class_exists('FiftyOneDegreesOauthCallback')) {
             add_action('admin_init', ['FiftyOneDegreesOauthCallback', 'handle'], 5);
         }
@@ -235,22 +199,6 @@ class Fiftyonedegrees {
                 ['FiftyOneDegreesOauthStart', 'handle']
             );
         }
-    }
-
-    /**
-     * Sticky admin notice shown when the plugin shipped with a
-     * placeholder OAuth redirect URL. Visible to all admins on every
-     * wp-admin page until the build is replaced.
-     */
-    public function render_placeholder_url_notice() {
-        echo '<div class="notice notice-error"><p><strong>'
-            . esc_html__('51Degrees:', 'fiftyonedegrees')
-            . '</strong> '
-            . esc_html__(
-                'OAuth is disabled — this build of the plugin shipped with a placeholder redirect URL. Google Analytics cannot be connected until a real relay URL is configured. Please contact 51Degrees support.',
-                'fiftyonedegrees'
-            )
-            . '</p></div>';
     }
 }
 

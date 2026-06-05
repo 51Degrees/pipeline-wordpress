@@ -20,7 +20,7 @@
 require_once __DIR__ . '/../options.php';
 require_once __DIR__ . '/oauth-state.php';
 require_once __DIR__ . '/oauth-notice.php';
-require_once __DIR__ . '/google-client-factory.php';
+require_once __DIR__ . '/oauth-relay-client.php';
 
 /**
  * OAuth start handler: admin-post action `fiftyonedegrees_oauth_start`.
@@ -141,27 +141,49 @@ class FiftyOneDegreesOauthStart
             return;
         }
 
-        // g. Build the auth URL via the Google client. The factory has
-        // already applied the fiftyonedegrees_oauth_redirect_url filter
-        // to setRedirectUri, so we only attach the run-time state here.
-        //
-        // PKCE: the vendored google/apiclient does not surface
-        // code_challenge as a config key, so PKCE params go through
-        // createAuthUrl's second argument. DO NOT add
-        // setCodeChallenge/setCodeChallengeMethod here without first
-        // removing this branch — both would otherwise duplicate.
-        $client = static::build_client();
-        $client->setState($state);
+        // g. Build the relay start URL and hand off. We do NOT build a Google
+        // consent URL or hold a Google client here — the relay owns the shared
+        // client and secret. We pass the resource key (for the relay's
+        // domain-binding check), the site callback the relay forwards to, the
+        // scope, our signed state (carried as `nonce` and echoed back verbatim
+        // so verify_state still works on callback), and the PKCE challenge. The
+        // matching verifier stays in our transient.
+        $resource = (string) get_option(Options::RESOURCE_KEY);
+        if ($resource === '') {
+            // No resource key configured: the relay would reject /start. Fail
+            // with the generic start branch rather than redirecting the admin
+            // into a relay 400.
+            self::reject('start_failed', $user_id);
+            return;
+        }
 
-        $url = $client->createAuthUrl(null, [
-            'code_challenge' => $challenge,
-            'code_challenge_method' => 'S256',
-        ]);
+        $url = FiftyOneDegreesOauthRelayClient::start_url(
+            $resource,
+            self::site_callback_url(),
+            Google_Service_GoogleAnalyticsAdmin::ANALYTICS_EDIT,
+            $state,
+            $challenge
+        );
 
-        // h. Off to Google. wp_redirect (not wp_safe_redirect) — see
-        // class docblock for the host-allowlist rationale.
+        // h. Off to the relay. wp_redirect (not wp_safe_redirect) — see class
+        // docblock for the host-allowlist rationale; the relay is an external
+        // host.
         wp_redirect($url);
         static::halt();
+    }
+
+    /**
+     * The site callback URL the relay forwards the authorization code to.
+     * Must match the `site_url` baked into the signed state by the state
+     * engine so verify_state's host check lines up on the callback side.
+     *
+     * @return string
+     */
+    protected static function site_callback_url()
+    {
+        return admin_url(
+            'options-general.php?page=51Degrees&tab=google-analytics&oauth=callback'
+        );
     }
 
     /**
@@ -179,18 +201,6 @@ class FiftyOneDegreesOauthStart
             'options-general.php?page=51Degrees&tab=google-analytics'
         ));
         static::halt();
-    }
-
-    /**
-     * Test seam over the Google_Client construction. Production delegates
-     * to the shared factory; tests override to inject a mock without
-     * touching the real apiclient.
-     *
-     * @return Google_Client
-     */
-    protected static function build_client()
-    {
-        return FiftyOneDegreesGoogleClientFactory::make();
     }
 
     /**
