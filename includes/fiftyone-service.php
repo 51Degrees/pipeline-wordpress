@@ -618,6 +618,18 @@ class FiftyoneService {
         if ($pipeline && !isset($pipeline['error'])) {
             update_option(Options::PIPELINE, $pipeline);
             delete_option(Options::PIPELINE_VALIDATION_ERROR);
+            // The freshly cached pipeline bakes the current code's
+            // endpoint format, so any pending schema-migration rebuild
+            // is implicitly satisfied -- clear the deferred flag and
+            // unschedule its cron event so we don't redundantly retrace
+            // a cloud round-trip moments later (issue #62 cascade on
+            // single-process php -S: wp-cron.php POST runs in the same
+            // worker as visitor traffic, so a redundant rebuild there
+            // blocks the next visitor request).
+            delete_option(Options::PIPELINE_REBUILD_PENDING);
+            if (function_exists('wp_clear_scheduled_hook')) {
+                wp_clear_scheduled_hook(self::PIPELINE_REBUILD_CRON_ACTION);
+            }
             return;
         }
 
