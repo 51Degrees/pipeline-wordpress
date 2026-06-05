@@ -762,6 +762,16 @@ class FiftyoneService {
             Options::PIPELINE_CACHE_VERSION,
             self::PIPELINE_CACHE_VERSION
         );
+        // Skip the cron fallback on single-process php -S (CI integration
+        // tests, ad-hoc local dev). On multi-worker servers WP-Cron runs
+        // in a parallel request and doesn't block visitor traffic; on
+        // cli-server it occupies the same worker as the next visitor
+        // request and would deadlock the server for the duration of the
+        // cloud round-trip. Admin visits will still trigger the rebuild
+        // via admin_init.
+        if (php_sapi_name() === 'cli-server') {
+            return;
+        }
         // Cron fallback: WP-Cron is pinged on any HTTP request, so even
         // sites that never see an admin visit eventually fire the
         // scheduled event and rebuild against the current code shape.
@@ -798,6 +808,16 @@ class FiftyoneService {
      * @return void
      */
     public function fiftyonedegrees_maybe_rebuild_pipeline() {
+        // Belt-and-suspenders: even if a cron event somehow slipped
+        // through maybe_migrate_pipeline_cache()'s cli-server gate
+        // (e.g. left over from a prior session, or fired from
+        // wp_remote_get pinging /wp-cron.php), don't run the cloud
+        // round-trip here. On single-process php -S the handler
+        // executes in the same worker as the next visitor request
+        // and blocks it.
+        if (php_sapi_name() === 'cli-server') {
+            return;
+        }
         if (!get_option(Options::PIPELINE_REBUILD_PENDING)) {
             return;
         }
