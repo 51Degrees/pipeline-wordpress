@@ -206,7 +206,8 @@ class FiftyoneService {
         // Register the new settings with wordpress.
         register_setting(
             Options::GROUP_KEY,
-            Options::RESOURCE_KEY);
+            Options::RESOURCE_KEY,
+            ['sanitize_callback' => array($this, 'fiftyonedegrees_sanitize_resource_key')]);
 
         // Suspicious activity detection settings.
         add_option(Options::SUSPICIOUS_ENABLE, 'off');
@@ -556,6 +557,26 @@ class FiftyoneService {
         if ($option === Options::RESOURCE_KEY && $value) {
             self::build_and_save_pipeline($value);
         }
+    }
+
+    /**
+     * register_setting sanitize_callback for the Resource Key. Runs on every
+     * settings save, even when the value is unchanged — which is the only
+     * place we can re-validate an unchanged key. WordPress fires
+     * updated_option (and the rebuild wired to it in fiftyonedegrees_update_option)
+     * only when the value actually changes, so without this an unchanged
+     * re-save never re-validates and a stale "rejected" error persists even
+     * after its cause is fixed. Changed keys are left to the updated_option
+     * path to avoid a duplicate cloud call.
+     *
+     * @param mixed $value the submitted resource key
+     * @return mixed the value to persist (unchanged)
+     */
+    static function fiftyonedegrees_sanitize_resource_key($value) {
+        if ($value === get_option(Options::RESOURCE_KEY)) {
+            self::build_and_save_pipeline($value);
+        }
+        return $value;
     }
 
     // On error: leave PIPELINE alone, record error string for setup.php.

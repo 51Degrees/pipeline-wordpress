@@ -121,6 +121,54 @@ class CloudOriginHeaderTests extends TestCase {
     }
 
     /**
+     * Domain-restricted resource keys: the cloud allow-list check reads the
+     * Referer header (with priority over Origin, mirroring a real browser).
+     * makeCloudRequest must send Referer alongside Origin so keys locked to a
+     * domain are recognised even through proxies that strip the Origin header.
+     */
+    public function testMakeCloudRequest_SendsRefererAlongsideOrigin() {
+        $captured = null;
+        Functions\when('wp_remote_request')->alias(function ($url, $args) use (&$captured) {
+            $captured = $args;
+            return 'RESPONSE';
+        });
+        Functions\when('is_wp_error')->justReturn(false);
+        Functions\when('wp_remote_retrieve_response_code')->justReturn(200);
+        Functions\when('wp_remote_retrieve_body')->justReturn('{"Products":{}}');
+        Functions\when('wp_remote_retrieve_headers')->justReturn([]);
+
+        $client = new FiftyOneDegreesWpHttpClient();
+        $client->makeCloudRequest('GET', 'https://cloud.example.com/api/v4/x', null, 'https://wp.example.com');
+
+        $this->assertSame('https://wp.example.com', $captured['headers']['Origin']);
+        $this->assertSame('https://wp.example.com', $captured['headers']['Referer']);
+    }
+
+    /**
+     * The user-facing "cloud rejected" error must name the actual cloud host
+     * being contacted (derived from FOD_CLOUD_API_URL), so a domain/host
+     * mismatch is diagnosable instead of an opaque generic message.
+     */
+    public function testMakePipeline_ErrorNamesCloudHost() {
+        putenv('FOD_CLOUD_API_URL=https://relay.example.com/api/v4/');
+        Functions\when('home_url')->justReturn('https://wp.example.com');
+        Functions\when('rest_url')->justReturn('https://wp.example.com/wp-json/fiftyonedegrees/v4/json');
+
+        Patchwork\redefine(
+            'FiftyOneDegreesWpHttpClient::makeCloudRequest',
+            function () {
+                throw new \fiftyone\pipeline\cloudrequestengine\CloudRequestException('rejected', 401, []);
+            }
+        );
+
+        $result = Pipeline::make_pipeline('TEST_KEY');
+
+        putenv('FOD_CLOUD_API_URL');
+
+        $this->assertStringContainsString('relay.example.com', $result['error']);
+    }
+
+    /**
      * Test that FiftyOneDegreesRobotsTxt::fetch_from_cloud passes Origin.
      */
     public function testRobotsTxtFetchFromCloud_PassesOriginToHttpClient() {

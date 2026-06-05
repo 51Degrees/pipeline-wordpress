@@ -26,6 +26,7 @@ require_once __DIR__ . '/../options.php';
 require_once __DIR__ . '/client-ip.php';
 require_once __DIR__ . '/fiftyone-strings.php';
 require_once __DIR__ . '/wp-http-client.php';
+require_once __DIR__ . '/cloud-metadata.php';
 
 class Pipeline
 {
@@ -172,7 +173,10 @@ class Pipeline
             || ($e instanceof CloudRequestException && $e->httpStatusCode === 0);
         $key = $unreachable ? 'common.cloud.unreachable' : 'common.cloud.rejected';
 
-        return strip_tags(FiftyOneDegreesStrings::get($key));
+        $host = FiftyOneDegreesCloudMetadata::get_cloud_host_url();
+
+        return strip_tags(FiftyOneDegreesStrings::get($key))
+            . ' ' . FiftyOneDegreesStrings::get('common.cloud.host_suffix', $host);
     }
 
     /**
