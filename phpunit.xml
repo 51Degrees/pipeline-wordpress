@@ -6,6 +6,7 @@
     <const name="FIFTYONEDEGREES_PLUGIN_DIR" value= ""/>
     <const name="FIFTYONEDEGREES_PLUGIN_URL" value="http://example.test/plugin/"/>
     <const name="FIFTYONEDEGREES_CUSTOM_DIMENSION_SCOPE" value= "HIT"/>
+    <const name="FIFTYONEDEGREES_VERSION" value="1.0.13-test"/>
   </php>
   <testsuites>
     <testsuite name="Unit">

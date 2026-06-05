@@ -42,10 +42,16 @@ class HookTests extends TestCase {
             "pipeline" =>  $mock_pipeline,
             "available_engines" => ["testElement"],
             "error" => null);
-        Functions\when('get_option')->alias(function($arg) {
+        Functions\when('get_option')->alias(function($arg, $default = null) {
             if ($arg === Options::PIPELINE) {
                 return HookTests::$pipeline;
             }
+            // Short-circuit the cache-version migration in setup_wp_actions
+            // by reporting the schema is already current.
+            if ($arg === Options::PIPELINE_CACHE_VERSION) {
+                return FiftyoneService::PIPELINE_CACHE_VERSION;
+            }
+            return $default;
         });
 	}
 
@@ -215,7 +221,11 @@ class HookTests extends TestCase {
             ->justReturn('root/includes/');
         Functions\expect('wp_enqueue_script')
             ->once()
-            ->with('fiftyonedegrees', 'root/includes/../assets/js/fod.js');
+            ->with(
+                'fiftyonedegrees',
+                'root/includes/../assets/js/fod.js',
+                Mockery::any(),
+                Mockery::any());
 
         Functions\expect('wp_add_inline_script')
             ->once()
@@ -452,7 +462,11 @@ class HookTests extends TestCase {
 
         Functions\expect('wp_enqueue_script')
             ->once()
-            ->with('fiftyonedegrees', 'root/includes/../assets/js/fod.js');
+            ->with(
+                'fiftyonedegrees',
+                'root/includes/../assets/js/fod.js',
+                Mockery::any(),
+                Mockery::any());
         Functions\expect('wp_add_inline_script')
             ->once()
             ->with('fiftyonedegrees', Mockery::any(), 'before');

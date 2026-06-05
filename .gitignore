@@ -1,2 +1,4 @@
 node_modules
 .phpunit.result.cache
+assets/js/ga-51d-tracking.js
+assets/js/ga-integration-tracking.js

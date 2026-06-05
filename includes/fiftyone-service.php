@@ -32,9 +32,33 @@ require_once __DIR__ . '/cloud-metadata.php';
 class FiftyoneService {
 
     /**
+     * Current schema version of the cached pipeline (Options::PIPELINE).
+     *
+     * Bump when the serialized pipeline shape becomes incompatible with
+     * older releases -- e.g. when the baked JS endpoint format changes.
+     * `maybe_migrate_pipeline_cache()` compares this against the stored
+     * Options::PIPELINE_CACHE_VERSION and schedules a deferred rebuild
+     * when they disagree.
+     *
+     * Version 2 was introduced in 1.0.13 when Pipeline::getRestEndpoint()
+     * switched to the permalink-agnostic `?rest_route=` form (issue #62).
+     */
+    public const PIPELINE_CACHE_VERSION = 2;
+
+    /**
+     * WP-Cron action name used as the fallback rebuild trigger for sites
+     * that never see an admin visit (set-and-forget installs, headless /
+     * decoupled WP, admin firewalled). The event is scheduled by
+     * `maybe_migrate_pipeline_cache()` and handled by
+     * `fiftyonedegrees_maybe_rebuild_pipeline()` in the cron request
+     * context -- never blocking the visitor whose request pinged cron.
+     */
+    public const PIPELINE_REBUILD_CRON_ACTION = 'fiftyonedegrees_pipeline_rebuild_event';
+
+    /**
      * Setup action hooks for the plugin. These hooks are handled
      * by wordpress.
-     * 
+     *
      * See available actions:
      * https://codex.wordpress.org/Plugin_API/Action_Reference
      *
@@ -44,13 +68,33 @@ class FiftyoneService {
      */
     public function setup_wp_actions() {
 
+        // Pipeline-cache schema migration. Cheap fast-path on every
+        // request after the version is bumped (one get_option). The
+        // mutations only run on the first post-upgrade request.
+        $this->maybe_migrate_pipeline_cache();
+
         // The main init action. This runs the processing.
         add_action(
             'init',
-            array($this, 'fiftyonedegrees_init'));     
+            array($this, 'fiftyonedegrees_init'));
 
         // Admin actions. These are initialization actions to run before
         // loading the admin interface.
+        // Priority 5 is load-bearing: fiftyonedegrees_register_settings
+        // (priority 10) and the RESOURCE_KEY update_option handler read
+        // Options::PIPELINE -- they must see the rebuilt copy when the
+        // first post-upgrade admin visit triggers the pending rebuild.
+        add_action(
+            'admin_init',
+            array($this, 'fiftyonedegrees_maybe_rebuild_pipeline'),
+            5);
+        // Fallback rebuild trigger for sites that never see an admin
+        // visit. WP-Cron is pinged by any HTTP request and runs the
+        // event in its own (separate) cron request context, so the
+        // visitor whose request pinged cron is not blocked on cloud HTTP.
+        add_action(
+            self::PIPELINE_REBUILD_CRON_ACTION,
+            array($this, 'fiftyonedegrees_maybe_rebuild_pipeline'));
         add_action(
             'admin_init',
             array($this, 'fiftyonedegrees_register_settings'));
@@ -500,6 +544,10 @@ class FiftyoneService {
             // Stale against the previous key — clear.
             delete_option(Options::ROBOTS_LAST_REFRESH);
 
+            // Sync rebuild required — unlike permalink_structure (issue
+            // #62, deferred via maybe_migrate_pipeline_cache), this option
+            // changes what the pipeline DOES, not just its baked URL.
+            // Admin saving an invalid key needs immediate feedback.
             self::build_and_save_pipeline($new_value);
 
             if ($old_value !== $new_value) {
@@ -630,23 +678,145 @@ class FiftyoneService {
     }
 
     /**
-     * Rebuilds the pipeline when the permalink structure changes.
-     * Hooked to 'updated_option' (fires after the DB write) so that
-     * rest_url() returns the URL for the new permalink structure.
+     * Reacts to permalink_structure changes.
+     *
+     * Pipeline::getRestEndpoint() now returns the permalink-agnostic
+     * `?rest_route=` form, so the cached pipeline's baked JS endpoint
+     * stays valid across permalink changes -- no synchronous cloud
+     * rebuild is needed here (which previously blocked admin POSTs on
+     * cloud HTTP and caused the nightly CI build hang -- issue #62).
+     *
+     * Session-cached evidence is still invalidated so the current
+     * visitor's next request rebuilds flow data instead of reading
+     * stale state.
+     *
+     * Shape kept as an additive guard (early return on the option key)
+     * so sibling option handlers added by other branches do not
+     * conflict at merge time.
      *
      * @return void
      */
     function fiftyonedegrees_updated_option($option, $old_value, $new_value) {
         if ($option === 'permalink_structure') {
-            $resource_key = get_option(Options::RESOURCE_KEY);
-            if ($resource_key) {
-                if (session_status() === PHP_SESSION_ACTIVE &&
-                    isset($_SESSION["fiftyonedegrees_data"])) {
-                    unset($_SESSION["fiftyonedegrees_data"]);
-                    update_option(Options::SESSION_INVALIDATED, time());
-                }
-                self::build_and_save_pipeline($resource_key);
+            if (session_status() === PHP_SESSION_ACTIVE &&
+                isset($_SESSION["fiftyonedegrees_data"])) {
+                unset($_SESSION["fiftyonedegrees_data"]);
+                update_option(Options::SESSION_INVALIDATED, time());
             }
+            return;
+        }
+    }
+
+    /**
+     * One-shot migration of the cached pipeline (Options::PIPELINE) when
+     * the schema version stored in the database lags behind the constant
+     * shipped with this release.
+     *
+     * Triggered by upgrades that change the serialized pipeline shape --
+     * e.g. 1.0.13's switch to the permalink-agnostic `?rest_route=` JS
+     * endpoint (issue #62), which would otherwise leave installations
+     * upgraded from 1.0.12 with a pretty-permalink endpoint baked in that
+     * can 404 if the admin later switches to plain permalinks (because
+     * we no longer rebuild on permalink_structure change).
+     *
+     * Strategy: DO NOT delete the cached pipeline here -- that would
+     * leave the plugin silent on the front-end (Pipeline::process()
+     * returns null when Options::PIPELINE is missing, no lazy rebuild
+     * path exists). Instead, set a "rebuild pending" flag and schedule a
+     * WP-Cron event. The actual rebuild runs either on the next admin
+     * request (admin_init handler) or via WP-Cron in its own request
+     * context. Until then, the old cached pipeline keeps serving
+     * visitors -- its baked endpoint is still functional under the
+     * current permalink_structure.
+     *
+     * Idempotent: once the version option is bumped, subsequent calls
+     * short-circuit at the get_option check. Multisite: each subsite
+     * migrates independently on its first post-upgrade request
+     * (Options::PIPELINE is already per-site).
+     *
+     * @return void
+     */
+    public function maybe_migrate_pipeline_cache() {
+        $stored = (int) get_option(Options::PIPELINE_CACHE_VERSION, 1);
+        if ($stored >= self::PIPELINE_CACHE_VERSION) {
+            return;
+        }
+        // Write order is load-bearing: set the rebuild flag FIRST, bump
+        // the version SECOND. If the second write fails the next request
+        // re-enters migration and re-sets the flag (idempotent). The
+        // inverse order would orphan the rebuild trigger.
+        update_option(Options::PIPELINE_REBUILD_PENDING, 1);
+        update_option(
+            Options::PIPELINE_CACHE_VERSION,
+            self::PIPELINE_CACHE_VERSION
+        );
+        // Cron fallback: WP-Cron is pinged on any HTTP request, so even
+        // sites that never see an admin visit eventually fire the
+        // scheduled event and rebuild against the current code shape.
+        if (!wp_next_scheduled(self::PIPELINE_REBUILD_CRON_ACTION)) {
+            wp_schedule_single_event(
+                time() + 10,
+                self::PIPELINE_REBUILD_CRON_ACTION
+            );
+        }
+    }
+
+    /**
+     * Picks up the rebuild flag set by maybe_migrate_pipeline_cache() and
+     * regenerates Options::PIPELINE against the current code shape.
+     *
+     * Hooked on both admin_init (priority 5) and the
+     * PIPELINE_REBUILD_CRON_ACTION cron event so that:
+     *   - admin'd sites rebuild on the next wp-admin visit
+     *   - admin-less sites still rebuild via WP-Cron pinged by any
+     *     visitor traffic, in cron's separate request context (not on
+     *     the visitor critical path).
+     *
+     * Serializes concurrent rebuild attempts via Options::PIPELINE_REBUILD_LOCK
+     * (admin opening multiple tabs, admin_init firing while cron event
+     * fires) -- exactly one request proceeds; the rest short-circuit.
+     *
+     * Cloud-failure handling: build_and_save_pipeline writes
+     * Options::PIPELINE_VALIDATION_ERROR on failure and leaves the
+     * cached pipeline alone. We only clear the rebuild-pending flag on
+     * success, so transient cloud failures retry on the next admin_init
+     * or scheduled cron run instead of silently leaving the site on a
+     * stale baked endpoint forever.
+     *
+     * @return void
+     */
+    public function fiftyonedegrees_maybe_rebuild_pipeline() {
+        if (!get_option(Options::PIPELINE_REBUILD_PENDING)) {
+            return;
+        }
+        // add_option returns false atomically if the option already exists
+        // -- effective mutex without needing a separate transient layer.
+        if (!add_option(Options::PIPELINE_REBUILD_LOCK, time(), '', 'no')) {
+            return;
+        }
+        try {
+            $resource_key = get_option(Options::RESOURCE_KEY);
+            if (empty($resource_key)) {
+                // Nothing to rebuild against. Clear the flag so the
+                // check doesn't run forever; the next add_option call
+                // will re-set the flag if a resource key is added later.
+                delete_option(Options::PIPELINE_REBUILD_PENDING);
+                return;
+            }
+            // Clear any prior error so the post-call check below can
+            // distinguish "this attempt failed" from "an old error is
+            // still hanging around".
+            delete_option(Options::PIPELINE_VALIDATION_ERROR);
+            self::build_and_save_pipeline($resource_key);
+            $succeeded = !get_option(Options::PIPELINE_VALIDATION_ERROR);
+            if ($succeeded) {
+                update_option(Options::SESSION_INVALIDATED, time());
+                delete_option(Options::PIPELINE_REBUILD_PENDING);
+            }
+            // On failure: leave the flag in place. The next admin_init
+            // or scheduled cron run retries against the cloud.
+        } finally {
+            delete_option(Options::PIPELINE_REBUILD_LOCK);
         }
     }
 
@@ -655,6 +825,11 @@ class FiftyoneService {
      * SUSPICIOUS_ENABLE is toggled. The cached pipeline's engine list is
      * the single source of truth for both engine selection and the
      * query.id.usage evidence decision; keep it in sync on every toggle.
+     *
+     * Sync rebuild required -- unlike permalink_structure (issue #62,
+     * deferred via maybe_migrate_pipeline_cache), this option changes
+     * which cloud engines are in the pipeline. The revert-on-failure
+     * logic below also depends on synchronous cloud feedback.
      */
     public function fiftyonedegrees_suspicious_enable_updated($option, $old_value, $value) {
         if ($option !== Options::SUSPICIOUS_ENABLE) {
@@ -739,9 +914,17 @@ class FiftyoneService {
      * @return void
      */
     function fiftyonedegrees_javascript() {
+        // $ver is bumped per plugin release (FIFTYONEDEGREES_VERSION) so
+        // upgrades bust browser/CDN caches that may otherwise serve a JS
+        // asset paired with a stale inline pipeline snippet. The inline
+        // `getJavaScript()` output is part of the page HTML, so full-page
+        // caches (WP Super Cache, W3TC, edge caches) still need a flush
+        // -- see the upgrade notice in readme.txt.
         wp_enqueue_script(
             "fiftyonedegrees",
-            plugin_dir_url(__FILE__) . "../assets/js/fod.js");
+            plugin_dir_url(__FILE__) . "../assets/js/fod.js",
+            [],
+            FIFTYONEDEGREES_VERSION);
         wp_add_inline_script(
             "fiftyonedegrees",
             Pipeline::getJavaScript(),
@@ -771,7 +954,11 @@ class FiftyoneService {
         // Footer load: PMP attaches its popup container as a sibling of this
         // script tag (see view.ts getRoot()). In <head> that container would
         // be unrenderable (head has display:none).
-        wp_register_script('fiftyonedegrees-pmp', $url, [], null, true);
+        // $ver = FIFTYONEDEGREES_VERSION so the PMP bundle re-fetches on
+        // plugin upgrade alongside fod.js (cache-busting rationale matches
+        // the comment in the wp_enqueue_script call above).
+        wp_register_script(
+            'fiftyonedegrees-pmp', $url, [], FIFTYONEDEGREES_VERSION, true);
         wp_enqueue_script('fiftyonedegrees-pmp');
 
         // Publisher-overridable continuation hook. Site owners can use
