@@ -91,10 +91,19 @@ try {
         # the loaded php.ini directly. Last directive wins on PHP ini parse.
         $phpIni = (php -r "echo php_ini_loaded_file();").Trim()
         Add-Content -Path $phpIni -Value "`nmax_execution_time=120"
+        # Nightly Pipeline intermittently segfaults in `php -S` on the first
+        # POST after WP login under PHP 8.4/8.5 — symptom matches OPcache JIT
+        # race conditions. Disable JIT for the test server only.
+        Add-Content -Path $phpIni -Value "`nopcache.jit=disable`nopcache.jit_buffer_size=0"
+        # If the segfault still happens, capture a core dump + inline gdb
+        # backtrace so the workflow log contains a C-level stack trace.
+        sudo apt-get install -y gdb 2>&1 | Out-Null
+        sudo sh -c "echo '/tmp/core.%e.%p' > /proc/sys/kernel/core_pattern" 2>&1 | Out-Null
         # Start-Process with -RedirectStandard* writes directly to disk —
         # unlike PowerShell jobs, which drop native-process stderr.
-        $server = Start-Process -FilePath "php" `
-            -ArgumentList @("$wp", "server") `
+        # bash wrapper raises core size limit; PHP child inherits it.
+        $server = Start-Process -FilePath "bash" `
+            -ArgumentList @("-c", "ulimit -c unlimited; exec php '$wp' server") `
             -RedirectStandardOutput $serverStdout `
             -RedirectStandardError $serverStderr `
             -PassThru -NoNewWindow
@@ -143,6 +152,12 @@ try {
         Write-Host "=== PHP built-in server stdout ==="
         if (Test-Path $serverStdout) { Get-Content $serverStdout | ForEach-Object { Write-Host $_ } }
         Write-Host "=== end PHP built-in server output ==="
+        $cores = Get-ChildItem /tmp/core.* -ErrorAction SilentlyContinue
+        foreach ($core in $cores) {
+            Write-Host "=== gdb backtrace from $($core.FullName) ==="
+            gdb --batch -ex "bt" -ex "bt full" -ex "info threads" -ex "thread apply all bt" (Get-Command php).Source $core.FullName 2>&1 | ForEach-Object { Write-Host $_ }
+            Write-Host "=== end gdb backtrace ==="
+        }
     }
 } finally {
     Pop-Location
