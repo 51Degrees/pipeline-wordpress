@@ -105,7 +105,12 @@ try {
         # quoted strings on Linux, so `bash -c "ulimit -c unlimited; ..."`
         # gets mangled. The script raises core size; PHP child inherits it.
         $serverScript = "$PWD/start-php-server.sh"
-        Set-Content -Path $serverScript -Value "#!/bin/bash`nulimit -c unlimited`nexec php `"$wp`" server"
+        # PHP_CLI_SERVER_WORKERS forks N worker processes — without it
+        # `php -S` is single-process and serializes concurrent requests,
+        # which deadlocks Selenium tests that trigger re-entrant HTTP
+        # (e.g. browser page-load fires our REST endpoint while pytest
+        # makes the next request).
+        Set-Content -Path $serverScript -Value "#!/bin/bash`nulimit -c unlimited`nexport PHP_CLI_SERVER_WORKERS=4`nexec php `"$wp`" server"
         chmod +x $serverScript
         $server = Start-Process -FilePath $serverScript `
             -RedirectStandardOutput $serverStdout `
