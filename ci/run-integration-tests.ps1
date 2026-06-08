@@ -101,9 +101,13 @@ try {
         sudo sh -c "echo '/tmp/core.%e.%p' > /proc/sys/kernel/core_pattern" 2>&1 | Out-Null
         # Start-Process with -RedirectStandard* writes directly to disk —
         # unlike PowerShell jobs, which drop native-process stderr.
-        # bash wrapper raises core size limit; PHP child inherits it.
-        $server = Start-Process -FilePath "bash" `
-            -ArgumentList @("-c", "ulimit -c unlimited; exec php '$wp' server") `
+        # Wrap via a script file: PowerShell's -ArgumentList re-tokenizes
+        # quoted strings on Linux, so `bash -c "ulimit -c unlimited; ..."`
+        # gets mangled. The script raises core size; PHP child inherits it.
+        $serverScript = "$PWD/start-php-server.sh"
+        Set-Content -Path $serverScript -Value "#!/bin/bash`nulimit -c unlimited`nexec php `"$wp`" server"
+        chmod +x $serverScript
+        $server = Start-Process -FilePath $serverScript `
             -RedirectStandardOutput $serverStdout `
             -RedirectStandardError $serverStderr `
             -PassThru -NoNewWindow
