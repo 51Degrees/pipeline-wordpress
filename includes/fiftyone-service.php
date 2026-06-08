@@ -810,6 +810,14 @@ class FiftyoneService {
         if (php_sapi_name() === 'cli-server') {
             return;
         }
+        // Guarded for the unit-test harness, which exercises this path
+        // via the RESOURCE_KEY updated_option hook without booting WP.
+        // Matches the function_exists guard on wp_clear_scheduled_hook
+        // in build_and_save_pipeline below.
+        if (!function_exists('wp_next_scheduled') ||
+            !function_exists('wp_schedule_single_event')) {
+            return;
+        }
         if (!wp_next_scheduled(self::PIPELINE_REBUILD_CRON_ACTION)) {
             wp_schedule_single_event(
                 time() + 10,
