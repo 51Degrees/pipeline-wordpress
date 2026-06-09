@@ -870,6 +870,7 @@ class PipelineTests extends TestCase {
             $scheduled = $hook;
             return true;
         });
+        Functions\when('delete_transient')->justReturn(true);
 
         $service = new FiftyoneService();
         $service->maybe_migrate_pipeline_cache();
@@ -885,6 +886,39 @@ class PipelineTests extends TestCase {
             FiftyoneService::PIPELINE_REBUILD_CRON_ACTION,
             $scheduled,
             'Cron fallback rebuild must be scheduled so admin-less sites still rebuild'
+        );
+    }
+
+    /**
+     * Test that a new schedule_pipeline_rebuild call (e.g. admin saves a
+     * valid key on top of a previously invalid one) clears any active
+     * backoff transient. Without this, the second save would be
+     * suppressed for up to PIPELINE_REBUILD_BACKOFF_TTL seconds and the
+     * Setup tab would never flip from the red box to the green box.
+     */
+    public function testSchedulePipelineRebuild_ClearsBackoffTransient() {
+        $deletedTransients = [];
+        Functions\when('get_option')->alias(function ($name, $default = null) {
+            if ($name === Options::PIPELINE_CACHE_VERSION) return 1;
+            return $default;
+        });
+        Functions\when('update_option')->justReturn(true);
+        Functions\when('wp_next_scheduled')->justReturn(false);
+        Functions\when('wp_schedule_single_event')->justReturn(true);
+        Functions\when('delete_transient')->alias(function ($key) use (&$deletedTransients) {
+            $deletedTransients[] = $key;
+            return true;
+        });
+
+        $service = new FiftyoneService();
+        // Invoke through the public migration entry point -- exercises
+        // schedule_pipeline_rebuild without requiring private-method access.
+        $service->maybe_migrate_pipeline_cache();
+
+        $this->assertContains(
+            FiftyoneService::PIPELINE_REBUILD_BACKOFF_TRANSIENT,
+            $deletedTransients,
+            'A fresh rebuild request must clear any prior cloud-failure backoff so a new key is not silently suppressed'
         );
     }
 
@@ -1319,6 +1353,7 @@ class PipelineTests extends TestCase {
             $deletes[] = $key;
             return true;
         });
+        Functions\when('delete_transient')->justReturn(true);
 
         $service = new FiftyoneService();
         $service->maybe_migrate_pipeline_cache();
@@ -1360,6 +1395,7 @@ class PipelineTests extends TestCase {
             $deletes[] = $key;
             return true;
         });
+        Functions\when('delete_transient')->justReturn(true);
 
         $service = new FiftyoneService();
         $service->maybe_migrate_pipeline_cache(); // runs migration

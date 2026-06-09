@@ -863,6 +863,16 @@ class FiftyoneService {
      */
     private static function schedule_pipeline_rebuild() {
         update_option(Options::PIPELINE_REBUILD_PENDING, 1);
+        // A new explicit rebuild request (RESOURCE_KEY save, schema
+        // migration, WP-CLI add_option) is fresh state to validate -- a
+        // prior cloud-failure backoff against the OLD key is no longer
+        // relevant and would otherwise suppress the rebuild for up to
+        // PIPELINE_REBUILD_BACKOFF_TTL seconds, blocking the green-box
+        // confirmation after the admin types a valid key on top of an
+        // invalid one.
+        if (function_exists('delete_transient')) {
+            delete_transient(self::PIPELINE_REBUILD_BACKOFF_TRANSIENT);
+        }
         if (self::is_single_process_cli_server()) {
             return;
         }
