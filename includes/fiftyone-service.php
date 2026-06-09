@@ -807,7 +807,7 @@ class FiftyoneService {
      */
     private static function schedule_pipeline_rebuild() {
         update_option(Options::PIPELINE_REBUILD_PENDING, 1);
-        if (php_sapi_name() === 'cli-server') {
+        if (self::is_single_process_cli_server()) {
             return;
         }
         // Guarded for the unit-test harness, which exercises this path
@@ -824,6 +824,26 @@ class FiftyoneService {
                 self::PIPELINE_REBUILD_CRON_ACTION
             );
         }
+    }
+
+    /**
+     * True only on the PHP built-in dev server (`php -S`) when it is
+     * running in single-process mode (no PHP_CLI_SERVER_WORKERS). That
+     * is the only environment where a cloud round-trip in admin_init
+     * or wp-cron deadlocks the next visitor request — the same worker
+     * serves both. Multi-worker cli-server (CI integration tests set
+     * PHP_CLI_SERVER_WORKERS=4 in start-php-server.sh) handles
+     * concurrent requests in parallel workers and is safe.
+     * Production (apache/fpm) returns false unconditionally because
+     * php_sapi_name() is never 'cli-server' there.
+     *
+     * @return bool
+     */
+    private static function is_single_process_cli_server() {
+        if (php_sapi_name() !== 'cli-server') {
+            return false;
+        }
+        return ((int) getenv('PHP_CLI_SERVER_WORKERS')) <= 1;
     }
 
     /**
@@ -851,14 +871,12 @@ class FiftyoneService {
      * @return void
      */
     public function fiftyonedegrees_maybe_rebuild_pipeline() {
-        // Belt-and-suspenders: even if a cron event somehow slipped
-        // through maybe_migrate_pipeline_cache()'s cli-server gate
-        // (e.g. left over from a prior session, or fired from
-        // wp_remote_get pinging /wp-cron.php), don't run the cloud
-        // round-trip here. On single-process php -S the handler
-        // executes in the same worker as the next visitor request
-        // and blocks it.
-        if (php_sapi_name() === 'cli-server') {
+        // Belt-and-suspenders: on a single-process `php -S` (no
+        // PHP_CLI_SERVER_WORKERS), the handler executes in the same
+        // worker as the next visitor request and blocks it for the
+        // duration of the cloud round-trip. Multi-worker cli-server
+        // (CI integration tests set PHP_CLI_SERVER_WORKERS=4) is safe.
+        if (self::is_single_process_cli_server()) {
             return;
         }
         if (!get_option(Options::PIPELINE_REBUILD_PENDING)) {
