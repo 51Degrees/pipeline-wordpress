@@ -56,6 +56,38 @@ class FiftyoneService {
     public const PIPELINE_REBUILD_CRON_ACTION = 'fiftyonedegrees_pipeline_rebuild_event';
 
     /**
+     * Stale-lock recovery window for Options::PIPELINE_REBUILD_LOCK. A PHP
+     * fatal (OOM, max_execution_time, segfault) or SIGKILL during
+     * build_and_save_pipeline would leak the lock indefinitely because
+     * the `finally` block never runs -- the very failure modes #62
+     * surfaced. If the stored acquisition timestamp is older than this
+     * window, the next caller force-deletes the lock and retries.
+     * Five minutes comfortably exceeds any sane cloud round-trip.
+     */
+    public const PIPELINE_REBUILD_LOCK_TTL = 300;
+
+    /**
+     * Backoff window after a cloud rebuild failure. A permanently
+     * invalid / revoked / typo'd resource key would otherwise hammer
+     * the cloud once per admin pageload (admin_init priority 5).
+     * Cleared on the first successful rebuild.
+     */
+    public const PIPELINE_REBUILD_BACKOFF_TTL = 300;
+    public const PIPELINE_REBUILD_BACKOFF_TRANSIENT =
+        'fiftyonedegrees_pipeline_rebuild_backoff';
+
+    /**
+     * One-shot admin notice surfaced after a deferred rebuild fails.
+     * Without this the admin sees the "Settings saved" green banner
+     * after submitting an invalid resource key but no inline error
+     * (the validation message is buried on the Setup tab).
+     * Short TTL: just long enough for the same redirected pageload's
+     * admin_notices hook to render and dismiss it.
+     */
+    public const PIPELINE_REBUILD_FAILED_NOTICE_TRANSIENT =
+        'fiftyonedegrees_pipeline_rebuild_failed_notice';
+
+    /**
      * Setup action hooks for the plugin. These hooks are handled
      * by wordpress.
      *
@@ -168,6 +200,9 @@ class FiftyoneService {
         add_action(
             'admin_notices',
             array($this, 'fiftyonedegrees_suspicious_toggle_failed_notice'));
+        add_action(
+            'admin_notices',
+            array($this, 'fiftyonedegrees_rebuild_failed_notice'));
     }
     
     /**
@@ -701,6 +736,27 @@ class FiftyoneService {
             '</p></div>';
     }
 
+    /**
+     * One-shot admin notice surfaced after the deferred rebuild handler
+     * (fiftyonedegrees_maybe_rebuild_pipeline) recorded a cloud failure
+     * for the current resource key. Renders and dismisses on the same
+     * pageload so a typo'd key produces immediate feedback instead of
+     * the silent green "Settings saved" banner that would otherwise
+     * follow the redirected save.
+     *
+     * @return void
+     */
+    function fiftyonedegrees_rebuild_failed_notice() {
+        $error = get_transient(self::PIPELINE_REBUILD_FAILED_NOTICE_TRANSIENT);
+        if ($error === false) {
+            return;
+        }
+        delete_transient(self::PIPELINE_REBUILD_FAILED_NOTICE_TRANSIENT);
+        echo '<div class="notice notice-error is-dismissible"><p>' .
+            '<strong>51Degrees:</strong> ' . esc_html((string) $error) .
+            '</p></div>';
+    }
+
     function fiftyonedegrees_suspicious_toggle_failed_notice() {
         $message = get_transient('fiftyonedegrees_suspicious_toggle_failed');
         if ($message === false) {
@@ -882,6 +938,24 @@ class FiftyoneService {
         if (!get_option(Options::PIPELINE_REBUILD_PENDING)) {
             return;
         }
+        // Cloud-failure backoff: a permanently invalid / revoked /
+        // typo'd resource key would otherwise re-hit the cloud on
+        // every admin_init (priority 5) and every cron tick. The
+        // transient is cleared on the first successful rebuild.
+        if (function_exists('get_transient') &&
+            get_transient(self::PIPELINE_REBUILD_BACKOFF_TRANSIENT)) {
+            return;
+        }
+        // Stale-lock recovery. The `finally` below releases the lock
+        // on normal exit and exceptions, but not on PHP fatal /
+        // max_execution_time / SIGKILL -- the exact failure modes #62
+        // surfaced. If the existing lock's acquisition timestamp is
+        // older than the recovery window, reclaim it.
+        $existing_lock = get_option(Options::PIPELINE_REBUILD_LOCK);
+        if ($existing_lock &&
+            (time() - (int) $existing_lock) > self::PIPELINE_REBUILD_LOCK_TTL) {
+            delete_option(Options::PIPELINE_REBUILD_LOCK);
+        }
         // add_option returns false atomically if the option already exists
         // -- effective mutex without needing a separate transient layer.
         if (!add_option(Options::PIPELINE_REBUILD_LOCK, time(), '', 'no')) {
@@ -901,13 +975,30 @@ class FiftyoneService {
             // still hanging around".
             delete_option(Options::PIPELINE_VALIDATION_ERROR);
             self::build_and_save_pipeline($resource_key);
-            $succeeded = !get_option(Options::PIPELINE_VALIDATION_ERROR);
-            if ($succeeded) {
+            $error = get_option(Options::PIPELINE_VALIDATION_ERROR);
+            if (empty($error)) {
                 update_option(Options::SESSION_INVALIDATED, time());
                 delete_option(Options::PIPELINE_REBUILD_PENDING);
+                if (function_exists('delete_transient')) {
+                    delete_transient(self::PIPELINE_REBUILD_BACKOFF_TRANSIENT);
+                }
+            } elseif (function_exists('set_transient')) {
+                // Suppress retries for the backoff window and surface a
+                // one-shot admin notice on the current pageload.
+                // PIPELINE_REBUILD_PENDING stays set so that any later
+                // RESOURCE_KEY change (which clears the backoff) triggers
+                // a rebuild on the next admin visit.
+                set_transient(
+                    self::PIPELINE_REBUILD_BACKOFF_TRANSIENT,
+                    1,
+                    self::PIPELINE_REBUILD_BACKOFF_TTL
+                );
+                set_transient(
+                    self::PIPELINE_REBUILD_FAILED_NOTICE_TRANSIENT,
+                    (string) $error,
+                    MINUTE_IN_SECONDS
+                );
             }
-            // On failure: leave the flag in place. The next admin_init
-            // or scheduled cron run retries against the cloud.
         } finally {
             delete_option(Options::PIPELINE_REBUILD_LOCK);
         }
@@ -1500,6 +1591,13 @@ class FiftyoneService {
         delete_option(Options::PIPELINE_ENABLE);
         delete_option(Options::SESSION_INVALIDATED);
         delete_option(Options::PIPELINE_VALIDATION_ERROR);
+        delete_option(Options::PIPELINE_REBUILD_PENDING);
+        delete_option(Options::PIPELINE_REBUILD_LOCK);
+        delete_option(Options::PIPELINE_CACHE_VERSION);
+        if (function_exists('delete_transient')) {
+            delete_transient(self::PIPELINE_REBUILD_BACKOFF_TRANSIENT);
+            delete_transient(self::PIPELINE_REBUILD_FAILED_NOTICE_TRANSIENT);
+        }
     }
 
     public function delete_pmp_options() {

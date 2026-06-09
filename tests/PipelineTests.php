@@ -924,6 +924,13 @@ class PipelineTests extends TestCase {
             $deletes[] = $key;
             return true;
         });
+        Functions\when('get_transient')->justReturn(false);
+        Functions\when('set_transient')->justReturn(true);
+        $deletedTransients = [];
+        Functions\when('delete_transient')->alias(function ($key) use (&$deletedTransients) {
+            $deletedTransients[] = $key;
+            return true;
+        });
 
         $service = new FiftyoneService();
         $service->fiftyonedegrees_maybe_rebuild_pipeline();
@@ -932,6 +939,11 @@ class PipelineTests extends TestCase {
         $this->assertContains(Options::PIPELINE_REBUILD_PENDING, $deletes, 'Flag must be cleared after successful rebuild');
         $this->assertContains(Options::PIPELINE_REBUILD_LOCK, $deletes, 'Lock must be released');
         $this->assertArrayHasKey(Options::SESSION_INVALIDATED, $writes, 'Session cache must be invalidated so active visitors pick up the rebuilt pipeline');
+        $this->assertContains(
+            FiftyoneService::PIPELINE_REBUILD_BACKOFF_TRANSIENT,
+            $deletedTransients,
+            'Backoff transient must be cleared on success so the next legitimate failure is not suppressed'
+        );
     }
 
     /**
@@ -978,6 +990,13 @@ class PipelineTests extends TestCase {
             }
             return true;
         });
+        Functions\when('get_transient')->justReturn(false);
+        $setTransients = [];
+        Functions\when('set_transient')->alias(function ($key, $value, $ttl) use (&$setTransients) {
+            $setTransients[$key] = ['value' => $value, 'ttl' => $ttl];
+            return true;
+        });
+        Functions\when('delete_transient')->justReturn(true);
 
         $service = new FiftyoneService();
         $service->fiftyonedegrees_maybe_rebuild_pipeline();
@@ -993,6 +1012,21 @@ class PipelineTests extends TestCase {
             Options::PIPELINE_REBUILD_LOCK,
             $deletes,
             'Lock must be released even on failure (finally block)'
+        );
+        $this->assertArrayHasKey(
+            FiftyoneService::PIPELINE_REBUILD_BACKOFF_TRANSIENT,
+            $setTransients,
+            'Cloud-failure backoff transient must be set so we stop hammering the cloud each admin pageload'
+        );
+        $this->assertArrayHasKey(
+            FiftyoneService::PIPELINE_REBUILD_FAILED_NOTICE_TRANSIENT,
+            $setTransients,
+            'One-shot admin notice transient must be set so the failure surfaces on the redirected pageload'
+        );
+        $this->assertSame(
+            'Cloud unreachable',
+            $setTransients[FiftyoneService::PIPELINE_REBUILD_FAILED_NOTICE_TRANSIENT]['value'],
+            'Notice transient must carry the cloud error message'
         );
     }
 
@@ -1019,11 +1053,148 @@ class PipelineTests extends TestCase {
         Functions\when('add_option')->justReturn(false);
         Functions\when('update_option')->justReturn(true);
         Functions\when('delete_option')->justReturn(true);
+        Functions\when('get_transient')->justReturn(false);
+        Functions\when('set_transient')->justReturn(true);
+        Functions\when('delete_transient')->justReturn(true);
 
         $service = new FiftyoneService();
         $service->fiftyonedegrees_maybe_rebuild_pipeline();
 
         $this->assertSame(0, $rebuildCalls, 'When lock is held by another request, this caller must not invoke the cloud');
+    }
+
+    /**
+     * Test that when the backoff transient is set (recent cloud failure),
+     * the handler short-circuits before acquiring the lock or hitting the
+     * cloud -- prevents the per-admin-pageload retry storm against a
+     * permanently invalid resource key.
+     */
+    public function testMaybeRebuildPending_BackoffActive_SkipsRebuild() {
+        $rebuildCalls = 0;
+        Patchwork\redefine(
+            'Pipeline::make_pipeline',
+            function () use (&$rebuildCalls) {
+                $rebuildCalls++;
+                return ['pipeline' => null, 'available_engines' => null, 'engine_properties' => null, 'error' => null];
+            }
+        );
+        $addOptionCalls = 0;
+        Functions\when('get_option')->alias(function ($name, $default = null) {
+            if ($name === Options::PIPELINE_REBUILD_PENDING) return 1;
+            if ($name === Options::RESOURCE_KEY) return 'VALID-KEY';
+            return $default;
+        });
+        Functions\when('add_option')->alias(function () use (&$addOptionCalls) {
+            $addOptionCalls++;
+            return true;
+        });
+        Functions\when('update_option')->justReturn(true);
+        Functions\when('delete_option')->justReturn(true);
+        // Backoff transient present (recent failure within the window).
+        Functions\when('get_transient')->alias(function ($key) {
+            return $key === FiftyoneService::PIPELINE_REBUILD_BACKOFF_TRANSIENT
+                ? 1 : false;
+        });
+        Functions\when('set_transient')->justReturn(true);
+        Functions\when('delete_transient')->justReturn(true);
+
+        $service = new FiftyoneService();
+        $service->fiftyonedegrees_maybe_rebuild_pipeline();
+
+        $this->assertSame(0, $rebuildCalls, 'Backoff active -- must not call the cloud');
+        $this->assertSame(0, $addOptionCalls, 'Backoff active -- must not even attempt to acquire the lock');
+    }
+
+    /**
+     * Test that a leaked PIPELINE_REBUILD_LOCK (older than the recovery
+     * window) is force-reclaimed instead of blocking rebuilds forever
+     * after a PHP fatal mid-rebuild.
+     */
+    public function testMaybeRebuildPending_StaleLock_IsReclaimed() {
+        Patchwork\redefine(
+            'Pipeline::make_pipeline',
+            Patchwork\always([
+                'pipeline' => 'rebuilt-stub',
+                'available_engines' => [],
+                'engine_properties' => [],
+                'error' => null,
+            ])
+        );
+        $deletes = [];
+        $addOptionCalls = 0;
+        $staleLockTs = time() - (FiftyoneService::PIPELINE_REBUILD_LOCK_TTL + 60);
+        Functions\when('get_option')->alias(function ($name, $default = null) use ($staleLockTs) {
+            if ($name === Options::PIPELINE_REBUILD_PENDING) return 1;
+            if ($name === Options::PIPELINE_REBUILD_LOCK) return $staleLockTs;
+            if ($name === Options::RESOURCE_KEY) return 'VALID-KEY';
+            return $default;
+        });
+        Functions\when('add_option')->alias(function () use (&$addOptionCalls) {
+            $addOptionCalls++;
+            return true;
+        });
+        Functions\when('update_option')->justReturn(true);
+        Functions\when('delete_option')->alias(function ($key) use (&$deletes) {
+            $deletes[] = $key;
+            return true;
+        });
+        Functions\when('get_transient')->justReturn(false);
+        Functions\when('set_transient')->justReturn(true);
+        Functions\when('delete_transient')->justReturn(true);
+
+        $service = new FiftyoneService();
+        $service->fiftyonedegrees_maybe_rebuild_pipeline();
+
+        $this->assertContains(
+            Options::PIPELINE_REBUILD_LOCK,
+            $deletes,
+            'Stale lock must be force-deleted before the add_option re-acquire'
+        );
+        $this->assertSame(1, $addOptionCalls, 'Lock must be re-acquired after stale-lock recovery');
+    }
+
+    /**
+     * Test that a fresh PIPELINE_REBUILD_LOCK (within the recovery
+     * window) is honored -- another worker is legitimately rebuilding,
+     * we must not stomp on it.
+     */
+    public function testMaybeRebuildPending_FreshLockHeldByPeer_DoesNotReclaim() {
+        $rebuildCalls = 0;
+        Patchwork\redefine(
+            'Pipeline::make_pipeline',
+            function () use (&$rebuildCalls) {
+                $rebuildCalls++;
+                return ['pipeline' => null, 'available_engines' => null, 'engine_properties' => null, 'error' => null];
+            }
+        );
+        $deletes = [];
+        $freshLockTs = time() - 5; // 5 seconds ago -- well under the TTL
+        Functions\when('get_option')->alias(function ($name, $default = null) use ($freshLockTs) {
+            if ($name === Options::PIPELINE_REBUILD_PENDING) return 1;
+            if ($name === Options::PIPELINE_REBUILD_LOCK) return $freshLockTs;
+            if ($name === Options::RESOURCE_KEY) return 'VALID-KEY';
+            return $default;
+        });
+        // Lock already held by peer -- add_option returns false.
+        Functions\when('add_option')->justReturn(false);
+        Functions\when('update_option')->justReturn(true);
+        Functions\when('delete_option')->alias(function ($key) use (&$deletes) {
+            $deletes[] = $key;
+            return true;
+        });
+        Functions\when('get_transient')->justReturn(false);
+        Functions\when('set_transient')->justReturn(true);
+        Functions\when('delete_transient')->justReturn(true);
+
+        $service = new FiftyoneService();
+        $service->fiftyonedegrees_maybe_rebuild_pipeline();
+
+        $this->assertSame(0, $rebuildCalls, 'Fresh peer-held lock must short-circuit this caller');
+        $this->assertNotContains(
+            Options::PIPELINE_REBUILD_LOCK,
+            $deletes,
+            'Fresh lock must NOT be force-deleted -- would corrupt the peer rebuild'
+        );
     }
 
     /**
@@ -1047,6 +1218,7 @@ class PipelineTests extends TestCase {
             if ($name === Options::RESOURCE_KEY) return '';
             return $default;
         });
+        Functions\when('add_option')->justReturn(true);
         Functions\when('update_option')->alias(function ($key, $value) use (&$writes) {
             $writes[$key] = $value;
             return true;
@@ -1055,6 +1227,9 @@ class PipelineTests extends TestCase {
             $deletes[] = $key;
             return true;
         });
+        Functions\when('get_transient')->justReturn(false);
+        Functions\when('set_transient')->justReturn(true);
+        Functions\when('delete_transient')->justReturn(true);
 
         $service = new FiftyoneService();
         $service->fiftyonedegrees_maybe_rebuild_pipeline();
