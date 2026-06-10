@@ -97,17 +97,14 @@ try {
         Add-Content -Path $phpIni -Value "`nopcache.jit=disable`nopcache.jit_buffer_size=0"
         # Start-Process with -RedirectStandard* writes directly to disk —
         # unlike PowerShell jobs, which drop native-process stderr.
-        # Wrap via a script file so PHP_CLI_SERVER_WORKERS is exported into
-        # PHP's environment (PowerShell's -ArgumentList can't set env vars
-        # for the child). Workers fork N processes — without this `php -S`
-        # is single-process and serializes concurrent requests, which
-        # deadlocks Selenium tests that trigger re-entrant HTTP (e.g.
-        # browser page-load fires our REST endpoint while pytest makes
-        # the next request).
-        $serverScript = "$PWD/start-php-server.sh"
-        Set-Content -Path $serverScript -Value "#!/bin/bash`nexport PHP_CLI_SERVER_WORKERS=4`nexec php `"$wp`" server"
-        chmod +x $serverScript
-        $server = Start-Process -FilePath $serverScript `
+        # PHP_CLI_SERVER_WORKERS makes `php -S` fork N child processes;
+        # without it the built-in server is single-process and serializes
+        # concurrent requests, which deadlocks Selenium tests that trigger
+        # re-entrant HTTP (e.g. a browser page-load fires our REST
+        # endpoint while pytest makes the next request).
+        $server = Start-Process -FilePath "php" `
+            -ArgumentList @("$wp", "server") `
+            -Environment @{PHP_CLI_SERVER_WORKERS=4} `
             -RedirectStandardOutput $serverStdout `
             -RedirectStandardError $serverStderr `
             -PassThru -NoNewWindow
