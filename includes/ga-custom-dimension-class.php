@@ -102,9 +102,20 @@ class Fiftyonedegrees_Custom_Dimensions extends WP_List_Table
 
     public function get_columns()
     {
+        // The 'include' header carries an HTML <input> rather than a
+        // plain label so the column heading itself is the master
+        // toggle. WP_List_Table emits column display names without
+        // escaping, so the markup survives intact; 51D.js wires the
+        // toggle to the per-row checkboxes by id.
         return [
             'property_name'         => __('Property Name'),
             'custom_dimension_name' => __('Custom Dimension'),
+            'include'               => '<input type="checkbox" class="51D-include-master" aria-label="'
+                . esc_attr__('Include all 51Degrees properties as Custom Dimensions', 'fiftyonedegrees')
+                . '" />'
+                . '<span style="margin-left:6px;">'
+                . esc_html__('Include', 'fiftyonedegrees')
+                . '</span>',
         ];
     }
 
@@ -206,10 +217,23 @@ class Fiftyonedegrees_Custom_Dimensions extends WP_List_Table
     public function display_rows()
     {
         $passedDims = get_option(Options::GA_DIMENSIONS);
+        // Inclusion set (property_name => true) of ticked checkboxes.
+        // Absent option (option === false) means "fresh, never submitted"
+        // -> default everything to ticked so an onboarding admin sees the
+        // familiar all-properties view. Present option (array, possibly
+        // empty) means "the admin has interacted" -> property ticked iff
+        // it appears as a key. Unticked properties are not stored, they
+        // are simply absent from the set.
+        $includedMap = get_option(Options::GA_DIMENSIONS_INCLUDED);
+        $hasIncludedMap = is_array($includedMap);
 
         foreach ($this->items as $i => $rec) {
             $listBoxId = '51D_' . $rec['property_name'];
             $selectedPHP = $passedDims[$rec['property_name']] ?? '';
+            $includeName = '51D_include_' . $rec['property_name'];
+            $isIncluded = $hasIncludedMap
+                ? isset($includedMap[$rec['property_name']])
+                : true;
 
             echo '<tr id="record_' . esc_attr((string) $i) . '">';
             echo '<td>' . esc_html($rec['property_name']) . '</td>';
@@ -236,7 +260,18 @@ class Fiftyonedegrees_Custom_Dimensions extends WP_List_Table
                 </script>
             </select>
             <?php
-            echo "</div>\n</td>\n</tr>\n";
+            echo "</div>\n</td>\n";
+            printf(
+                '<td><input type="checkbox" class="51D-include-cb" name="%s" value="1" %s aria-label="%s" /></td>',
+                esc_attr($includeName),
+                checked($isIncluded, true, false),
+                esc_attr(sprintf(
+                    /* translators: %s is the 51Degrees property name. */
+                    __('Include %s as a Custom Dimension', 'fiftyonedegrees'),
+                    $rec['property_name']
+                ))
+            );
+            echo "</tr>\n";
         }
     }
 

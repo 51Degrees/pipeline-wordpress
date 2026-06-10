@@ -237,6 +237,67 @@ class GoogleAnalyticsTabRenderTests extends TestCase
         );
     }
 
+    public function testRejectionNoticeRendersTryAgainButton()
+    {
+        // For retryable rejection slugs the notice should carry an
+        // inline "Try again" link that starts a fresh OAuth flow via
+        // the same nonce'd admin-post handler the Connect button
+        // uses. Without it the admin would have to scroll past the
+        // notice to find the Connect button further down.
+        $this->transients[FiftyOneDegreesOauthNotice::TRANSIENT_KEY] = 'exchange_failed';
+
+        $html = $this->render();
+
+        $this->assertStringContainsString('Try again', $html,
+            'retryable error notice must offer an inline Try-again link'
+        );
+        $this->assertStringContainsString(
+            'admin-post.php?action=fiftyonedegrees_oauth_start',
+            $html,
+            'Try-again link must point at the OAuth start handler'
+        );
+        $this->assertStringContainsString('_wpnonce=', $html,
+            'Try-again link must be nonced'
+        );
+    }
+
+    public function testMultisiteRejectionNoticeOmitsTryAgainButton()
+    {
+        // The start handler rejects every multisite request up front
+        // with multisite_unsupported — a Try-again click would loop
+        // straight back to the same notice. Don't render the button.
+        Functions\when('is_multisite')->justReturn(true);
+        $this->transients[FiftyOneDegreesOauthNotice::TRANSIENT_KEY] = 'multisite_unsupported';
+
+        $html = $this->render();
+
+        $this->assertStringNotContainsString('Try again', $html,
+            'multisite_unsupported notice must not offer a Try-again link'
+        );
+    }
+
+    public function testHttpsRequiredNoticeOmitsTryAgainButton()
+    {
+        // Same loop rationale as multisite: the HTTPS gate trips on
+        // every entry, so retry would never make progress.
+        $this->transients[FiftyOneDegreesOauthNotice::TRANSIENT_KEY] = 'https_required';
+
+        $html = $this->render();
+
+        $this->assertStringNotContainsString('Try again', $html);
+    }
+
+    public function testSuccessNoticeOmitsTryAgainButton()
+    {
+        $this->transients[FiftyOneDegreesOauthNotice::TRANSIENT_KEY] = 'success';
+
+        $html = $this->render();
+
+        $this->assertStringNotContainsString('Try again', $html,
+            'success notice must not show a retry control'
+        );
+    }
+
     public function testSuccessNoticeFromTransientUsesSuccessClass()
     {
         $this->transients[FiftyOneDegreesOauthNotice::TRANSIENT_KEY] = 'success';

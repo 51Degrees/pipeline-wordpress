@@ -47,14 +47,26 @@ class FiftyOneDegreesOauthRelayClient
 
     /**
      * The relay origin, e.g. https://cloud.51degrees.com. The relay is part of
-     * the cloud service, so its host is taken from the same cloud API URL used
-     * for device-detection and robots requests (the FOD_CLOUD_API_URL
-     * environment variable), defaulting to the production cloud host when unset.
+     * the cloud service and in production shares a host with the device-
+     * detection API, so the default is taken from FOD_CLOUD_API_URL (same
+     * source as cloud-metadata). FOD_OAUTH_RELAY_URL overrides only this base
+     * for local development where the relay is rolled to a staging host
+     * (e.g. an Azure app service) ahead of the rest of the v4 API.
      *
      * @return string
      */
     public static function base()
     {
+        $override = getenv('FOD_OAUTH_RELAY_URL');
+        if (is_string($override) && $override !== '') {
+            $parsed = parse_url(rtrim($override, '/'));
+            $scheme = isset($parsed['scheme']) ? $parsed['scheme'] : 'https';
+            $host = isset($parsed['host']) ? $parsed['host'] : '';
+            $port = isset($parsed['port']) ? ':' . $parsed['port'] : '';
+            if ($host !== '') {
+                return $scheme . '://' . $host . $port;
+            }
+        }
         return FiftyOneDegreesCloudMetadata::get_cloud_host_url();
     }
 

@@ -348,6 +348,95 @@ class GaServiceTests extends TestCase {
         $this->assertStringContainsString('device_type', $store->data[Options::GA_ERROR]);
     }
 
+    public function testApplySkipsRowsExcludedByInclusionMap() {
+        // GA_DIMENSIONS_INCLUDED is a set of ticked property names.
+        // A property absent from the set means the admin unticked its
+        // row and we must skip its CD. Two rows in the map, only one
+        // listed in the set: a single create call is expected.
+        $created = [];
+        $response = Mockery::mock();
+        $response->shouldReceive('getCustomDimensions')->andReturn([]);
+        $response->shouldReceive('getNextPageToken')->andReturn('');
+
+        $resource = Mockery::mock();
+        $resource->shouldReceive('listPropertiesCustomDimensions')->andReturn($response);
+        $resource->shouldReceive('create')->andReturnUsing(
+            function ($parent, $payload) use (&$created) {
+                $created[] = $payload;
+                return $payload;
+            }
+        );
+
+        $admin = new \stdClass();
+        $admin->properties_customDimensions = $resource;
+
+        $store = $this->stub_option_store([
+            Options::GA_PROPERTY_ID           => '100',
+            Options::GA_CUSTOM_DIMENSIONS_MAP => [
+                ['parameter_name' => 'device_type',   'property_name' => 'devicetype'],
+                ['parameter_name' => 'hardware_name', 'property_name' => 'hardwarename'],
+            ],
+            Options::GA_DIMENSIONS_INCLUDED => [
+                // Only hardwarename is in the set => only hardwarename
+                // is included. devicetype absent from the set =>
+                // excluded.
+                'hardwarename' => true,
+            ],
+        ]);
+
+        $svc = Mockery::mock('Fiftyonedegrees_Google_Analytics')->makePartial();
+        $svc->shouldReceive('authenticate')->andReturn(Mockery::mock(\stdClass::class));
+        $svc->shouldReceive('get_ga4_admin_service')->andReturn($admin);
+
+        $result = $svc->apply_custom_dimensions_to_ga4();
+
+        $this->assertTrue($result);
+        $this->assertCount(1, $created,
+            'devicetype was excluded; only hardware_name must be created');
+        $this->assertSame('hardware_name', $created[0]->getParameterName());
+    }
+
+    public function testApplyMissingInclusionMapDefaultsToAllIncluded() {
+        // Backwards-compat: an admin who upgrades from an older build
+        // has no GA_DIMENSIONS_INCLUDED option yet. The filter must
+        // default to "everything included" so first-time Enable keeps
+        // the historical behaviour.
+        $created = [];
+        $response = Mockery::mock();
+        $response->shouldReceive('getCustomDimensions')->andReturn([]);
+        $response->shouldReceive('getNextPageToken')->andReturn('');
+
+        $resource = Mockery::mock();
+        $resource->shouldReceive('listPropertiesCustomDimensions')->andReturn($response);
+        $resource->shouldReceive('create')->andReturnUsing(
+            function ($parent, $payload) use (&$created) {
+                $created[] = $payload;
+                return $payload;
+            }
+        );
+
+        $admin = new \stdClass();
+        $admin->properties_customDimensions = $resource;
+
+        $store = $this->stub_option_store([
+            Options::GA_PROPERTY_ID           => '100',
+            Options::GA_CUSTOM_DIMENSIONS_MAP => [
+                ['parameter_name' => 'device_type', 'property_name' => 'devicetype'],
+            ],
+            // GA_DIMENSIONS_INCLUDED intentionally absent.
+        ]);
+
+        $svc = Mockery::mock('Fiftyonedegrees_Google_Analytics')->makePartial();
+        $svc->shouldReceive('authenticate')->andReturn(Mockery::mock(\stdClass::class));
+        $svc->shouldReceive('get_ga4_admin_service')->andReturn($admin);
+
+        $result = $svc->apply_custom_dimensions_to_ga4();
+
+        $this->assertTrue($result);
+        $this->assertCount(1, $created,
+            'absent inclusion map must default to include-all');
+    }
+
     public function testApplySkipsMalformedRows() {
         // Non-array entries and empty parameter_name rows are
         // dropped silently — same behavior as the frontend gtag

@@ -127,6 +127,15 @@ class Options
     const GA_DIMENSIONS_UPDATED = "fiftyonedegrees_passed_dimensions_updated";
 
     /**
+     * Per-property inclusion map (property_name => bool) for the
+     * Custom Dimensions tab. A property absent from the map is treated
+     * as included so a fresh resource key onboards with everything
+     * pre-ticked. Persisted by populate_selected_dimensions and read by
+     * apply_custom_dimensions_to_ga4 to filter the create batch.
+     */
+    const GA_DIMENSIONS_INCLUDED = "fiftyonedegrees_dimensions_included";
+
+    /**
      * Key to store Google Analytics JavaScript code.
      */
     const GA_JS = "fiftyonedegrees_ga_tracking_javascript";

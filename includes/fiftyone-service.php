@@ -438,10 +438,12 @@ class FiftyoneService {
                 $_POST[Options::RESOURCE_KEY]));
             update_option(Options::RESOURCE_KEY, $resource_key);
 
-            if (!isset($cachedPipeline['error'])) {
+            // update_option above triggers a synchronous pipeline rebuild
+            // that sets PIPELINE_VALIDATION_ERROR on failure.
+            if (!get_option(Options::PIPELINE_VALIDATION_ERROR)) {
                 if (get_option(Options::ENABLE_GA) &&
                     get_option(Options::RESOURCE_KEY_UPDATED)) {
-                
+
                     wp_redirect(get_admin_url() .
                         'options-general.php?page=51Degrees&tab=google-analytics');
                     exit();

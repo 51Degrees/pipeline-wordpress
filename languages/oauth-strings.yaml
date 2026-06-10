@@ -29,7 +29,7 @@ oauth:
 
     # Shown when Google appended ?error=... to the callback (user denied, consent
     # screen cancelled, scope missing). %s is the raw error code Google returned.
-    google_error: 'Google Analytics did not authorize the connection (%s). Try connecting again.'
+    google_error: 'Google did not grant access to Analytics (reason: %s). Please try connecting again and approve all requested permissions.'
 
     # Shown when the code exchange request to Google failed (network error,
     # invalid_grant, server error). The authorization code is single-use and
@@ -52,7 +52,7 @@ oauth:
     # Shown when the host in state.site_url does not match the current request host.
     # Indicates the callback landed on a different site than the one that started
     # the flow (cross-site replay attempt) or a misconfigured reverse proxy.
-    host_mismatch: 'The Google Analytics authorization response was issued for a different site. Please try connecting from this site''s admin.'
+    host_mismatch: 'The Google Analytics authorization response was issued for a different site. Check that WordPress Address and Site Address (under Settings -> General) match the URL you used to start the flow, then try connecting again.'
 
     # Shown when the paired transient row is gone (TTL expired, already consumed,
     # or never created). Typical cause: the admin clicked the callback link twice.
@@ -74,7 +74,7 @@ oauth:
 
     # Shown when capability/login checks pass but the call somehow reached
     # verify_state with user_id <= 0. Defensive — should not happen via the UI.
-    invalid_user_id: 'Could not identify the administrator who started the Google Analytics connection. Please log in and try again.'
+    invalid_user_id: 'Your administrator session could not be identified. Please log out, log back in, and try connecting again.'
 
     # Shown when wp_json_encode fails to serialize the state payload
     # (e.g. non-UTF-8 input from a future caller). Defensive — current
@@ -86,19 +86,19 @@ oauth:
     # something other than FiftyOneDegreesOauthStateException (e.g. a
     # CSPRNG failure inside random_bytes). Pairs with an error_log entry
     # for ops diagnostics.
-    start_failed: 'Could not start the Google Analytics authorization. Please try connecting again. If the problem persists, contact your administrator.'
+    start_failed: 'Could not start the Google Analytics authorization. Please try connecting again. If the problem persists, contact 51Degrees support.'
 
     # Shown when the site is a multisite install. OAuth flow is single-site only
     # in this release; multisite support is tracked for 1.0.13.
-    multisite_unsupported: 'Google Analytics OAuth is not yet supported on multisite installations. This site is on the roadmap for a future release.'
+    multisite_unsupported: 'Google Analytics connection is not yet supported on WordPress multisite installations. Support is planned for a future release.'
 
     # (Used by S-8 oauth-start handler) Shown when the site is served over plain HTTP.
     # OAuth tokens must transit via HTTPS — refuse to start the flow otherwise.
-    https_required: 'Google Analytics requires HTTPS. Enable SSL on this site before connecting.'
+    https_required: 'Google Analytics connection requires HTTPS. Set both WordPress Address and Site Address to start with https:// (under Settings -> General) before connecting.'
 
     # (Used by fiftyonedegrees.php bootstrap) Sticky notice when the plugin shipped
     # with a placeholder relay URL. OAuth is hard-disabled until a real URL is wired in.
-    placeholder_url: 'OAuth is disabled — this build of the plugin shipped with a placeholder redirect URL. Google Analytics cannot be connected until a real relay URL is configured. Please contact 51Degrees support.'
+    placeholder_url: 'Google Analytics connection is disabled in this build of the plugin. Please update to the latest version, or contact 51Degrees support.'
 
     # (Used by oauth-migration) One-shot notice after the migration cleared
     # OOB-era access tokens. Visible once, then auto-dismissed.

@@ -117,6 +117,14 @@ else {
 ?>
 
 <form method="post" action="options.php">
+    <?php
+    // Marker so populate_selected_dimensions can distinguish "no
+    // include_* keys posted because the admin unticked everything"
+    // from "no include_* keys posted because the form was never
+    // shown". Without this, the first form (Go Back) below would
+    // wipe the inclusion map.
+    ?>
+    <input type="hidden" name="51D_form_submitted" value="1" />
     <?php $customDimensionsTable->display();?>
 
     <table style="width: 100%">

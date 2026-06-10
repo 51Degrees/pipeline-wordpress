@@ -35,10 +35,41 @@ if ($fiftyonedegrees_notice_slug !== '' && class_exists('FiftyOneDegreesStrings'
     $css = ($fiftyonedegrees_notice_slug === 'success' || $fiftyonedegrees_notice_slug === 'migration_done')
         ? 'notice notice-success'
         : 'notice notice-error';
+
+    // Slugs where a Try-again button does not help the admin:
+    //   success / migration_done — flow already finished cleanly.
+    //   multisite_unsupported / https_required / placeholder_url —
+    //   the start handler will re-trip the same gate, so the click
+    //   would loop them back to this notice unchanged.
+    $fiftyonedegrees_no_retry = [
+        'success'               => true,
+        'migration_done'        => true,
+        'multisite_unsupported' => true,
+        'https_required'        => true,
+        'placeholder_url'       => true,
+    ];
+
+    $fiftyonedegrees_retry_html = '';
+    if (!isset($fiftyonedegrees_no_retry[$fiftyonedegrees_notice_slug])
+        && !is_multisite()
+        && class_exists('FiftyOneDegreesOauthStart')
+    ) {
+        $fiftyonedegrees_retry_url = wp_nonce_url(
+            admin_url('admin-post.php?action=fiftyonedegrees_oauth_start'),
+            FiftyOneDegreesOauthStart::NONCE_ACTION
+        );
+        $fiftyonedegrees_retry_html = sprintf(
+            ' <a href="%s" class="button button-secondary" style="margin-left:8px;">%s</a>',
+            esc_url($fiftyonedegrees_retry_url),
+            esc_html__('Try again', 'fiftyonedegrees')
+        );
+    }
+
     printf(
-        '<div class="%s"><p>%s</p></div>',
+        '<div class="%s"><p>%s%s</p></div>',
         esc_attr($css),
-        esc_html(FiftyOneDegreesStrings::get('oauth.notice.' . $fiftyonedegrees_notice_slug))
+        esc_html(FiftyOneDegreesStrings::get('oauth.notice.' . $fiftyonedegrees_notice_slug)),
+        $fiftyonedegrees_retry_html
     );
 }
 

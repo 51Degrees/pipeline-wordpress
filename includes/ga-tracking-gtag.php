@@ -115,6 +115,15 @@ class Fiftyonedegrees_Tracking_Gtag {
             return ['parameters' => [], 'delayed_evidence' => false];
         }
 
+        // Inclusion set (property_name => true) of ticked CD rows. An
+        // absent option means "admin has never submitted the form" ->
+        // emit everything (fresh install historical behaviour). A row
+        // whose property_name is not in the set is silently dropped:
+        // emitting its parameter to GA4 would auto-unarchive a matching
+        // archived Custom Dimension and undo the admin's intent.
+        $included_map = get_option(Options::GA_DIMENSIONS_INCLUDED);
+        $has_included_map = is_array($included_map);
+
         $parameters = [];
         $delayed_evidence = false;
 
@@ -131,6 +140,10 @@ class Fiftyonedegrees_Tracking_Gtag {
             $datakey  = $this->normalize_segment($dimension, 'custom_dimension_datakey');
             $propName = $this->normalize_segment($dimension, 'property_name');
             if ($datakey === '' || $propName === '') {
+                continue;
+            }
+
+            if ($has_included_map && !isset($included_map[$propName])) {
                 continue;
             }
 

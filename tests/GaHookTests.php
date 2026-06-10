@@ -376,7 +376,13 @@ class GaHookTests extends TestCase {
             Options::GA_DIMENSIONS_UPDATED,
             true);
 
-        $service = new Fiftyonedegrees_Google_Analytics();
+        // Stub the gtag-regen seam — the production path loads
+        // WP_List_Table via ABSPATH, which is unavailable in the
+        // unit-test bootstrap. The behavioural assertion here is the
+        // populate path + redirect; the regen is covered separately.
+        $service = Mockery::mock('Fiftyonedegrees_Google_Analytics')->makePartial();
+        $service->shouldAllowMockingProtectedMethods();
+        $service->shouldReceive('regenerate_gtag_code')->once();
 
         $service->fiftyonedegrees_ga_update_cd_indices();
         $this->assertTrue(true);

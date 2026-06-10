@@ -297,6 +297,16 @@ class Fiftyonedegrees_Google_Analytics {
 
         $existing_params = array_column($existing, 'parameter_name');
 
+        // Inclusion set: a property is included iff it appears as a key
+        // in GA_DIMENSIONS_INCLUDED. Absent option (option === false)
+        // means "admin has never submitted the form" -> default to
+        // include-all so first-time Enable keeps historical behaviour.
+        // Removing a property here does not delete the CD on GA4 (GA4
+        // has no delete API for CDs); it just stops the plugin from
+        // creating new ones.
+        $included_map = get_option(Options::GA_DIMENSIONS_INCLUDED);
+        $has_included_map = is_array($included_map);
+
         // Filter to "new for this property" — anything already
         // present at the same parameter_name is handled by the
         // 409-idempotent path inside create_custom_dimension if
@@ -305,6 +315,14 @@ class Fiftyonedegrees_Google_Analytics {
         $to_create = [];
         foreach ($cd_map as $row) {
             if (!is_array($row)) {
+                continue;
+            }
+            $prop = isset($row['property_name']) && is_scalar($row['property_name'])
+                ? (string) $row['property_name']
+                : '';
+            if ($has_included_map && $prop !== ''
+                && !isset($included_map[$prop])
+            ) {
                 continue;
             }
             $param = isset($row['parameter_name']) && is_scalar($row['parameter_name'])
@@ -443,10 +461,29 @@ class Fiftyonedegrees_Google_Analytics {
     function populate_selected_dimensions($cachedPipeline) {
 
         if (!isset($cachedPipeline['error'])) {
-                    
+
             $passed_dimensions = array();
+            $included = array();
+            $include_prefix = '51D_include_';
             foreach ($_POST as $key=>$dimension) {
-                if (strpos($key, "51D_") !== false) {
+                // The form marker shares the 51D_ namespace with
+                // listbox names; skip it explicitly so it does not get
+                // captured as a phantom property below.
+                if ($key === '51D_form_submitted') {
+                    continue;
+                }
+                if (strpos($key, $include_prefix) === 0) {
+                    // Inclusion checkbox — name carries the property,
+                    // presence in $_POST means the box was ticked
+                    // (HTML omits unchecked checkboxes entirely).
+                    $property = sanitize_text_field(wp_unslash(
+                        substr($key, strlen($include_prefix))));
+                    if ($property !== '') {
+                        $included[$property] = true;
+                    }
+                    continue;
+                }
+                if (strpos($key, "51D_") === 0) {
                     $key = sanitize_text_field(wp_unslash(
                         str_replace("51D_","", $key)));
                     $passed_dimensions[$key] =
@@ -456,6 +493,17 @@ class Fiftyonedegrees_Google_Analytics {
             update_option(
                 Options::GA_DIMENSIONS,
                 $passed_dimensions);
+            // Only update the inclusion map if the form actually
+            // carried the marker — populate_selected_dimensions is
+            // invoked from two paths (Enable + Update mappings) and
+            // both render the marker, but other callers wired in the
+            // future must not silently reset the map to "nothing
+            // included" by virtue of POSTing without checkboxes.
+            if (isset($_POST['51D_form_submitted'])) {
+                update_option(
+                    Options::GA_DIMENSIONS_INCLUDED,
+                    $included);
+            }
             update_option(
                 Options::GA_DIMENSIONS_UPDATED,
                 true);
@@ -477,10 +525,29 @@ class Fiftyonedegrees_Google_Analytics {
                 $this->populate_selected_dimensions(
                     get_option(Options::PIPELINE));
 
+                // Regenerate the cached gtag head fragment so the
+                // frontend stops emitting parameters for properties
+                // the admin just unticked. Without this, GA4 keeps
+                // receiving events with archived parameter names and
+                // auto-unarchives the matching Custom Dimensions,
+                // making the inclusion toggle appear inert.
+                // Defensive try/catch: a failure here must not block
+                // the redirect back to the GA tab — the inclusion map
+                // is already persisted above, and the previous GA_JS
+                // stays cached as a safe fallback.
+                try {
+                    $this->regenerate_gtag_code();
+                } catch (\Throwable $e) {
+                    error_log(
+                        '51Degrees: failed to regenerate gtag code on '
+                        . 'Update Custom Dimension Mappings: '
+                        . $e->getMessage()
+                    );
+                }
             }
             wp_redirect(get_admin_url() .
                 'options-general.php?page=51Degrees&tab=google-analytics');
-        }       
+        }
     }
 
     /**
@@ -545,17 +612,41 @@ class Fiftyonedegrees_Google_Analytics {
      * failure, which the admin UI surfaces as a one-shot notice.
      */
     function execute_ga_tracking_steps() {
-        // Refresh GA_CUSTOM_DIMENSIONS_MAP from the current Pipeline
-        // property list + admin-saved mappings.
+        // Same defensive try/catch rationale as the Update path: a
+        // gtag-regen failure must not prevent the redirect or the
+        // GA4 apply step below from running. The previous GA_JS
+        // stays cached as a safe fallback.
+        try {
+            $this->regenerate_gtag_code();
+        } catch (\Throwable $e) {
+            error_log(
+                '51Degrees: failed to regenerate gtag code on '
+                . 'Enable Google Analytics Tracking: '
+                . $e->getMessage()
+            );
+        }
+
+        if ($this->apply_custom_dimensions_to_ga4()) {
+            update_option(Options::ENABLE_GA, 'enabled');
+        }
+    }
+
+    /**
+     * Refreshes GA_CUSTOM_DIMENSIONS_MAP from the current Pipeline
+     * property list + admin-saved selections, then rebuilds the cached
+     * gtag head fragment so the frontend reflects the latest inclusion
+     * state. Extracted as a protected seam so tests that exercise the
+     * Update / Enable hooks can stub the heavy class loading without
+     * needing ABSPATH or the WP_List_Table base.
+     */
+    protected function regenerate_gtag_code() {
+        require_once dirname(__DIR__)
+            . '/includes/ga-custom-dimension-class.php';
         $customDimensionsTable = new Fiftyonedegrees_Custom_Dimensions();
         $customDimensionsTable->prepare_items();
 
         $gtag_code = $this->gtag_tracking_inst->output_ga_tracking_code();
         update_option(Options::GA_JS, $gtag_code);
-
-        if ($this->apply_custom_dimensions_to_ga4()) {
-            update_option(Options::ENABLE_GA, 'enabled');
-        }
     }
 
     /**
@@ -771,6 +862,7 @@ class Fiftyonedegrees_Google_Analytics {
         delete_option(Options::RESOURCE_KEY_UPDATED);
         delete_option(Options::GA_DIMENSIONS);
         delete_option(Options::GA_DIMENSIONS_UPDATED);
+        delete_option(Options::GA_DIMENSIONS_INCLUDED);
         delete_option(Options::GA_ID_UPDATED);
         delete_option(Options::GA_SEND_PAGE_VIEW_UPDATED);
         delete_option(Options::GA_TRACKING_ID_ERROR);
