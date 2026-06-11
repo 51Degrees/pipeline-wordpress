@@ -82,7 +82,7 @@ class FiftyOneDegreesWpHttpClient extends HttpClient
 
         $args = [
             'method'  => strtoupper($type),
-            'timeout' => 10,
+            'timeout' => 3,
             'headers' => [],
         ];
         if (!empty($originHeader)) {

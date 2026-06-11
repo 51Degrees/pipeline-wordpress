@@ -340,12 +340,12 @@ class Pipeline
         $data = Pipeline::$data;
 
         if (!$data) {
-            return null;
+            return [];
         }
         if (isset($data['errors']) && count($data['errors'])) {
             error_log('Errors processing Flow Data' . $data['errors']);
 
-            return null;
+            return [];
         }
 
         $flowData = $data['flowData'];
@@ -355,7 +355,7 @@ class Pipeline
         } catch (\Exception $e) {
             error_log($e->getMessage());
 
-            return null;
+            return [];
         }
     }
 
