@@ -104,7 +104,7 @@ try {
         # endpoint while pytest makes the next request).
         $server = Start-Process -FilePath "php" `
             -ArgumentList @("$wp", "server") `
-            -Environment @{PHP_CLI_SERVER_WORKERS=4} `
+            -Environment @{PHP_CLI_SERVER_WORKERS=8} `
             -RedirectStandardOutput $serverStdout `
             -RedirectStandardError $serverStderr `
             -PassThru -NoNewWindow
