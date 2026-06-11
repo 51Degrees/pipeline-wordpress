@@ -1,3 +1,8 @@
+= 1.0.13 =
+* FIX: Nightly CI builds no longer hang on plain-permalink test runs. The cached pipeline's baked JS endpoint is now decoupled from the site's permalink_structure setting, so changing permalinks no longer triggers a synchronous cloud rebuild (issue #62).
+* INTERNAL: The cached pipeline (Options::PIPELINE) is automatically invalidated once on upgrade so the new permalink-agnostic endpoint format is picked up on the next request.
+* UPGRADE NOTICE: After updating, purge your full-page cache (WP Super Cache / W3TC / CDN / managed hosting edge cache) so visitors fetch HTML with the refreshed device-detection JS endpoint. If your security plugin or host blocks query-string REST routes, configure an exception for `?rest_route=/fiftyonedegrees/*`.
+
 = 1.0.12 =
 * FIX: /robots.txt is now always reachable to crawlers regardless of the configured robots-enforce policy. Previously, disallowed crawlers were 302-redirected when fetching /robots.txt itself, defeating the policy the file advertises (issue #60).
 

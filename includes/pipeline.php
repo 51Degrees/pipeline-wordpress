@@ -340,12 +340,12 @@ class Pipeline
         $data = Pipeline::$data;
 
         if (!$data) {
-            return null;
+            return [];
         }
         if (isset($data['errors']) && count($data['errors'])) {
             error_log('Errors processing Flow Data' . $data['errors']);
 
-            return null;
+            return [];
         }
 
         $flowData = $data['flowData'];
@@ -355,7 +355,7 @@ class Pipeline
         } catch (\Exception $e) {
             error_log($e->getMessage());
 
-            return null;
+            return [];
         }
     }
 
@@ -449,22 +449,29 @@ class Pipeline
 
     /**
      * Gets the REST API endpoint path for the 51Degrees JSON callback.
-     * Uses WordPress rest_url() to support all permalink structures
-     * (pretty permalinks, plain permalinks, subdirectory installs).
      *
-     * @return string the endpoint path (e.g. "/wp-json/fiftyonedegrees/v4/json"
-     *                or "/?rest_route=/fiftyonedegrees/v4/json")
+     * Returns the permalink-agnostic `?rest_route=` form regardless of the
+     * site's permalink_structure setting. WP core's rest_api_loaded() (in
+     * wp-includes/rest-api.php) fires on parse_request unconditionally, so
+     * this form works whether or not rewrite rules are in place. Used by
+     * Gutenberg, WP-CLI and WordPress.com for the same reason.
+     *
+     * Decoupling the baked JS endpoint from permalink_structure lets the
+     * cached pipeline (Options::PIPELINE) stay valid across permalink
+     * changes -- no synchronous cloud-rebuild needed when the admin flips
+     * Settings -> Permalinks.
+     *
+     * @return string the endpoint path (e.g. "/?rest_route=/fiftyonedegrees/v4/json"
+     *                or "/blog/?rest_route=/fiftyonedegrees/v4/json" for subdir)
      */
     public static function getRestEndpoint()
     {
-        $restUrl = rest_url('fiftyonedegrees/v4/json');
-        $parsed = parse_url($restUrl);
-        $endpoint = $parsed['path'] ?? '/';
-        if (isset($parsed['query'])) {
-            $endpoint .= '?' . $parsed['query'];
+        $homePath = parse_url(home_url('/'), PHP_URL_PATH) ?: '/';
+        if (substr($homePath, -1) !== '/') {
+            $homePath .= '/';
         }
 
-        return $endpoint;
+        return $homePath . '?rest_route=/fiftyonedegrees/v4/json';
     }
 
     /**

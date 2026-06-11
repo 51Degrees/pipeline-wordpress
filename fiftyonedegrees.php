@@ -3,7 +3,7 @@
  *  Plugin Name: 51Degrees
  *  Plugin URI:  https://51degrees.com/
  *  Description: Device detection and location-aware content for WordPress, with cloud-driven robots.txt management for AI/search crawlers and suspicious-activity protection against abusive traffic.
- *  Version:     1.0.12
+ *  Version:     1.0.13
  *  Author:      51Degrees
  *  Author URI:  https://51degrees.com/
  *  Text Domain: fiftyonedegrees
@@ -94,6 +94,16 @@ class Fiftyonedegrees {
         // Setting Global Values.
         define('FIFTYONEDEGREES_PLUGIN_DIR', plugin_dir_path( __FILE__ ));
         define('FIFTYONEDEGREES_PLUGIN_URL', plugin_dir_url(__FILE__));
+        // Used as wp_enqueue_script() $ver to bust browser/CDN caches on
+        // upgrade. Derived from the `Version:` header above so a release
+        // bump touches a single line (no separate constant to keep in
+        // sync). get_file_data() is loaded before plugins_loaded fires;
+        // the empty-string fallback only matters if this code somehow
+        // runs before wp-includes/functions.php (CLI tests bypassing WP).
+        $plugin_header = function_exists('get_file_data')
+            ? get_file_data(__FILE__, ['Version' => 'Version'])
+            : ['Version' => ''];
+        define('FIFTYONEDEGREES_VERSION', $plugin_header['Version']);
         define('FIFTYONEDEGREES_PROMPT', 'force');
         define('FIFTYONEDEGREES_ACCESS_TYPE', 'offline');
         define('FIFTYONEDEGREES_RESPONSE_TYPE', 'code');
@@ -189,6 +199,7 @@ register_uninstall_hook(__FILE__, 'fiftyonedegrees_deactivate'); // delete
 
 function fiftyonedegrees_deactivate() {
     wp_clear_scheduled_hook('fiftyonedegrees_refresh_robots_txt');
+    wp_clear_scheduled_hook(FiftyoneService::PIPELINE_REBUILD_CRON_ACTION);
     Fiftyonedegrees::get_instance()->delete_options();
     FiftyOneDegreesCloudMetadata::invalidate_all();
 }

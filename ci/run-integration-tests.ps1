@@ -91,10 +91,20 @@ try {
         # the loaded php.ini directly. Last directive wins on PHP ini parse.
         $phpIni = (php -r "echo php_ini_loaded_file();").Trim()
         Add-Content -Path $phpIni -Value "`nmax_execution_time=120"
+        # Nightly Pipeline intermittently segfaults in `php -S` on the first
+        # POST after WP login under PHP 8.4/8.5 — symptom matches OPcache JIT
+        # race conditions. Disable JIT for the test server only.
+        Add-Content -Path $phpIni -Value "`nopcache.jit=disable`nopcache.jit_buffer_size=0"
         # Start-Process with -RedirectStandard* writes directly to disk —
         # unlike PowerShell jobs, which drop native-process stderr.
+        # PHP_CLI_SERVER_WORKERS makes `php -S` fork N child processes;
+        # without it the built-in server is single-process and serializes
+        # concurrent requests, which deadlocks Selenium tests that trigger
+        # re-entrant HTTP (e.g. a browser page-load fires our REST
+        # endpoint while pytest makes the next request).
         $server = Start-Process -FilePath "php" `
             -ArgumentList @("$wp", "server") `
+            -Environment @{PHP_CLI_SERVER_WORKERS=4} `
             -RedirectStandardOutput $serverStdout `
             -RedirectStandardError $serverStderr `
             -PassThru -NoNewWindow

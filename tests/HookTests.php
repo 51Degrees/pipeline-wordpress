@@ -42,10 +42,16 @@ class HookTests extends TestCase {
             "pipeline" =>  $mock_pipeline,
             "available_engines" => ["testElement"],
             "error" => null);
-        Functions\when('get_option')->alias(function($arg) {
+        Functions\when('get_option')->alias(function($arg, $default = null) {
             if ($arg === Options::PIPELINE) {
                 return HookTests::$pipeline;
             }
+            // Short-circuit the cache-version migration in setup_wp_actions
+            // by reporting the schema is already current.
+            if ($arg === Options::PIPELINE_CACHE_VERSION) {
+                return FiftyoneService::PIPELINE_CACHE_VERSION;
+            }
+            return $default;
         });
 	}
 
@@ -215,7 +221,11 @@ class HookTests extends TestCase {
             ->justReturn('root/includes/');
         Functions\expect('wp_enqueue_script')
             ->once()
-            ->with('fiftyonedegrees', 'root/includes/../assets/js/fod.js');
+            ->with(
+                'fiftyonedegrees',
+                'root/includes/../assets/js/fod.js',
+                Mockery::any(),
+                Mockery::any());
 
         Functions\expect('wp_add_inline_script')
             ->once()
@@ -452,7 +462,11 @@ class HookTests extends TestCase {
 
         Functions\expect('wp_enqueue_script')
             ->once()
-            ->with('fiftyonedegrees', 'root/includes/../assets/js/fod.js');
+            ->with(
+                'fiftyonedegrees',
+                'root/includes/../assets/js/fod.js',
+                Mockery::any(),
+                Mockery::any());
         Functions\expect('wp_add_inline_script')
             ->once()
             ->with('fiftyonedegrees', Mockery::any(), 'before');
@@ -696,7 +710,15 @@ class HookTests extends TestCase {
         $this->assertArrayNotHasKey(Options::PIPELINE_ENABLE, $updated);
     }
 
-    public function testResourceKeyUpdateDoesNotClobberCachedPipelineOnCloudFailure() {
+    /**
+     * The RESOURCE_KEY updated_option handler must NOT make a sync cloud
+     * call — it ties up the only worker under single-process `php -S` and
+     * deadlocks concurrent traffic (see #62 and follow-up). The hook
+     * schedules a deferred rebuild via PIPELINE_REBUILD_PENDING; the
+     * cloud round-trip happens later in fiftyonedegrees_maybe_rebuild_pipeline
+     * on admin_init priority 5 (covered by PipelineTests).
+     */
+    public function testResourceKeyUpdate_SchedulesDeferredRebuildWithoutCloudCall() {
         Functions\when('get_option')->alias(function($arg, $default = null) {
             if ($arg === Options::PIPELINE) return HookTests::$pipeline;
             return $default;
@@ -714,42 +736,50 @@ class HookTests extends TestCase {
         Functions\when('set_transient')->justReturn(true);
         Functions\when('delete_transient')->justReturn(true);
 
+        $makePipelineCalls = 0;
         Patchwork\redefine(
             'Pipeline::make_pipeline',
-            Patchwork\always([
-                'pipeline' => null,
-                'available_engines' => null,
-                'error' => 'Cloud unreachable: simulated',
-            ])
+            function () use (&$makePipelineCalls) {
+                $makePipelineCalls++;
+                return HookTests::$pipeline;
+            }
         );
 
         $service = new FiftyoneService();
         $service->fiftyonedegrees_update_option(
             Options::RESOURCE_KEY, 'old-key', 'new-key');
 
+        $this->assertSame(
+            0,
+            $makePipelineCalls,
+            'Hook must NOT invoke the cloud — deferred to fiftyonedegrees_maybe_rebuild_pipeline'
+        );
+        $this->assertArrayHasKey(
+            Options::PIPELINE_REBUILD_PENDING,
+            $updated,
+            'Hook must set the rebuild-pending flag so admin_init/cron picks it up'
+        );
+        $this->assertSame(1, $updated[Options::PIPELINE_REBUILD_PENDING]);
         $this->assertArrayNotHasKey(
             Options::PIPELINE,
             $updated,
-            'Error pipeline must not overwrite the cached pipeline'
+            'Hook must not touch the cached pipeline — the deferred rebuild owns that write'
         );
         $this->assertContains(
             Options::ROBOTS_LAST_REFRESH,
             $deleted,
-            'Stale last-refresh against the previous key must be cleared'
-        );
-        $this->assertArrayHasKey(
-            Options::PIPELINE_VALIDATION_ERROR,
-            $updated,
-            'Validation error message must be surfaced to setup.php'
-        );
-        $this->assertSame(
-            'Cloud unreachable: simulated',
-            $updated[Options::PIPELINE_VALIDATION_ERROR]
+            'Stale last-refresh against the previous key must still be cleared'
         );
     }
 
-    public function testResourceKeyUpdateClearsValidationErrorOnSuccessfulBuild() {
+    /**
+     * Clearing the resource key (empty new value) needs no cloud call, so
+     * the cached pipeline + validation error are wiped inline — matches
+     * pre-defer behavior of build_and_save_pipeline('').
+     */
+    public function testResourceKeyUpdate_EmptyValueWipesCachedPipelineInline() {
         Functions\when('get_option')->alias(function($arg, $default = null) {
+            if ($arg === Options::PIPELINE) return HookTests::$pipeline;
             return $default;
         });
         $updated = [];
@@ -765,17 +795,35 @@ class HookTests extends TestCase {
         Functions\when('set_transient')->justReturn(true);
         Functions\when('delete_transient')->justReturn(true);
 
+        $makePipelineCalls = 0;
         Patchwork\redefine(
             'Pipeline::make_pipeline',
-            Patchwork\always(HookTests::$pipeline)
+            function () use (&$makePipelineCalls) {
+                $makePipelineCalls++;
+                return HookTests::$pipeline;
+            }
         );
 
         $service = new FiftyoneService();
         $service->fiftyonedegrees_update_option(
-            Options::RESOURCE_KEY, 'old-key', 'new-key');
+            Options::RESOURCE_KEY, 'old-key', '');
 
-        $this->assertArrayHasKey(Options::PIPELINE, $updated);
-        $this->assertContains(Options::PIPELINE_VALIDATION_ERROR, $deleted);
+        $this->assertSame(0, $makePipelineCalls, 'Empty key needs no cloud call');
+        $this->assertContains(
+            Options::PIPELINE,
+            $deleted,
+            'Cached pipeline must be wiped when the key is cleared'
+        );
+        $this->assertContains(
+            Options::PIPELINE_VALIDATION_ERROR,
+            $deleted,
+            'Stale validation error must be wiped when the key is cleared'
+        );
+        $this->assertArrayNotHasKey(
+            Options::PIPELINE_REBUILD_PENDING,
+            $updated,
+            'No deferred rebuild scheduled when there is nothing to rebuild against'
+        );
     }
 
     /**

@@ -6,7 +6,7 @@ Tags: 51degrees, device detection, location, Google Analytics, device, detect, d
 Requires at least: 4.7
 Tested up to: 6.9.1
 Requires PHP: 8.2
-Stable tag: 1.0.12
+Stable tag: 1.0.13
 License: EUPL
 
 The best plugin for WordPress to send Device properties as Custom Dimensions to Google Analytics to get richer insights of device specifications and capabilities.
@@ -104,6 +104,10 @@ If you're experiencing any issues, use the WordPress.org [support forums](https:
 
 == Changelog ==
 
+= 1.0.13 =
+* FIX: Nightly CI builds no longer hang on plain-permalink test runs. The cached pipeline's baked JS endpoint is now decoupled from the site's permalink_structure setting, so changing permalinks no longer triggers a synchronous cloud rebuild (issue #62).
+* INTERNAL: The cached pipeline (Options::PIPELINE) is automatically invalidated once on upgrade so the new permalink-agnostic endpoint format is picked up on the next request.
+
 = 1.0.12 =
 * FIX: /robots.txt is now always reachable to crawlers regardless of the configured robots-enforce policy. Previously, disallowed crawlers were 302-redirected when fetching /robots.txt itself, defeating the policy the file advertises (issue #60).
 
@@ -111,6 +115,9 @@ If you're experiencing any issues, use the WordPress.org [support forums](https:
 * Initial Release.
 
 == Upgrade Notice ==
+
+= 1.0.13 =
+After updating, purge your full-page cache (WP Super Cache / W3TC / CDN / managed hosting edge cache) so visitors fetch HTML with the refreshed device-detection JS endpoint. If your security plugin or host blocks query-string REST routes, configure an exception for `?rest_route=/fiftyonedegrees/*`.
 
 = 1.0.0 =
 * Install 51Degrees Plugin.

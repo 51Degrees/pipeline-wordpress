@@ -254,6 +254,29 @@ class Options
     const PIPELINE_ENABLE = "fiftyonedegrees_pipeline_enable";
 
     /**
+     * Schema version of the cached pipeline (Options::PIPELINE). Compared
+     * against FiftyoneService::PIPELINE_CACHE_VERSION on each request to
+     * detect upgrades that need to regenerate the cache (issue #62).
+     */
+    const PIPELINE_CACHE_VERSION = "fiftyonedegrees_pipeline_cache_version";
+
+    /**
+     * Flag set by FiftyoneService::maybe_migrate_pipeline_cache() to defer
+     * a cached-pipeline rebuild to the next admin request or WP-Cron run,
+     * keeping the front-end critical path off any cloud HTTP (issue #62).
+     */
+    const PIPELINE_REBUILD_PENDING = "fiftyonedegrees_pipeline_rebuild_pending";
+
+    /**
+     * Lock used by FiftyoneService::fiftyonedegrees_maybe_rebuild_pipeline()
+     * to serialize concurrent rebuild attempts (e.g. admin opening multiple
+     * tabs, admin_init firing alongside the WP-Cron fallback event). Written
+     * via add_option which returns false atomically when the option already
+     * exists -- so exactly one request enters the rebuild body.
+     */
+    const PIPELINE_REBUILD_LOCK = "fiftyonedegrees_pipeline_rebuild_lock";
+
+    /**
      * Options group key for the PMP (Preference Management Platform) settings tab.
      */
     const PMP_GROUP_KEY = "fiftyonedegrees_pmp_options";
