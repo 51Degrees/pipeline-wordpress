@@ -80,7 +80,7 @@
 
 <p>
     Please visit our
-    <a href="https://51degrees.com/documentation/_other_integrations__wordpress.html" target="_blank">
+    <a href="https://51degrees.com/documentation/_other_integrations__wordpress.html?utm_source=code&utm_medium=comment&utm_campaign=pipeline-wordpress&utm_content=help.php&utm_term=use-in-templates-and-advanced-features" target="_blank">
         documentation
     </a>
     page for more information on advanced features including Value Replacement

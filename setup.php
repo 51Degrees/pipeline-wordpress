@@ -51,13 +51,13 @@
 
     <p>
         To get started visit
-        <a href="https://configure.51degrees.com/zHPMyDk6" target="_blank">the Configurator</a>
+        <a href="https://configure.51degrees.com/zHPMyDk6?utm_source=code&utm_medium=comment&utm_campaign=pipeline-wordpress&utm_content=setup.php&utm_term=body" target="_blank">the Configurator</a>
         to get a 51Degrees Resource Key for the device detection properties you
         want to get access to.
         </br>
         For more information on how to use our Configurator, view our explainer
         video
-        <a href="https://51degrees.com/documentation/_concepts__configurator.html" target="_blank">
+        <a href="https://51degrees.com/documentation/_concepts__configurator.html?utm_source=code&utm_medium=comment&utm_campaign=pipeline-wordpress&utm_content=setup.php&utm_term=body" target="_blank">
             here
         </a>.
     </p>

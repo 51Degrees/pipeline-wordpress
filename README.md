@@ -1,8 +1,8 @@
 # 51Degrees Pipeline API
 
-![51Degrees](https://51degrees.com/img/logo.png?utm_source=github&utm_medium=repository&utm_campaign=varnish_open_source&utm_content=readme_main "Data rewards the curious") **Pipeline API - WordPress plugin**
+![51Degrees](https://51degrees.com/img/logo.png?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.md&utm_term=51degrees-pipeline-api "Data rewards the curious") **Pipeline API - WordPress plugin**
 
-[Developer Documentation](https://51degrees.com/device-detection-php/md__home_vsts_work_1_s_apis_device-detection-php_readme.html "Developer Documentation")
+[Developer Documentation](https://51degrees.com/device-detection-php/md__home_vsts_work_1_s_apis_device-detection-php_readme.html?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.md&utm_term=51degrees-pipeline-api "Developer Documentation")
 # Introduction
 Optimize your website for a range of devices and personalize your content
 based on your user’s location.
@@ -19,7 +19,7 @@ by searching for `51Degrees`.
 2. To start using this plugin, you will need to create a `Resource Key`.
 This enables access to the data you need via the 51Degrees cloud service.
 You can create a `Resource Key` for free, using the
-[configurator](https://configure.51degrees.com/) to select the properties
+[configurator](https://configure.51degrees.com/?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.md&utm_term=after-activation) to select the properties
 you want.
 
 

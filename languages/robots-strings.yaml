@@ -23,11 +23,11 @@ robots:
 
   notice:
     # (HTML) Shown when the resource key lacks IsCrawler / CrawlerUsage properties.
-    no_crawler: '<strong>Warning:</strong> Your Resource Key does not include crawler detection properties (<code>IsCrawler</code> or <code>CrawlerUsage</code>). Robots.txt enforcement will not work until you add these properties to your key at <a href="https://configure.51degrees.com/" target="_blank">configure.51degrees.com</a>.'
+    no_crawler: '<strong>Warning:</strong> Your Resource Key does not include crawler detection properties (<code>IsCrawler</code> or <code>CrawlerUsage</code>). Robots.txt enforcement will not work until you add these properties to your key at <a href="https://configure.51degrees.com/?utm_source=code&utm_medium=comment&utm_campaign=pipeline-wordpress&utm_content=languages-robots-strings.yaml&utm_term=no_crawler" target="_blank">configure.51degrees.com</a>.'
     # (HTML) Shown when the resource key has IsCrawler but not CrawlerUsage.
-    no_crawler_usage: '<strong>Note:</strong> Your Resource Key includes <code>IsCrawler</code> but not <code>CrawlerUsage</code>. Without <code>CrawlerUsage</code>, category selections have no effect — enforcement falls back to path-based rules only. Upgrade your key at <a href="https://configure.51degrees.com/" target="_blank">configure.51degrees.com</a> for category-based enforcement.'
+    no_crawler_usage: '<strong>Note:</strong> Your Resource Key includes <code>IsCrawler</code> but not <code>CrawlerUsage</code>. Without <code>CrawlerUsage</code>, category selections have no effect — enforcement falls back to path-based rules only. Upgrade your key at <a href="https://configure.51degrees.com/?utm_source=code&utm_medium=comment&utm_campaign=pipeline-wordpress&utm_content=languages-robots-strings.yaml&utm_term=no_crawler_usage" target="_blank">configure.51degrees.com</a> for category-based enforcement.'
     # (HTML) Shown when the resource key lacks RobotsTxt properties.
-    no_robots_txt: '<strong>Note:</strong> Your Resource Key does not include the RobotsTxt <code>PlainText</code> property. Robots.txt generation will use local rules only. Upgrade your key at <a href="https://configure.51degrees.com/" target="_blank">configure.51degrees.com</a>'
+    no_robots_txt: '<strong>Note:</strong> Your Resource Key does not include the RobotsTxt <code>PlainText</code> property. Robots.txt generation will use local rules only. Upgrade your key at <a href="https://configure.51degrees.com/?utm_source=code&utm_medium=comment&utm_campaign=pipeline-wordpress&utm_content=languages-robots-strings.yaml&utm_term=no_robots_txt" target="_blank">configure.51degrees.com</a>'
     # Plain text. Shown after a successful Save and Generate action.
     generate_success: 'Robots.txt successfully generated from the 51Degrees Cloud API and cached.'
     # (HTML) Shown when the Cloud API call fails. %s is replaced by the error detail.
