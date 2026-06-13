@@ -240,7 +240,7 @@ class Pipeline
 
                 $flowData->process();
 
-                // https://51degrees.com/blog/user-agent-client-hints
+                // https://51degrees.com/blog/user-agent-client-hints?utm_source=code&utm_medium=comment&utm_campaign=pipeline-wordpress&utm_content=includes-pipeline.php&utm_term=process
                 Utils::setResponseHeader($flowData);
 
                 // Prefer the cloud's entitlement map cached at build time:

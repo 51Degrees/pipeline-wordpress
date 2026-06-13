@@ -1,7 +1,7 @@
 === 51Degrees ===
 
 Contributors: 51Degrees
-Donate link: https://51degrees.com/
+Donate link: https://51degrees.com/?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.txt&utm_term=51degrees
 Tags: 51degrees, device detection, location, Google Analytics, device, detect, device type, smartphone, tablet, desktop, mobile, optimize, detection, customizable, personalized, tailored, targeting, responsive, mobile website, mobile friendly, user experience, ecommerce, OpenStreetMap, Digital element, Geolocation
 Requires at least: 4.7
 Tested up to: 6.9.1
@@ -15,7 +15,7 @@ The best plugin for WordPress to send Device properties as Custom Dimensions to 
 
 Integrating 51Degrees Device Detection with your website will allow you to make informed decisions about what content a user engages with and how it is displayed. Combining the information learned from your analytics data with real-time enhanced device data on your website will empower you to produce a page built for that specific device’s needs. Taking this one step further, you have an additional 280+ device properties available to enhance your user's user experience. The possibilities are endless as to what you can do with the information - it’s remarkably powerful.
 
-This plugin makes use of the 51Degrees Pipeline API to deliver various data intelligence [services](https://51degrees.com/services). You can also add custom dimensions to your Google Analytics solution which will enhance your analytical data. With 51Degrees you can capture data that Google Analytics doesn't readily collect, such as detailed information on specific device hardware.
+This plugin makes use of the 51Degrees Pipeline API to deliver various data intelligence [services](https://51degrees.com/services?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.txt&utm_term=description). You can also add custom dimensions to your Google Analytics solution which will enhance your analytical data. With 51Degrees you can capture data that Google Analytics doesn't readily collect, such as detailed information on specific device hardware.
 
 == Features ==
 
@@ -66,9 +66,9 @@ For instructions on how to install the plugin manually or by uploading a zip fil
 = After activation =
 
 1. Visit the new `51Degrees` Settings menu.
-2. To start using this plugin, you will need to create a `Resource Key`. This enables access to the data you need via the 51Degrees cloud service. You can create a `Resource Key` for free, using the [configurator](https://configure.51degrees.com/) to select the properties you want.
+2. To start using this plugin, you will need to create a `Resource Key`. This enables access to the data you need via the 51Degrees cloud service. You can create a `Resource Key` for free, using the [configurator](https://configure.51degrees.com/?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.txt&utm_term=after-activation) to select the properties you want.
 
-For a demo video on how to use our configurator, [click here](https://51degrees.com/documentation/_concepts__configurator.html).
+For a demo video on how to use our configurator, [click here](https://51degrees.com/documentation/_concepts__configurator.html?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.txt&utm_term=after-activation).
 
 = Integration with Google Analytics =
 
@@ -92,7 +92,7 @@ For a demo video on how to use our configurator, [click here](https://51degrees.
 
 = Is the 51Degrees plugin free? =
 
-The 51Degrees plugin is free and open source. However Our [Cloud Configurator](https://configure.51degrees.com/) contains both FREE and PAID properties. The properties you will need to pay for are shown with a dollar icon. You can buy what you need on our [Pricing page](https://51degrees.com/pricing).
+The 51Degrees plugin is free and open source. However Our [Cloud Configurator](https://configure.51degrees.com/?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.txt&utm_term=is-the-51degrees-plugin-free) contains both FREE and PAID properties. The properties you will need to pay for are shown with a dollar icon. You can buy what you need on our [Pricing page](https://51degrees.com/pricing?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.txt&utm_term=is-the-51degrees-plugin-free).
 
 = What happens if I already use another plugin to integrate Google Analytics? =
 
