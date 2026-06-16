@@ -22,7 +22,7 @@ class FiftyOneDegreesStrings {
     // via array_replace_recursive. Top-level namespaces (common:, robots:,
     // suspicious:) are unique per file by convention — feature files must NOT
     // add a `common:` namespace or they'll silently override common-strings.
-    private const FILES = ['common-strings', 'robots-strings', 'suspicious-strings'];
+    private const FILES = ['common-strings', 'robots-strings', 'suspicious-strings', 'oauth-strings'];
 
     /** @var array<string,mixed>|null */
     private static $data = null;

@@ -1,0 +1,119 @@
+# 51Degrees Plugin — OAuth Notice Strings
+#
+# Strings shown to admins after the Google Analytics OAuth callback returns.
+# Each key under oauth.notice.* maps 1-to-1 to a rejection branch surfaced by
+# FiftyOneDegreesOauthCallback::handle() and FiftyOneDegrees_OAuth_Start_Handler.
+#
+# The branch slug used in:
+#   - FiftyOneDegreesOauthStateException::$reason
+#   - do_action('fiftyonedegrees_oauth_rejection', $branch, ...)
+#   - the `fiftyonedegrees_oauth_notice` transient set before PRG
+# matches the leaf key here. Adding a new branch means: throw the matching
+# reason, add a key here, render it in the google-analytics admin tab.
+#
+# Localisation: copy this file as oauth-strings.{locale}.yaml alongside and
+# translate the values. Missing locale files fall back to this base.
+#
+# Value syntax:
+#   Single-quoted  'value'  — no escape sequences; use '' for a literal apostrophe.
+#   Double-quoted  "value"  — supports \n \t \" \\.
+#   HTML tags are permitted in values marked "(HTML)"; these are output through
+#   wp_kses_post(). All other values use esc_html(). Use %s as a sprintf()
+#   placeholder for dynamic content inserted at runtime.
+
+oauth:
+
+  notice:
+    # Shown after a successful code exchange — token saved, ready to pick a property.
+    success: 'Connected to Google Analytics. Choose a property below to finish setup.'
+
+    # Shown when Google appended ?error=... to the callback (user denied, consent
+    # screen cancelled, scope missing). %s is the raw error code Google returned.
+    google_error: 'Google did not grant access to Analytics (reason: %s). Please try connecting again and approve all requested permissions.'
+
+    # Shown when the code exchange request to Google failed (network error,
+    # invalid_grant, server error). The authorization code is single-use and
+    # already burned on Google''s side — the user must restart the flow.
+    exchange_failed: 'Could not exchange the authorization code with Google. Please try connecting again.'
+
+    # Shown when the callback arrived with state but no `code` query parameter.
+    # Distinct from exchange_failed: the code was never present, not burned.
+    missing_code: 'The Google Analytics authorization response was missing the authorization code. Please try connecting again.'
+
+    # Shown when the state HMAC signature does not match. Indicates a tampered
+    # or corrupted state string — possible attempted forgery, possible truncation
+    # in transit. The user should restart the flow.
+    bad_hmac: 'The Google Analytics authorization response could not be verified. Please try connecting again.'
+
+    # Shown when the state has expired (older than STATE_TTL). The user took too
+    # long on the Google consent screen, or the relay queued the response.
+    expired_state: 'The Google Analytics authorization request expired. Please try connecting again.'
+
+    # Shown when the host in state.site_url does not match the current request host.
+    # Indicates the callback landed on a different site than the one that started
+    # the flow (cross-site replay attempt) or a misconfigured reverse proxy.
+    host_mismatch: 'The Google Analytics authorization response was issued for a different site. Check that WordPress Address and Site Address (under Settings -> General) match the URL you used to start the flow, then try connecting again.'
+
+    # Shown when the paired transient row is gone (TTL expired, already consumed,
+    # or never created). Typical cause: the admin clicked the callback link twice.
+    missing_transient: 'This Google Analytics authorization link has already been used or has expired. Please try connecting again.'
+
+    # Shown when the transient was created by a different admin user than the one
+    # currently logged in. Defends against cross-admin state replay.
+    user_mismatch: 'This Google Analytics authorization request was started by a different administrator. Please start the flow from your own account.'
+
+    # Shown when the state string is structurally invalid (bad base64, missing
+    # dot separator, malformed JSON). Almost always indicates request tampering.
+    malformed: 'The Google Analytics authorization response was malformed. Please try connecting again.'
+
+    # Shown when the per-site HMAC secret option is missing or too short. Indicates
+    # the OAUTH_STATE_SECRET row was manually deleted or never created. Resolution
+    # is to restart the flow from /admin/options-general.php?page=51Degrees — the
+    # start handler lazy-creates the secret.
+    secret_corrupt: 'The Google Analytics authorization secret is missing or corrupted on this site. Please try connecting again to regenerate it.'
+
+    # Shown when capability/login checks pass but the call somehow reached
+    # verify_state with user_id <= 0. Defensive — should not happen via the UI.
+    invalid_user_id: 'Your administrator session could not be identified. Please log out, log back in, and try connecting again.'
+
+    # Shown when wp_json_encode fails to serialize the state payload
+    # (e.g. non-UTF-8 input from a future caller). Defensive — current
+    # payload shape is plain ASCII so this branch is unreachable in
+    # practice, but the contract demands a key for every state exception.
+    encode_failure: 'Internal error while preparing the Google Analytics authorization request. Please try connecting again.'
+
+    # Last-resort slug emitted by oauth-start when the state engine throws
+    # something other than FiftyOneDegreesOauthStateException (e.g. a
+    # CSPRNG failure inside random_bytes). Pairs with an error_log entry
+    # for ops diagnostics.
+    start_failed: 'Could not start the Google Analytics authorization. Please try connecting again. If the problem persists, contact 51Degrees support.'
+
+    # Shown when the site is a multisite install. OAuth flow is single-site only
+    # in this release; multisite support is tracked for 1.0.13.
+    multisite_unsupported: 'Google Analytics connection is not yet supported on WordPress multisite installations. Support is planned for a future release.'
+
+    # (Used by S-8 oauth-start handler) Shown when the site is served over plain HTTP.
+    # OAuth tokens must transit via HTTPS — refuse to start the flow otherwise.
+    https_required: 'Google Analytics connection requires HTTPS. Set both WordPress Address and Site Address to start with https:// (under Settings -> General) before connecting.'
+
+    # (Used by fiftyonedegrees.php bootstrap) Sticky notice when the plugin shipped
+    # with a placeholder relay URL. OAuth is hard-disabled until a real URL is wired in.
+    placeholder_url: 'Google Analytics connection is disabled in this build of the plugin. Please update to the latest version, or contact 51Degrees support.'
+
+    # (Used by oauth-migration) One-shot notice after the migration cleared
+    # OOB-era access tokens. Visible once, then auto-dismissed.
+    migration_done: 'Google Analytics connection settings were upgraded. Please reconnect to Google Analytics to continue using it.'
+
+    # Set by GA tab render paths when a GA4 Admin API call returned 401 / 403
+    # mid-render (token revoked or scope insufficient since last consent).
+    # The admin needs to reconnect Google Analytics; surfaced as a top-of-tab
+    # banner so an empty CD list or property dropdown is not misread as
+    # "nothing to show".
+    reconnect_required: 'Google Analytics access was revoked or has expired. Please reconnect Google Analytics on the Google Analytics tab to continue.'
+
+    # Reserved slugs for the GA4 Admin API edge cases. Currently surfaced
+    # inline via Options::GA_ERROR by ga-service.php; the canonical copies
+    # live here so a future refactor that routes these through the OauthNotice
+    # channel does not need to invent new strings.
+    no_web_stream: 'The selected GA4 property has no Web data stream. Add a Web stream in Google Analytics Admin, then reload this page.'
+    cd_limit_exceeded: 'Cannot enable tracking: GA4 allows up to 50 Custom Dimensions per property and the selected mapping would exceed this limit. Reduce the number of selected properties or use a GA4 360 account.'

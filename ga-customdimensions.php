@@ -91,7 +91,7 @@ else {
                         <b>Enable Google Analytics Tracking</b> to send them as
                         Custom Dimensions to
                         <b>
-                            <?php echo esc_html(get_option(Options::GA_TRACKING_ID));?>
+                            <?php echo esc_html(get_option(Options::GA_MEASUREMENT_ID));?>
                         </b>
                         Google Analytics Property or <b>Go Back</b> to change.
                     </p>
@@ -117,6 +117,14 @@ else {
 ?>
 
 <form method="post" action="options.php">
+    <?php
+    // Marker so populate_selected_dimensions can distinguish "no
+    // include_* keys posted because the admin unticked everything"
+    // from "no include_* keys posted because the form was never
+    // shown". Without this, the first form (Go Back) below would
+    // wipe the inclusion map.
+    ?>
+    <input type="hidden" name="51D_form_submitted" value="1" />
     <?php $customDimensionsTable->display();?>
 
     <table style="width: 100%">

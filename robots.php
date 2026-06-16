@@ -60,9 +60,13 @@ $plaintext_cache      = get_option(Options::ROBOTS_PLAINTEXT_CACHE, '');
         $notice_key    = ($http_status === 0)
             ? 'common.cloud.unreachable'
             : 'common.cloud.rejected';
+        $host_suffix   = ' ' . FiftyOneDegreesStrings::get(
+            'common.cloud.host_suffix',
+            FiftyOneDegreesCloudMetadata::get_cloud_host_url()
+        );
         ?>
         <div class="notice notice-error">
-            <p><?php echo wp_kses_post(FiftyOneDegreesStrings::get($notice_key) . $cache_suffix); ?></p>
+            <p><?php echo wp_kses_post(FiftyOneDegreesStrings::get($notice_key) . $host_suffix . $cache_suffix); ?></p>
         </div>
     <?php else: ?>
         <?php if (!$supports_crawler): ?>

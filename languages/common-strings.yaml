@@ -14,3 +14,6 @@ common:
     rejected: '<strong>51Degrees Cloud rejected the request.</strong> Check your resource key and subscription at <a href="https://configure.51degrees.com/?utm_source=code&utm_medium=comment&utm_campaign=pipeline-wordpress&utm_content=languages-common-strings.yaml&utm_term=rejected" target="_blank">configure.51degrees.com</a>.'
     # (HTML) Shown when the cloud is unreachable (network failure / timeout).
     unreachable: '<strong>51Degrees Cloud unreachable.</strong> The plugin will retry automatically.'
+    # (plain text) Appended to the notices above; %s is the cloud host actually
+    # contacted, derived from FOD_CLOUD_API_URL (default cloud.51degrees.com).
+    host_suffix: 'Cloud host contacted: %s'

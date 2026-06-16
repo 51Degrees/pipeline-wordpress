@@ -74,20 +74,27 @@ class Options
     const GA_PROPERTIES = "fiftyonedegrees_ga_properties_list";
 
     /**
-     * Key for storing the Google Analytics tracking id.
-     */
-    const GA_TRACKING_ID = "fiftyonedegrees_ga_tracking_id";
-
-    /**
      * Key for storing the Google Analytics account id.
      */
     const GA_ACCOUNT_ID = "fiftyonedegrees_ga_account_id";
 
+    // ─── GA4 — populated on property selection ──────────────────────
+
     /**
-     * Key for storing the maximum number of custom dimensions
-     * that can be set for Google Analytics.
+     * GA4 Measurement ID (e.g. "G-XXXXXXX") emitted in the frontend
+     * gtag snippet. Fetched from the selected property's first
+     * WEB_DATA_STREAM at the point the admin picks a property in the
+     * settings dropdown — never user-edited directly.
      */
-    const GA_MAX_DIMENSIONS = "fiftyonedegrees_ga_max_cust_dim_index";
+    const GA_MEASUREMENT_ID = "fiftyonedegrees_ga_measurement_id";
+
+    /**
+     * GA4 Property ID (numeric resource id, e.g. "123456789") used as
+     * the parent for Admin API calls (dataStreams, customDimensions).
+     * Stored alongside GA_MEASUREMENT_ID when the admin submits the
+     * property dropdown.
+     */
+    const GA_PROPERTY_ID = "fiftyonedegrees_ga_property_id";
 
     /**
      * Key for storing an error message from Google Analytics if one
@@ -118,6 +125,15 @@ class Options
      * updated.
      */
     const GA_DIMENSIONS_UPDATED = "fiftyonedegrees_passed_dimensions_updated";
+
+    /**
+     * Per-property inclusion map (property_name => bool) for the
+     * Custom Dimensions tab. A property absent from the map is treated
+     * as included so a fresh resource key onboards with everything
+     * pre-ticked. Persisted by populate_selected_dimensions and read by
+     * apply_custom_dimensions_to_ga4 to filter the create batch.
+     */
+    const GA_DIMENSIONS_INCLUDED = "fiftyonedegrees_dimensions_included";
 
     /**
      * Key to store Google Analytics JavaScript code.
@@ -160,6 +176,37 @@ class Options
      * Google Analytics.
      */
     const GA_AUTH_DATE = "fiftyonedegrees_ga_auth_date";
+
+    /**
+     * Per-site HMAC secret used to sign the OAuth state parameter.
+     * Initialized lazily on the first OAuth flow start via
+     * FiftyOneDegreesOauthState::get_or_create_secret().
+     *
+     * Write semantics: add_option($name, $value, '', 'no') — autoload=no,
+     * set-once-immutable. Never use update_option on this key, otherwise
+     * in-flight states issued under the previous secret will become
+     * unverifiable. Rotation requires an explicit delete_option +
+     * re-initialization (manual maintenance task, not exposed in UI).
+     */
+    const OAUTH_STATE_SECRET = "fiftyonedegrees_oauth_state_secret";
+
+    /**
+     * Current OAuth + GA schema version marker. Used as a generation
+     * gate by FiftyOneDegreesOauthMigration to wipe stale GA state on
+     * upgrade.
+     *
+     * History:
+     *   - Absent / not '2' and not '3': OOB-era install (Google sunset
+     *     Jan 2023). Migration to v2 cleared OOB state.
+     *   - '2': HMAC + PKCE OAuth, Universal Analytics API (UA).
+     *   - '3': GA4 schema (Admin API + analytics.edit scope + new
+     *     option keys). Upgrade from v2 wipes every GA-related option
+     *     to force re-consent under the broader scope and to drop UA
+     *     fields that have no GA4 equivalent.
+     *
+     * See FiftyOneDegreesOauthMigration::run for the gate.
+     */
+    const GA_OAUTH_VERSION = "fiftyonedegrees_ga_oauth_version";
 
     /**
      * Options group key for suspicious activity detection settings.

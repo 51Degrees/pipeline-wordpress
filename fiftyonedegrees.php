@@ -3,7 +3,8 @@
  *  Plugin Name: 51Degrees
  *  Plugin URI:  https://51degrees.com/?utm_source=packagist&utm_medium=package&utm_campaign=pipeline-wordpress&utm_content=fiftyonedegrees.php&utm_term=plugin-uri
  *  Description: Device detection and location-aware content for WordPress, with cloud-driven robots.txt management for AI/search crawlers and suspicious-activity protection against abusive traffic.
- *  Version:     1.0.12
+ *  Version:     1.0.13
+ *  Requires PHP: 8.2
  *  Author:      51Degrees
  *  Author URI:  https://51degrees.com/?utm_source=packagist&utm_medium=package&utm_campaign=pipeline-wordpress&utm_content=fiftyonedegrees.php&utm_term=author-uri
  *  Text Domain: fiftyonedegrees
@@ -56,11 +57,12 @@ class Fiftyonedegrees {
      */
     private function __construct() {
         $this->load_includes();
-        $this->setup_constants();		
+        $this->setup_constants();
         $this->fiftyone_service = new FiftyoneService();
         $this->ga_service = new Fiftyonedegrees_Google_Analytics();
         $this->setup_wp_actions();
         $this->setup_wp_filters();
+        $this->setup_oauth_actions();
     }
 
     /**
@@ -94,19 +96,8 @@ class Fiftyonedegrees {
         // Setting Global Values.
         define('FIFTYONEDEGREES_PLUGIN_DIR', plugin_dir_path( __FILE__ ));
         define('FIFTYONEDEGREES_PLUGIN_URL', plugin_dir_url(__FILE__));
-        define('FIFTYONEDEGREES_PROMPT', 'force');
+        define('FIFTYONEDEGREES_PROMPT', 'consent');
         define('FIFTYONEDEGREES_ACCESS_TYPE', 'offline');
-        define('FIFTYONEDEGREES_RESPONSE_TYPE', 'code');
-        define('FIFTYONEDEGREES_CLIENT_ID',
-            '296335631462-e36u9us90puu4de17ct7rnklu3j8q63n.apps.googleusercontent.com');
-        define(
-            'FIFTYONEDEGREES_CLIENT_SECRET',
-            'V9lcL-V3SxtGSWWcGsFW9QeI');
-        define( 'FIFTYONEDEGREES_REDIRECT', 'urn:ietf:wg:oauth:2.0:oob');
-        define(
-            'FIFTYONEDEGREES_SCOPE',
-            Google_Service_Analytics::ANALYTICS_READONLY .
-            " " .  Google_Service_Analytics::ANALYTICS_EDIT);
         define('FIFTYONEDEGREES_CUSTOM_DIMENSION_SCOPE', "HIT");
     }
 
@@ -127,11 +118,32 @@ class Fiftyonedegrees {
         require_once __DIR__ . '/includes/ga-tracking-gtag.php';
         require_once __DIR__ . '/options.php';
         require_once __DIR__ . '/includes/suspicious-activity.php';
-        
+        require_once __DIR__ . '/includes/oauth-state.php';
+        require_once __DIR__ . '/includes/oauth-notice.php';
+        require_once __DIR__ . '/includes/oauth-relay-client.php';
+        require_once __DIR__ . '/includes/google-client-factory.php';
+        require_once __DIR__ . '/includes/ga4-auth-error.php';
+        require_once __DIR__ . '/includes/ga4-property-service.php';
+        require_once __DIR__ . '/includes/ga4-dimension-service.php';
+        require_once __DIR__ . '/includes/oauth-migration.php';
+
+        // OAuth callback and start handlers land in later commits. Guard
+        // with file_exists so the bootstrap stays loadable while the
+        // files are being introduced one at a time — once both exist,
+        // the class_exists checks in setup_oauth_actions() pick them up.
+        $oauth_callback_file = __DIR__ . '/includes/oauth-callback.php';
+        if (file_exists($oauth_callback_file)) {
+            require_once $oauth_callback_file;
+        }
+        $oauth_start_file = __DIR__ . '/includes/oauth-start.php';
+        if (file_exists($oauth_start_file)) {
+            require_once $oauth_start_file;
+        }
+
         // Include Custom_Dimensions class
         if (!class_exists('Fiftyonedegrees_Custom_Dimensions')) {
             require_once('includes/ga-custom-dimension-class.php');
-        }         
+        }
     }
 
     function setup_wp_actions() {
@@ -149,10 +161,44 @@ class Fiftyonedegrees {
         $this->fiftyone_service->delete_pmp_options();
         SuspiciousActivity::delete_options();
         FiftyOneDegreesRobotsTxt::delete_options();
+        FiftyOneDegreesOauthState::delete_options();
+        FiftyOneDegreesOauthMigration::delete_options();
     }
 
     function execute_ga_tracking_steps() {
         $this->ga_service->execute_ga_tracking_steps();
+    }
+
+    /**
+     * Wires up the OAuth flow on admin_init / admin_post.
+     *
+     * Migration runs unconditionally and idempotently — it cleans up
+     * legacy state regardless of the OAuth flow. The callback and start
+     * handlers are registered when their classes are available.
+     */
+    private function setup_oauth_actions() {
+        // Migration runs on plugins_loaded (earlier than admin_init)
+        // so a frontend page view served between the upgrade and the
+        // first wp-admin visit does not emit a stale UA snippet built
+        // from pre-migration option values. The v3 sweep is version-
+        // gated and order-independent w.r.t. the OAuth callback at
+        // admin_init priority 5, but future additions that read
+        // request-time state need to re-verify hook ordering.
+        add_action('plugins_loaded', ['FiftyOneDegreesOauthMigration', 'run'], 10);
+        add_action(
+            'fiftyonedegrees_refresh_robots_txt',
+            ['FiftyOneDegreesOauthState', 'cron_cleanup']
+        );
+
+        if (class_exists('FiftyOneDegreesOauthCallback')) {
+            add_action('admin_init', ['FiftyOneDegreesOauthCallback', 'handle'], 5);
+        }
+        if (class_exists('FiftyOneDegreesOauthStart')) {
+            add_action(
+                'admin_post_fiftyonedegrees_oauth_start',
+                ['FiftyOneDegreesOauthStart', 'handle']
+            );
+        }
     }
 }
 
@@ -184,10 +230,20 @@ function fiftyonedegrees_activate() {
 }
 register_activation_hook(__FILE__, 'fiftyonedegrees_activate');
 
-register_deactivation_hook(__FILE__, 'fiftyonedegrees_deactivate'); //in-active
-register_uninstall_hook(__FILE__, 'fiftyonedegrees_deactivate'); // delete
+// Deactivation is reversible and runs on plugin auto-update too, so it
+// must not destroy persistent data. Only stop scheduled work and drop
+// derived caches; the user's saved options stay put.
+register_deactivation_hook(__FILE__, 'fiftyonedegrees_deactivate');
+
+// Uninstall is terminal — wipe every option row the plugin ever wrote.
+register_uninstall_hook(__FILE__, 'fiftyonedegrees_uninstall');
 
 function fiftyonedegrees_deactivate() {
+    wp_clear_scheduled_hook('fiftyonedegrees_refresh_robots_txt');
+    FiftyOneDegreesCloudMetadata::invalidate_all();
+}
+
+function fiftyonedegrees_uninstall() {
     wp_clear_scheduled_hook('fiftyonedegrees_refresh_robots_txt');
     Fiftyonedegrees::get_instance()->delete_options();
     FiftyOneDegreesCloudMetadata::invalidate_all();

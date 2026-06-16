@@ -1,12 +1,19 @@
 <phpunit
   colors="true"
-  bootstrap="tests/bootstrap.php">
+  bootstrap="tests/bootstrap.php"
+  defaultTestSuite="Unit">
   <php>
     <env name="RESOURCEKEY" value="!!YOUR_RESOURCE_KEY!!"/>
     <const name="FIFTYONEDEGREES_PLUGIN_DIR" value= ""/>
     <const name="FIFTYONEDEGREES_PLUGIN_URL" value="http://example.test/plugin/"/>
     <const name="FIFTYONEDEGREES_CUSTOM_DIMENSION_SCOPE" value= "HIT"/>
   </php>
+  <!--
+    defaultTestSuite (on <phpunit>) pins bare phpunit invocations
+    (i.e. CI runners that do not pass the testsuite flag) to the Unit
+    suite. Keeps ReleaseGate explicit and opt-in so it can fail by
+    design until a release PR.
+  -->
   <testsuites>
     <testsuite name="Unit">
       <file>tests/HookTests.php</file>
@@ -22,9 +29,28 @@
       <file>tests/CloudMetadataTests.php</file>
       <file>tests/PipelineErrorClearTests.php</file>
       <file>tests/CloudOriginHeaderTests.php</file>
+      <file>tests/OAuthStateTests.php</file>
+      <file>tests/OAuthStateCleanupTests.php</file>
+      <file>tests/OAuthMigrationTests.php</file>
+      <file>tests/OAuthCallbackTests.php</file>
+      <file>tests/OAuthStartHandlerTests.php</file>
+      <file>tests/GoogleAnalyticsTabRenderTests.php</file>
+      <file>tests/GoogleClientFactoryTests.php</file>
+      <file>tests/Ga4AuthErrorTests.php</file>
+      <file>tests/Ga4PropertyServiceTests.php</file>
+      <file>tests/Ga4DimensionServiceTests.php</file>
     </testsuite>
     <testsuite name="Integration">
       <file>tests/PipelineTests.php</file>
+    </testsuite>
+    <!--
+      ReleaseGate suite is run explicitly before tagging a release.
+      Excluded from the default Unit suite so day-to-day dev runs stay
+      green even while the placeholder OAuth redirect URL is still in
+      the bootstrap. Run with `phpunit testsuite=ReleaseGate`.
+    -->
+    <testsuite name="ReleaseGate">
+      <file>tests/ReleaseReadinessTests.php</file>
     </testsuite>
   </testsuites>
 </phpunit>

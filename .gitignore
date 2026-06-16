@@ -1,2 +1,14 @@
+# Dependencies installed by dev tooling. Lockfile (package-lock.json)
+# is committed; node_modules itself is not.
+node_modules/
+
+# Tooling caches.
+.phpunit.result.cache
+.php-cs-fixer.cache
+
+# OS noise.
+.DS_Store
+
 node_modules
 .phpunit.result.cache
+
