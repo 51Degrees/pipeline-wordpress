@@ -41,13 +41,13 @@
     <li>
         Generate a 51Degrees Resource Key for the device-detection
         properties you need at
-        <a href="https://configure.51degrees.com/zHPMyDk6" target="_blank">the
+        <a href="https://configure.51degrees.com/zHPMyDk6?utm_source=code&utm_medium=comment&utm_campaign=pipeline-wordpress&utm_content=help.php&utm_term=resource-key" target="_blank">the
         Configurator</a>, then paste it into the <code><b>Setup</b></code>
         tab and save. The Resource Key unlocks the
         <code><b>Properties</b></code>, <code><b>Google Analytics</b></code>
         and other settings tabs — without it the plugin has no device
         data to send. See
-        <a href="https://51degrees.com/documentation/_concepts__configurator.html" target="_blank">the
+        <a href="https://51degrees.com/documentation/_concepts__configurator.html?utm_source=code&utm_medium=comment&utm_campaign=pipeline-wordpress&utm_content=help.php&utm_term=resource-key" target="_blank">the
         Configurator documentation</a> for details.
     </li>
     <li>

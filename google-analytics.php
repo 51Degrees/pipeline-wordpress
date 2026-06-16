@@ -148,7 +148,7 @@ if (!get_option(Options::GA_TOKEN) ||
         <p>
             <strong>Before connecting:</strong> access is only authorized for a
             resource key whose registered domains include this site. In the
-            <a href="https://configure.51degrees.com/" target="_blank">Configurator</a>,
+            <a href="https://configure.51degrees.com/?utm_source=code&utm_medium=comment&utm_campaign=pipeline-wordpress&utm_content=google-analytics.php&utm_term=before-connecting" target="_blank">Configurator</a>,
             create the resource key with this site's domain added to it —
             otherwise the Google Analytics connection will be refused.
         </p>
