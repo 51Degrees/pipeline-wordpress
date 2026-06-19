@@ -3,7 +3,7 @@
  *  Plugin Name: 51Degrees
  *  Plugin URI:  https://51degrees.com/?utm_source=packagist&utm_medium=package&utm_campaign=pipeline-wordpress&utm_content=fiftyonedegrees.php&utm_term=plugin-uri
  *  Description: Device detection and location-aware content for WordPress, with cloud-driven robots.txt management for AI/search crawlers and suspicious-activity protection against abusive traffic.
- *  Version:     1.0.13
+ *  Version:     0.0.0
  *  Requires PHP: 8.2
  *  Author:      51Degrees
  *  Author URI:  https://51degrees.com/?utm_source=packagist&utm_medium=package&utm_campaign=pipeline-wordpress&utm_content=fiftyonedegrees.php&utm_term=author-uri
