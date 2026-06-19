@@ -259,6 +259,40 @@ class SuspiciousActivityTests extends TestCase
     }
 
     /**
+     * Issue #69: ads.txt / app-ads.txt / /.well-known/* are bot-facing
+     * policy files and must be exempt from throttling, like robots.txt.
+     */
+    public function testSkippedOnAdsTxt()
+    {
+        $this->options[Options::SUSPICIOUS_ENABLE] = 'on';
+        $_SERVER['REQUEST_URI'] = '/ads.txt';
+
+        SuspiciousActivity::check_and_maybe_redirect();
+
+        self::assertEmpty($this->transients);
+    }
+
+    public function testSkippedOnAppAdsTxt()
+    {
+        $this->options[Options::SUSPICIOUS_ENABLE] = 'on';
+        $_SERVER['REQUEST_URI'] = '/app-ads.txt';
+
+        SuspiciousActivity::check_and_maybe_redirect();
+
+        self::assertEmpty($this->transients);
+    }
+
+    public function testSkippedOnWellKnownPath()
+    {
+        $this->options[Options::SUSPICIOUS_ENABLE] = 'on';
+        $_SERVER['REQUEST_URI'] = '/.well-known/security.txt';
+
+        SuspiciousActivity::check_and_maybe_redirect();
+
+        self::assertEmpty($this->transients);
+    }
+
+    /**
      * Test that the redirect is skipped when headers have already been sent.
      */
     public function testSkippedWhenHeadersSent()

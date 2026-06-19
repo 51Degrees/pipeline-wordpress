@@ -470,6 +470,35 @@ class RobotsTxtTests extends TestCase {
         $this->assertTrue($redirected);
     }
 
+    public function testEnforceCrawlerRedirectSkipsAdsTxt() {
+        // Issue #69: ads.txt is a bot-facing policy file and must stay reachable.
+        $this->stageDisallowedCrawlerCapture($redirected);
+        $_SERVER['REQUEST_URI'] = '/ads.txt';
+
+        FiftyOneDegreesRobotsTxt::enforce_crawler_redirect();
+
+        $this->assertFalse($redirected);
+    }
+
+    public function testEnforceCrawlerRedirectSkipsAppAdsTxt() {
+        $this->stageDisallowedCrawlerCapture($redirected);
+        $_SERVER['REQUEST_URI'] = '/app-ads.txt';
+
+        FiftyOneDegreesRobotsTxt::enforce_crawler_redirect();
+
+        $this->assertFalse($redirected);
+    }
+
+    public function testEnforceCrawlerRedirectSkipsWellKnownPaths() {
+        // Issue #69: anything under /.well-known/ (RFC 8615) must stay reachable.
+        $this->stageDisallowedCrawlerCapture($redirected);
+        $_SERVER['REQUEST_URI'] = '/.well-known/security.txt';
+
+        FiftyOneDegreesRobotsTxt::enforce_crawler_redirect();
+
+        $this->assertFalse($redirected);
+    }
+
     public function testRedirectLoopPreventionSkipsRedirect() {
         $this->mockGuardsPassed();
         $this->mockOptions([

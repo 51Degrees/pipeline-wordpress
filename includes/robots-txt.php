@@ -6,6 +6,7 @@ require_once __DIR__ . '/cloud-metadata.php';
 require_once __DIR__ . '/fiftyone-strings.php';
 require_once __DIR__ . '/standard-tdls.php';
 require_once __DIR__ . '/wp-http-client.php';
+require_once __DIR__ . '/bot-exempt-paths.php';
 
 use fiftyone\pipeline\cloudrequestengine\CloudRequestEngine;
 use fiftyone\pipeline\cloudrequestengine\CloudRequestException;
@@ -238,11 +239,11 @@ class FiftyOneDegreesRobotsTxt {
             return;
         }
 
-        // /robots.txt must be reachable to crawlers regardless of crawler-
-        // category gating; redirecting it defeats the policy it advertises.
-        // Mirrors the matching skip in suspicious-activity.php.
-        $path = wp_parse_url(wp_unslash($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH);
-        if (is_string($path) && strtolower(rtrim($path, '/')) === '/robots.txt') {
+        // Bot-facing policy files (robots.txt, ads.txt, /.well-known/*) must
+        // be reachable to crawlers regardless of crawler-category gating;
+        // redirecting them defeats the policies they advertise. Mirrors the
+        // matching skip in suspicious-activity.php.
+        if (fiftyonedegrees_is_bot_exempt_path(wp_unslash($_SERVER['REQUEST_URI'] ?? '/'))) {
             return;
         }
 
