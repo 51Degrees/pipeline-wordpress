@@ -25,7 +25,7 @@ if (!is_array($custom_tdl)) {
     $custom_tdl = [];
 }
 
-$supports_crawler       = FiftyOneDegreesCloudMetadata::supports_crawler();
+$supports_iscrawler     = FiftyOneDegreesCloudMetadata::supports_iscrawler();
 $supports_crawler_usage = FiftyOneDegreesCloudMetadata::supports_crawler_usage();
 $supports_robots_txt    = FiftyOneDegreesCloudMetadata::supports_robots_txt();
 
@@ -69,9 +69,13 @@ $plaintext_cache      = get_option(Options::ROBOTS_PLAINTEXT_CACHE, '');
             <p><?php echo wp_kses_post(FiftyOneDegreesStrings::get($notice_key) . $host_suffix . $cache_suffix); ?></p>
         </div>
     <?php else: ?>
-        <?php if (!$supports_crawler): ?>
+        <?php if (!$supports_iscrawler && !$supports_crawler_usage): ?>
             <div class="notice notice-warning">
                 <p><?php echo wp_kses_post(FiftyOneDegreesStrings::get('robots.notice.no_crawler')); ?></p>
+            </div>
+        <?php elseif (!$supports_iscrawler): ?>
+            <div class="notice notice-warning">
+                <p><?php echo wp_kses_post(FiftyOneDegreesStrings::get('robots.notice.no_iscrawler')); ?></p>
             </div>
         <?php elseif (!$supports_crawler_usage): ?>
             <div class="notice notice-info">

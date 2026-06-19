@@ -119,6 +119,14 @@ class FiftyOneDegreesCloudMetadata {
         return in_array('IsCrawler', $props) || in_array('CrawlerUsage', $props);
     }
 
+    // Enforcement gates on the IsCrawler value, so a key with CrawlerUsage but
+    // not IsCrawler silently never redirects — supports_crawler()'s OR can't
+    // distinguish that case, hence this dedicated check.
+    public static function supports_iscrawler() {
+        $props = self::fetch_accessible_properties();
+        return in_array('IsCrawler', $props);
+    }
+
     public static function supports_crawler_usage() {
         $props = self::fetch_accessible_properties();
         return in_array('CrawlerUsage', $props);

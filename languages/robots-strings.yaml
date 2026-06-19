@@ -22,8 +22,10 @@ robots:
     description: 'Configure bot traffic management and robots.txt generation. The generated robots.txt is advisory only — real enforcement happens via server-side 302 redirects based on live 51Degrees crawler detection.'
 
   notice:
-    # (HTML) Shown when the resource key lacks IsCrawler / CrawlerUsage properties.
-    no_crawler: '<strong>Warning:</strong> Your Resource Key does not include crawler detection properties (<code>IsCrawler</code> or <code>CrawlerUsage</code>). Robots.txt enforcement will not work until you add these properties to your key at <a href="https://configure.51degrees.com/?utm_source=code&utm_medium=comment&utm_campaign=pipeline-wordpress&utm_content=languages-robots-strings.yaml&utm_term=no_crawler" target="_blank">configure.51degrees.com</a>.'
+    # (HTML) Shown when the resource key lacks BOTH IsCrawler and CrawlerUsage.
+    no_crawler: '<strong>Warning:</strong> Your Resource Key does not include the crawler detection properties required for enforcement. Robots.txt enforcement needs both <code>IsCrawler</code> and <code>CrawlerUsage</code> on the key, and will not redirect any crawler until you add them at <a href="https://configure.51degrees.com/?utm_source=code&utm_medium=comment&utm_campaign=pipeline-wordpress&utm_content=languages-robots-strings.yaml&utm_term=no_crawler" target="_blank">configure.51degrees.com</a>.'
+    # (HTML) Shown when the resource key has CrawlerUsage but not IsCrawler.
+    no_iscrawler: '<strong>Warning:</strong> Your Resource Key includes <code>CrawlerUsage</code> but not <code>IsCrawler</code>. Robots.txt enforcement requires <code>IsCrawler</code> to detect crawlers, so it will silently redirect nothing until you add <code>IsCrawler</code> to your key at <a href="https://configure.51degrees.com/?utm_source=code&utm_medium=comment&utm_campaign=pipeline-wordpress&utm_content=languages-robots-strings.yaml&utm_term=no_iscrawler" target="_blank">configure.51degrees.com</a>.'
     # (HTML) Shown when the resource key has IsCrawler but not CrawlerUsage.
     no_crawler_usage: '<strong>Note:</strong> Your Resource Key includes <code>IsCrawler</code> but not <code>CrawlerUsage</code>. Without <code>CrawlerUsage</code>, category selections have no effect — enforcement falls back to path-based rules only. Upgrade your key at <a href="https://configure.51degrees.com/?utm_source=code&utm_medium=comment&utm_campaign=pipeline-wordpress&utm_content=languages-robots-strings.yaml&utm_term=no_crawler_usage" target="_blank">configure.51degrees.com</a> for category-based enforcement.'
     # (HTML) Shown when the resource key lacks RobotsTxt properties.
@@ -51,7 +53,7 @@ robots:
     enforce_label: 'Enable Crawler Enforcement'
     enforce_checkbox: 'Enable real-time crawler detection and 302 redirect enforcement'
     # (HTML) Description shown below the Enforce checkbox.
-    enforce_description: '<strong>Warning:</strong> Every enforcement check consumes a cloud request on each page load. Enable this only if you want active bot blocking. You can host the robots.txt without enforcement to save on cloud requests.'
+    enforce_description: '<strong>Requires</strong> the <code>IsCrawler</code> and <code>CrawlerUsage</code> properties on your Resource Key — without both, no crawler is ever redirected. Add them at <a href="https://configure.51degrees.com/?utm_source=code&utm_medium=comment&utm_campaign=pipeline-wordpress&utm_content=languages-robots-strings.yaml&utm_term=enforce_description" target="_blank">configure.51degrees.com</a>. <strong>Note:</strong> every enforcement check consumes a cloud request on each page load, so enable this only if you want active bot blocking; you can host the robots.txt without enforcement to save on cloud requests.'
     categories_label: 'Allowed Crawler Categories'
     # (HTML) Description shown above the category checkboxes.
     categories_description: 'Select crawler categories to allow. Crawlers in the selected categories will be allowed access. If your key does not support <code>CrawlerUsage</code>, category selections have no effect.'
