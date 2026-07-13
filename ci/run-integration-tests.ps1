@@ -90,7 +90,7 @@ try {
         # parent -d directives, so raise max_execution_time by appending to
         # the loaded php.ini directly. Last directive wins on PHP ini parse.
         $phpIni = (php -r "echo php_ini_loaded_file();").Trim()
-        Add-Content -Path $phpIni -Value "`nmax_execution_time=120"
+        Add-Content -Path $phpIni -Value "`nmax_execution_time=300"
         # Start-Process with -RedirectStandard* writes directly to disk —
         # unlike PowerShell jobs, which drop native-process stderr.
         $server = Start-Process -FilePath "php" `
