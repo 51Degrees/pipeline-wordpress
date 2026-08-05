@@ -1553,4 +1553,139 @@ class RobotsTxtTests extends TestCase {
         $this->assertStringContainsString('51Degrees', $logged[0]);
     }
 
+    // ------------------------------------------------------------------
+    // Terms-of-service <link> elements in the HTML <head> (issue #45)
+    // ------------------------------------------------------------------
+
+    /**
+     * Minimal stand-in for WordPress esc_url: passes http(s) URLs
+     * through and rejects anything else, mirroring the behaviour the
+     * production code relies on.
+     */
+    private function mockEscUrl() {
+        Functions\when('esc_url')->alias(function ($url) {
+            return preg_match('#^https?://#i', $url) ? $url : '';
+        });
+    }
+
+    private function renderTermsOfServiceLinks(): string {
+        ob_start();
+        FiftyOneDegreesRobotsTxt::render_terms_of_service_links();
+        return ob_get_clean();
+    }
+
+    public function testInitRegistersWpHeadTermsOfServiceAction() {
+        $added = [];
+        Functions\when('add_action')->alias(function ($hook, $callback) use (&$added) {
+            $added[] = [$hook, $callback];
+        });
+
+        FiftyOneDegreesRobotsTxt::init();
+
+        $found = false;
+        foreach ($added as $call) {
+            if ($call[0] === 'wp_head'
+                && is_array($call[1])
+                && $call[1][1] === 'render_terms_of_service_links') {
+                $found = true;
+                break;
+            }
+        }
+        $this->assertTrue(
+            $found,
+            'init() must register render_terms_of_service_links on wp_head'
+        );
+    }
+
+    public function testTermsOfServiceLinksNotEmittedWhenDisabled() {
+        $this->mockEscUrl();
+        $this->mockOptions([
+            Options::ROBOTS_ENABLE => 'off',
+            Options::ROBOTS_PLAINTEXT_CACHE => "tdl: https://example.com/terms/v1\n",
+        ]);
+
+        $this->assertSame('', $this->renderTermsOfServiceLinks());
+    }
+
+    public function testTermsOfServiceLinkEmittedPerTdlLine() {
+        $this->mockEscUrl();
+        $this->mockOptions([
+            Options::ROBOTS_ENABLE => 'on',
+            Options::ROBOTS_PLAINTEXT_CACHE =>
+                "User-agent: *\nDisallow: /private/\n"
+                . "tdl: https://m4ow.uk/socw/1.txt\n"
+                . "tdl: https://example.com/other/tos.txt\n",
+        ]);
+
+        $output = $this->renderTermsOfServiceLinks();
+
+        $this->assertSame(
+            '<link rel="terms-of-service" href="https://m4ow.uk/socw/1.txt" />' . "\n"
+            . '<link rel="terms-of-service" href="https://example.com/other/tos.txt" />' . "\n",
+            $output
+        );
+    }
+
+    public function testTermsOfServiceLinksIncludeCustomSectionsAndDeduplicate() {
+        $this->mockEscUrl();
+        $this->mockOptions([
+            Options::ROBOTS_ENABLE => 'on',
+            Options::ROBOTS_CUSTOM_TOP => "tdl: https://example.com/terms/v1",
+            Options::ROBOTS_PLAINTEXT_CACHE => "tdl: https://example.com/terms/v1\n",
+            Options::ROBOTS_CUSTOM_BOTTOM => "tdl: https://example.org/terms/v2",
+        ]);
+
+        $output = $this->renderTermsOfServiceLinks();
+
+        $this->assertSame(
+            '<link rel="terms-of-service" href="https://example.com/terms/v1" />' . "\n"
+            . '<link rel="terms-of-service" href="https://example.org/terms/v2" />' . "\n",
+            $output
+        );
+    }
+
+    public function testTermsOfServiceLinksNoOutputWithoutTdlLines() {
+        $this->mockEscUrl();
+        $this->mockOptions([
+            Options::ROBOTS_ENABLE => 'on',
+            Options::ROBOTS_PLAINTEXT_CACHE => "User-agent: *\nDisallow: /private/\n",
+        ]);
+
+        $this->assertSame('', $this->renderTermsOfServiceLinks());
+    }
+
+    public function testTermsOfServiceLinksSkipUrlsRejectedByEscUrl() {
+        $this->mockEscUrl();
+        $this->mockOptions([
+            Options::ROBOTS_ENABLE => 'on',
+            Options::ROBOTS_PLAINTEXT_CACHE =>
+                "tdl: javascript:alert(1)\n"
+                . "tdl: https://example.com/terms/v1\n",
+        ]);
+
+        $output = $this->renderTermsOfServiceLinks();
+
+        $this->assertSame(
+            '<link rel="terms-of-service" href="https://example.com/terms/v1" />' . "\n",
+            $output
+        );
+    }
+
+    public function testGetTdlUrlsFromRobotsTxtParsesCaseAndWhitespace() {
+        $this->mockOptions([
+            Options::ROBOTS_ENABLE => 'on',
+            Options::ROBOTS_PLAINTEXT_CACHE =>
+                "  TDL:   https://example.com/terms/v1\r\n"
+                . "tdl:https://example.org/terms/v2\n"
+                . "not-a-tdl: https://example.net/ignored\n",
+        ]);
+
+        $result = FiftyOneDegreesRobotsTxt::get_tdl_urls_from_robots_txt();
+
+        $this->assertSame(
+            ['https://example.com/terms/v1', 'https://example.org/terms/v2'],
+            $result
+        );
+    }
+
 }
