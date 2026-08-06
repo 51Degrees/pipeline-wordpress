@@ -22,6 +22,7 @@ class FiftyOneDegreesRobotsTxt {
     public static function init() {
         add_filter('robots_txt', [__CLASS__, 'generate_robots_txt'], 10, 2);
         add_action('init', [__CLASS__, 'enforce_crawler_redirect'], 15);
+        add_action('wp_head', [__CLASS__, 'render_terms_of_service_links'], 10);
         add_action('fiftyonedegrees_refresh_robots_txt', [__CLASS__, 'refresh_robots_txt_cron']);
     }
 
@@ -220,6 +221,51 @@ class FiftyOneDegreesRobotsTxt {
         }
 
         return $content;
+    }
+
+    /**
+     * Extracts the Terms Document Locator (TDL) URLs from the robots.txt
+     * content this plugin serves. Standard TDLs are stored locally as
+     * macros and only resolved to URLs by 51Degrees Cloud, so the served
+     * robots.txt content (custom top + cloud plaintext + custom bottom)
+     * is the one place the final URLs exist. One URL per "tdl:" line,
+     * kept in order of first appearance with duplicates removed.
+     *
+     * @return array<int,string>
+     */
+    public static function get_tdl_urls_from_robots_txt() {
+        $content = self::generate_robots_txt_content(get_option('blog_public'));
+        $urls = [];
+        foreach (preg_split('/\r\n|\r|\n/', $content) as $line) {
+            if (preg_match('/^\s*tdl\s*:\s*(\S+)/i', $line, $matches)) {
+                if (!in_array($matches[1], $urls, true)) {
+                    $urls[] = $matches[1];
+                }
+            }
+        }
+        return $urls;
+    }
+
+    /**
+     * Echoes one <link rel="terms-of-service"> element into the HTML
+     * <head> section for each TDL present in the generated robots.txt,
+     * so pages advertise the same terms documents as the robots.txt.
+     * See https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/rel#terms-of-service
+     *
+     * Runs on wp_head and emits nothing when the robots.txt feature is
+     * disabled or no TDLs are configured.
+     */
+    public static function render_terms_of_service_links() {
+        if (get_option(Options::ROBOTS_ENABLE, 'off') !== 'on') {
+            return;
+        }
+        foreach (self::get_tdl_urls_from_robots_txt() as $url) {
+            $escaped = esc_url($url);
+            if (empty($escaped)) {
+                continue;
+            }
+            echo '<link rel="terms-of-service" href="' . $escaped . '" />' . "\n";
+        }
     }
 
     public static function enforce_crawler_redirect() {
