@@ -126,28 +126,109 @@ class SuspiciousActivityTests extends TestCase
     }
 
     /**
-     * Assembles a 117-byte OWID v3 envelope matching the spec at
-     * .claude/issues/pipeline-wordpress/16/2026-04-24-51did-core-engine-spec.md
-     * and returns it base64-encoded.
+     * Assembles an OWID v3 envelope around a payload and returns it
+     * base64-encoded. The envelope is a version byte, the creator domain
+     * as ASCII with a zero terminator, four date bytes, the payload
+     * length as four little-endian bytes, the payload and then the
+     * 64-byte signature.
      */
-    private function buildOwid($identity32, $signature64 = null, $version = 3)
-    {
-        if (strlen($identity32) !== 32) {
-            throw new \InvalidArgumentException('identity must be exactly 32 bytes');
-        }
+    private function buildEnvelope(
+        $payload,
+        $signature64 = null,
+        $version = 3,
+        $domain = '51d.es'
+    ) {
         $signature = $signature64 ?? str_repeat("\x00", 64);
         if (strlen($signature) !== 64) {
-            throw new \InvalidArgumentException('signature must be exactly 64 bytes');
+            throw new \InvalidArgumentException(
+                'signature must be exactly 64 bytes'
+            );
         }
         $envelope = chr($version)            // Version (1 byte)
-            . "51d.es\x00"                   // Domain (7 bytes, null-terminated)
-            . pack('V', 3320214)              // Date (4 bytes LE, arbitrary minutes)
-            . pack('V', 37)                   // Payload Length (4 bytes LE)
-            . "\x01"                         // Usage Signal (1 byte, non-marketing)
-            . pack('V', 19493)                // License Key ID (4 bytes LE, arbitrary)
-            . $identity32                     // Identifier (32 bytes)
-            . $signature;                     // Signature (64 bytes)
+            . $domain . "\x00"               // Domain (null-terminated)
+            . pack('V', 3320214)             // Date (4 bytes LE, arbitrary)
+            . pack('V', strlen($payload))    // Payload Length (4 bytes LE)
+            . $payload
+            . $signature;
         return base64_encode($envelope);
+    }
+
+    /**
+     * Assembles a 51Did payload, being the flags byte, the four-byte
+     * licence field, the value and an optional creator context section.
+     * Bits 6 and 7 of the flags carry the identifier type, which the
+     * default of 0x01 leaves at Probabilistic.
+     */
+    private function buildPayload($value, $flags = 0x01, $context = '')
+    {
+        return chr($flags)                   // Flags (1 byte)
+            . pack('V', 19493)               // License Key ID (4 bytes LE)
+            . $value
+            . $context;
+    }
+
+    /**
+     * Assembles a base64-encoded OWID v3 envelope carrying a
+     * Probabilistic 51Did with the given 32-byte identity.
+     */
+    private function buildOwid(
+        $identity32,
+        $signature64 = null,
+        $version = 3,
+        $context = '',
+        $domain = '51d.es'
+    ) {
+        if (strlen($identity32) !== 32) {
+            throw new \InvalidArgumentException(
+                'identity must be exactly 32 bytes'
+            );
+        }
+        return $this->buildEnvelope(
+            $this->buildPayload($identity32, 0x01, $context),
+            $signature64,
+            $version,
+            $domain
+        );
+    }
+
+    /**
+     * Builds a creator context section of the given length. The plugin
+     * must not care what is inside it, so the bytes are arbitrary.
+     */
+    private function buildContext($length)
+    {
+        return str_repeat("\xAB", $length);
+    }
+
+    /**
+     * Puts a token on the pipeline as IdProbLic and returns the identity
+     * the suspicious activity feature derives from it.
+     */
+    private function identityFromToken($token)
+    {
+        Pipeline::$data = [
+            'properties' => [
+                'did_engine' => [
+                    'idproblic' => ['name' => 'IdProbLic', 'type' => 'String'],
+                ],
+            ],
+            'flowData' => $this->buildMockFlowData(
+                'did_engine',
+                'idproblic',
+                $token
+            ),
+            'errors' => [],
+        ];
+        return SuspiciousActivity::get_51did();
+    }
+
+    /**
+     * The identity the feature falls back to when nothing parses, which
+     * is a SHA-256 of the client IP and the User-Agent.
+     */
+    private function ipUaFallback()
+    {
+        return hash('sha256', '192.168.1.100|TestBrowser/1.0');
     }
 
     /**
@@ -448,6 +529,256 @@ class SuspiciousActivityTests extends TestCase
         $result = SuspiciousActivity::get_51did();
         $expected = hash('sha256', '192.168.1.100|TestBrowser/1.0');
         self::assertEquals($expected, $result);
+    }
+
+    /**
+     * Test that an identifier carrying a creator context gives the same
+     * tracking key as the same identifier without one. The cloud starts
+     * issuing the context section with the creator context release, and
+     * an exact length check on the envelope silently dropped every
+     * identifier from that day, which sent every site back to the IP and
+     * User-Agent fallback.
+     *
+     * The 136 bytes asserted here are what the cloud issues with its own
+     * 51d.es domain, being the previous 117-byte envelope plus a 19-byte
+     * version 0 context section. The number is pinned in the test on
+     * purpose, so a regression to an exact length check in the reader
+     * fails here. The reader itself must not know it.
+     */
+    public function testIdentityWithCreatorContextMatchesWithout()
+    {
+        $identity = str_repeat("\x7f", 32);
+        $withoutContext = $this->buildOwid($identity);
+        $withContext = $this->buildOwid(
+            $identity,
+            null,
+            3,
+            $this->buildContext(19)
+        );
+
+        self::assertEquals(117, strlen(base64_decode($withoutContext)));
+        self::assertEquals(136, strlen(base64_decode($withContext)));
+
+        $before = $this->identityFromToken($withoutContext);
+        $after = $this->identityFromToken($withContext);
+
+        self::assertEquals(bin2hex($identity), $after);
+        self::assertEquals($before, $after);
+    }
+
+    /**
+     * Test that a context section of some other length is read the same
+     * way, so the plugin keeps working if the section ever grows. The
+     * plugin must not assume any context length at all.
+     */
+    public function testIdentityWithLongerCreatorContextReadsValue()
+    {
+        $identity = str_repeat("\x31", 32);
+        $token = $this->buildOwid(
+            $identity,
+            null,
+            3,
+            $this->buildContext(64)
+        );
+
+        self::assertEquals(
+            bin2hex($identity),
+            $this->identityFromToken($token)
+        );
+    }
+
+    /**
+     * Test that a self-hosted deployment signing with its own creator
+     * domain is read correctly. The domain sits between the version byte
+     * and the payload, so a longer domain moves the value and a fixed
+     * offset would read the wrong bytes.
+     */
+    public function testIdentitySelfHostedDomainReadsValue()
+    {
+        $identity = str_repeat("\x66", 32);
+        $token = $this->buildOwid(
+            $identity,
+            null,
+            3,
+            $this->buildContext(19),
+            'id.self-hosted.example.com'
+        );
+
+        self::assertEquals(
+            bin2hex($identity),
+            $this->identityFromToken($token)
+        );
+    }
+
+    /**
+     * Test that a HashedEmail identifier, which sets bit 7 of the flags
+     * and carries a 32-byte value like the Probabilistic type, gives the
+     * same 64-character key.
+     */
+    public function testIdentityHashedEmailTypeReadsValue()
+    {
+        $identity = str_repeat("\x0c", 32);
+        $token = $this->buildEnvelope(
+            $this->buildPayload($identity, 0x80, $this->buildContext(19))
+        );
+
+        $result = $this->identityFromToken($token);
+        self::assertEquals(bin2hex($identity), $result);
+        self::assertEquals(64, strlen($result));
+    }
+
+    /**
+     * Test that a Random identifier, whose value is a 16-byte GUID
+     * rather than a 32-byte hash, gives the hex of those 16 bytes. That
+     * is 32 characters rather than 64. The result is only ever used as a
+     * per-visitor key, so a shorter string is still a complete and
+     * stable identity, and inventing padding or hashing the GUID would
+     * produce a key no other 51Did reader agrees with.
+     */
+    public function testIdentityRandomTypeReadsGuid()
+    {
+        $guid = str_repeat("\x22", 16);
+        $token = $this->buildEnvelope($this->buildPayload($guid, 0x41));
+
+        $result = $this->identityFromToken($token);
+        self::assertEquals(bin2hex($guid), $result);
+        self::assertEquals(32, strlen($result));
+    }
+
+    /**
+     * Test that a Random identifier carrying a creator context gives the
+     * same key as the same GUID without one, so the context section is
+     * never read as part of the value.
+     */
+    public function testIdentityRandomWithCreatorContextMatchesWithout()
+    {
+        $guid = str_repeat("\x9e", 16);
+        $plain = $this->buildEnvelope($this->buildPayload($guid, 0x41));
+        $withContext = $this->buildEnvelope(
+            $this->buildPayload($guid, 0x41, $this->buildContext(19))
+        );
+
+        self::assertEquals(
+            $this->identityFromToken($plain),
+            $this->identityFromToken($withContext)
+        );
+    }
+
+    /**
+     * Test that the reserved identifier type falls back to the IP and
+     * User-Agent hash. Its value has no assigned length, so guessing one
+     * would give a key that is not stable.
+     */
+    public function testIdentityReservedTypeFallsBackToIpUa()
+    {
+        $token = $this->buildEnvelope(
+            $this->buildPayload(str_repeat("\x44", 32), 0xC1)
+        );
+
+        self::assertNull(SuspiciousActivity::extract_owid_identifier($token));
+        self::assertEquals(
+            $this->ipUaFallback(),
+            $this->identityFromToken($token)
+        );
+    }
+
+    /**
+     * Test that an envelope cut short after the payload, so that the
+     * signature is incomplete, is rejected rather than read.
+     */
+    public function testIdentityTruncatedSignatureFallsBackToIpUa()
+    {
+        $full = base64_decode($this->buildOwid(str_repeat("\x12", 32)));
+        $token = base64_encode(substr($full, 0, strlen($full) - 1));
+
+        self::assertNull(SuspiciousActivity::extract_owid_identifier($token));
+        self::assertEquals(
+            $this->ipUaFallback(),
+            $this->identityFromToken($token)
+        );
+    }
+
+    /**
+     * Test that a payload holding only the flags and licence header,
+     * with no value after it, is rejected rather than read as an empty
+     * or partial key.
+     */
+    public function testIdentityPayloadWithoutValueFallsBackToIpUa()
+    {
+        $token = $this->buildEnvelope($this->buildPayload(''));
+
+        self::assertNull(SuspiciousActivity::extract_owid_identifier($token));
+        self::assertEquals(
+            $this->ipUaFallback(),
+            $this->identityFromToken($token)
+        );
+    }
+
+    /**
+     * Test that a payload holding only part of the value is rejected.
+     * Reading it would give a short key that changes shape.
+     */
+    public function testIdentityPartialValueFallsBackToIpUa()
+    {
+        $token = $this->buildEnvelope(
+            $this->buildPayload(str_repeat("\x77", 20))
+        );
+
+        self::assertNull(SuspiciousActivity::extract_owid_identifier($token));
+        self::assertEquals(
+            $this->ipUaFallback(),
+            $this->identityFromToken($token)
+        );
+    }
+
+    /**
+     * Test that an envelope whose payload length field asks for more
+     * bytes than the envelope holds is rejected.
+     */
+    public function testIdentityOverstatedPayloadLengthFallsBackToIpUa()
+    {
+        $identity = str_repeat("\x5a", 32);
+        $payload = $this->buildPayload($identity);
+        $envelope = chr(3)
+            . "51d.es\x00"
+            . pack('V', 3320214)
+            . pack('V', strlen($payload) + 32)
+            . $payload
+            . str_repeat("\x00", 64);
+
+        $token = base64_encode($envelope);
+        self::assertNull(SuspiciousActivity::extract_owid_identifier($token));
+        self::assertEquals(
+            $this->ipUaFallback(),
+            $this->identityFromToken($token)
+        );
+    }
+
+    /**
+     * Test that an envelope with no zero terminator after the domain is
+     * rejected, since the payload cannot be located without it.
+     */
+    public function testIdentityUnterminatedDomainFallsBackToIpUa()
+    {
+        $token = base64_encode(chr(3) . str_repeat("\x41", 116));
+
+        self::assertNull(SuspiciousActivity::extract_owid_identifier($token));
+        self::assertEquals(
+            $this->ipUaFallback(),
+            $this->identityFromToken($token)
+        );
+    }
+
+    /**
+     * Test that an empty string and a value that is not a string are
+     * rejected without a warning.
+     */
+    public function testIdentityEmptyAndNonStringTokensReturnNull()
+    {
+        self::assertNull(SuspiciousActivity::extract_owid_identifier(''));
+        self::assertNull(SuspiciousActivity::extract_owid_identifier(null));
+        self::assertNull(SuspiciousActivity::extract_owid_identifier(42));
+        self::assertNull(SuspiciousActivity::extract_owid_identifier('===='));
     }
 
     /**

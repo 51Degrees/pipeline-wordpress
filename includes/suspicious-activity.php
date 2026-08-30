@@ -145,18 +145,97 @@ class SuspiciousActivity
     }
 
     /**
-     * Extracts the 32-byte Identifier (bytes 21..52) from a base64-encoded
-     * OWID v3 token and returns it as a 64-char hex string.
+     * OWID envelope version this reader understands.
+     */
+    const OWID_VERSION = 3;
+
+    /**
+     * Byte length of the OWID creation date field under version 3.
+     */
+    const OWID_DATE_LENGTH = 4;
+
+    /**
+     * Byte length of the little-endian field that gives the payload
+     * length.
+     */
+    const OWID_PAYLOAD_LENGTH_FIELD = 4;
+
+    /**
+     * Byte length of the signature that closes an OWID envelope.
+     */
+    const OWID_SIGNATURE_LENGTH = 64;
+
+    /**
+     * Byte length of the flags field that opens a 51Did payload.
+     */
+    const DID_FLAGS_LENGTH = 1;
+
+    /**
+     * Byte length of the licence field that follows the flags.
+     */
+    const DID_LICENCE_LENGTH = 4;
+
+    /**
+     * Byte length of the payload header, being the flags and the licence
+     * field, which every identifier type shares.
+     */
+    const DID_HEADER_LENGTH = self::DID_FLAGS_LENGTH + self::DID_LICENCE_LENGTH;
+
+    /**
+     * Byte length of the SHA-256 value carried by the Probabilistic and
+     * HashedEmail identifier types.
+     */
+    const DID_HASH_LENGTH = 32;
+
+    /**
+     * Byte length of the GUID value carried by the Random identifier
+     * type.
+     */
+    const DID_GUID_LENGTH = 16;
+
+    /**
+     * Identifier type derived from the device fingerprint and the IP
+     * address. Identifiers issued before the type bits were assigned
+     * carry zeroes there, so they read as this type.
+     */
+    const DID_TYPE_PROBABILISTIC = 0;
+
+    /**
+     * Identifier type holding a server-generated random GUID.
+     */
+    const DID_TYPE_RANDOM = 1;
+
+    /**
+     * Identifier type derived from a caller-supplied email and salt.
+     */
+    const DID_TYPE_HASHED_EMAIL = 2;
+
+    /**
+     * Extracts the stable value from a base64-encoded 51Did (an OWID v3
+     * envelope) and returns it as a hex string.
      *
      * The envelope's ECDSA signature is regenerated on every request
      * (random nonce), so hashing the full token would produce a new
-     * tracking key per request. The Identifier is the SHA-256 hash the
-     * cloud computed from visitor features and is stable per visitor.
+     * tracking key per request. The value is what the cloud computed
+     * from the visitor and is stable per visitor, so that is what this
+     * returns.
+     *
+     * The envelope is parsed rather than read at fixed offsets, because
+     * neither the creator domain nor the payload has a fixed length. A
+     * self-hosted deployment signs with its own domain, which moves the
+     * payload, and an identifier carrying a creator context has extra
+     * bytes after the value, which this reader keeps out of the value
+     * and does not interpret.
+     *
+     * A Probabilistic or HashedEmail identifier gives 64 hex characters
+     * and a Random one gives 32, because the value itself is shorter.
+     * The caller only uses the result as a per-visitor key, so the
+     * shorter string is still a complete and stable identity.
      *
      * @access public
      *
-     * @param  mixed       $token base64-encoded OWID token
-     * @return string|null 64-char hex identifier, or null on malformed input
+     * @param  mixed       $token base64-encoded 51Did
+     * @return string|null hex value, or null on malformed input
      */
     public static function extract_owid_identifier($token)
     {
@@ -166,13 +245,98 @@ class SuspiciousActivity
         $normalized = strtr($token, '-_', '+/');
         $pad = (4 - strlen($normalized) % 4) % 4;
         $decoded = base64_decode($normalized . str_repeat('=', $pad), true);
-        if (!is_string($decoded) || strlen($decoded) !== 117) {
+        if (!is_string($decoded) || $decoded === '') {
             return null;
         }
-        if (ord($decoded[0]) !== 3) {
+        $payload = self::read_owid_payload($decoded);
+        if ($payload === null) {
             return null;
         }
-        return bin2hex(substr($decoded, 21, 32));
+        $value = self::read_did_value($payload);
+        if ($value === null) {
+            return null;
+        }
+        return bin2hex($value);
+    }
+
+    /**
+     * Reads the payload out of an OWID envelope, which is a version
+     * byte, the creator domain as ASCII with a zero terminator, the
+     * date, the payload length as four little-endian bytes, the payload
+     * itself and then the signature.
+     *
+     * Nothing here assumes a total length. The envelope only has to be
+     * long enough for the payload the length field asks for and the
+     * signature that follows it, so an envelope that later grows keeps
+     * working.
+     *
+     * @access private
+     *
+     * @param  string      $envelope raw decoded envelope bytes
+     * @return string|null payload bytes, or null when malformed
+     */
+    private static function read_owid_payload($envelope)
+    {
+        if (ord($envelope[0]) !== self::OWID_VERSION) {
+            return null;
+        }
+        $terminator = strpos($envelope, "\x00", 1);
+        if ($terminator === false) {
+            return null;
+        }
+        $offset = $terminator + 1 + self::OWID_DATE_LENGTH;
+        if (strlen($envelope) < $offset + self::OWID_PAYLOAD_LENGTH_FIELD) {
+            return null;
+        }
+        $field = unpack(
+            'V',
+            substr($envelope, $offset, self::OWID_PAYLOAD_LENGTH_FIELD)
+        );
+        $length = $field[1];
+        $offset += self::OWID_PAYLOAD_LENGTH_FIELD;
+        $available = strlen($envelope) - $offset - self::OWID_SIGNATURE_LENGTH;
+        if ($available < $length) {
+            return null;
+        }
+        return substr($envelope, $offset, $length);
+    }
+
+    /**
+     * Reads the value out of a 51Did payload, which is the flags byte,
+     * the licence field, the value and then an optional creator context
+     * section this plugin does not interpret.
+     *
+     * Bits 6 and 7 of the flags give the identifier type, and the type
+     * gives the length of the value, so the context section that may
+     * follow is never taken to be part of the value however long it is.
+     *
+     * @access private
+     *
+     * @param  string      $payload raw payload bytes
+     * @return string|null value bytes, or null when malformed or when
+     *                     the type is one this plugin cannot read
+     */
+    private static function read_did_value($payload)
+    {
+        if (strlen($payload) < self::DID_HEADER_LENGTH) {
+            return null;
+        }
+        $type = (ord($payload[0]) >> 6) & 0x03;
+        if ($type === self::DID_TYPE_RANDOM) {
+            $length = self::DID_GUID_LENGTH;
+        } elseif ($type === self::DID_TYPE_PROBABILISTIC
+            || $type === self::DID_TYPE_HASHED_EMAIL) {
+            $length = self::DID_HASH_LENGTH;
+        } else {
+            // The remaining type is not assigned yet, so the length of
+            // its value is unknown and guessing one would produce a key
+            // that is not stable. The caller falls back instead.
+            return null;
+        }
+        if (strlen($payload) < self::DID_HEADER_LENGTH + $length) {
+            return null;
+        }
+        return substr($payload, self::DID_HEADER_LENGTH, $length);
     }
 
     /**
