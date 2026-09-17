@@ -816,19 +816,28 @@ class FiftyoneService {
     }
 
     /**
-     * Composes the PMP bundle URL for the new query-parameter endpoint.
-     * Returns an empty string when the resource key is missing -- the
-     * enqueue path uses that to short-circuit registration.
+     * Composes the PMP loader address. Returns an empty string when the
+     * resource key is missing, and the enqueue path uses that to
+     * short-circuit registration.
+     *
+     * The Resource Key goes in the path and the address ends in '.js',
+     * because the loader served from that address works out where to
+     * fetch the rest of PMP from by reading its own 'src' attribute,
+     * dropping any query string and any '.js' ending, then appending the
+     * locale it picked. A query-string form leaves nothing in the path
+     * for the loader to carry the key forward with, so the key has to be
+     * a path segment. rawurlencode is still the right escape, because
+     * the key is now a path segment rather than a query value.
      *
      * The base URL comes from FiftyOneDegreesCloudMetadata, which honours
      * the FOD_CLOUD_API_URL env var used across the plugin (robots,
      * suspicious, cloud metadata) and falls back to
      * https://cloud.51degrees.com when unset.
      *
-     * Locale negotiation is delegated to the visitor's Accept-Language
-     * request header — the browser fetches this <script src> and sends
-     * the header for free, the cloud picks the closest available bundle
-     * and falls back to en-us when nothing matches.
+     * The locale is chosen in the browser by the loader, which matches
+     * navigator.languages against the locales it was built with and
+     * falls back to en-us, so no allowlist and no locale handling lives
+     * in the plugin.
      *
      * @return string
      */
@@ -838,7 +847,7 @@ class FiftyoneService {
             return '';
         }
         return sprintf(
-            '%s/api/v4/pmp?resource=%s',
+            '%s/api/v4/pmp/%s.js',
             FiftyOneDegreesCloudMetadata::get_cloud_host_url(),
             rawurlencode($key));
     }

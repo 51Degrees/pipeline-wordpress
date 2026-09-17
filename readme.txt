@@ -33,11 +33,13 @@ Use 51Degrees device detection to intelligently manage your robots.txt file and 
 
 ## Preference Management Platform (PMP)
 
-Add a 51Degrees consent popup to your site. Visitors choose Standard, Personalized, or a publisher-defined alternative (e.g. "Remove ads"). The choice is stored client-side in `localStorage` — no cookies, no extra server round-trips. Configure the brand, the alternative button, and the terms/privacy URL from the `PMP` tab.
+Add a 51Degrees consent popup to your site. Visitors choose Standard, Personalized, or a publisher-defined alternative (e.g. "Remove ads"). The choice is stored in the browser under `localStorage`, and the plugin itself writes no cookies and keeps no preference on the server. Configure the brand, the alternative button, and the terms/privacy URL from the `PMP` tab.
 
 Publishers can react to the visitor's choice by overriding a single global callback on their page:
 
-`window.onPMPCompletion = function (preference) { /* preference is 'standard' or 'personalized' */ };`
+`window.onPMPCompletion = function (preference) { /* preference is 'standard', 'personalized' or 'non-marketing' */ };`
+
+The alternative button stores `non-marketing`, not `standard`.
 
 The plugin ships a no-op default, so the popup works out of the box without any custom JavaScript.
 
