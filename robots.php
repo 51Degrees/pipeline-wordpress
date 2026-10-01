@@ -1,4 +1,27 @@
 <?php
+/* *********************************************************************
+ * This Original Work is copyright of 51 Degrees Mobile Experts Limited.
+ * Copyright 2026 51 Degrees Mobile Experts Limited, Davidson House,
+ * Forbury Square, Reading, Berkshire, United Kingdom RG1 3EU.
+ *
+ * This Original Work is licensed under the European Union Public Licence
+ * (EUPL) v.1.2 and is subject to its terms as set out below.
+ *
+ * If a copy of the EUPL was not distributed with this file, You can obtain
+ * one at https://opensource.org/licenses/EUPL-1.2.
+ *
+ * The 'Compatible Licences' set out in the Appendix to the EUPL (as may be
+ * amended by the European Commission) shall be deemed incompatible for
+ * the purposes of the Work and the provisions of the compatibility
+ * clause in Article 5 of the EUPL shall not apply.
+ *
+ * If using the Work as, or as part of, a network application, by
+ * including the attribution notice(s) required under Article 5 of the EUPL
+ * in the end user terms of the application under an appropriate heading,
+ * such notice(s) shall fulfill the requirements of that article.
+ * ********************************************************************* */
+
+
 
 if (!defined('ABSPATH')) { exit; }
 
@@ -45,10 +68,10 @@ $plaintext_cache      = get_option(Options::ROBOTS_PLAINTEXT_CACHE, '');
 ?>
 
 <div class="wrap">
-    <h2><?php echo esc_html(FiftyOneDegreesStrings::get('robots.page.title')); ?></h2>
-    <p><?php echo esc_html(FiftyOneDegreesStrings::get('robots.page.description')); ?></p>
-    <?php if ($cloud_failure_signal !== null): ?>
-        <?php
+    <h2> echo esc_html(FiftyOneDegreesStrings::get('robots.page.title')); ?></h2>
+    <p> echo esc_html(FiftyOneDegreesStrings::get('robots.page.description')); ?></p>
+     if ($cloud_failure_signal !== null): ?>
+        
         $http_status   = isset($cloud_failure_signal['http_status']) ? $cloud_failure_signal['http_status'] : null;
         $cache_suffix  = !empty($plaintext_cache)
             ? ' ' . FiftyOneDegreesStrings::get('robots.notice.cached_state_suffix')
@@ -66,117 +89,117 @@ $plaintext_cache      = get_option(Options::ROBOTS_PLAINTEXT_CACHE, '');
         );
         ?>
         <div class="notice notice-error">
-            <p><?php echo wp_kses_post(FiftyOneDegreesStrings::get($notice_key) . $host_suffix . $cache_suffix); ?></p>
+            <p> echo wp_kses_post(FiftyOneDegreesStrings::get($notice_key) . $host_suffix . $cache_suffix); ?></p>
         </div>
-    <?php else: ?>
-        <?php if (!$supports_iscrawler && !$supports_crawler_usage): ?>
+     else: ?>
+         if (!$supports_iscrawler && !$supports_crawler_usage): ?>
             <div class="notice notice-warning">
-                <p><?php echo wp_kses_post(FiftyOneDegreesStrings::get('robots.notice.no_crawler')); ?></p>
+                <p> echo wp_kses_post(FiftyOneDegreesStrings::get('robots.notice.no_crawler')); ?></p>
             </div>
-        <?php elseif (!$supports_iscrawler): ?>
+         elseif (!$supports_iscrawler): ?>
             <div class="notice notice-warning">
-                <p><?php echo wp_kses_post(FiftyOneDegreesStrings::get('robots.notice.no_iscrawler')); ?></p>
+                <p> echo wp_kses_post(FiftyOneDegreesStrings::get('robots.notice.no_iscrawler')); ?></p>
             </div>
-        <?php elseif (!$supports_crawler_usage): ?>
+         elseif (!$supports_crawler_usage): ?>
             <div class="notice notice-info">
-                <p><?php echo wp_kses_post(FiftyOneDegreesStrings::get('robots.notice.no_crawler_usage')); ?></p>
+                <p> echo wp_kses_post(FiftyOneDegreesStrings::get('robots.notice.no_crawler_usage')); ?></p>
             </div>
-        <?php endif; ?>
+         endif; ?>
 
-        <?php if (!$supports_robots_txt): ?>
+         if (!$supports_robots_txt): ?>
             <div class="notice notice-info">
-                <p><?php echo wp_kses_post(FiftyOneDegreesStrings::get('robots.notice.no_robots_txt')); ?></p>
+                <p> echo wp_kses_post(FiftyOneDegreesStrings::get('robots.notice.no_robots_txt')); ?></p>
             </div>
-        <?php endif; ?>
+         endif; ?>
 
-        <?php if (empty($crawler_categories) && $supports_crawler_usage): ?>
+         if (empty($crawler_categories) && $supports_crawler_usage): ?>
             <div class="notice notice-error">
-                <p><?php echo wp_kses_post(FiftyOneDegreesStrings::get('robots.notice.categories_fetch_failed')); ?></p>
+                <p> echo wp_kses_post(FiftyOneDegreesStrings::get('robots.notice.categories_fetch_failed')); ?></p>
             </div>
-        <?php endif; ?>
-    <?php endif; ?>
+         endif; ?>
+     endif; ?>
 
-    <?php
+    
     $generate_success = get_transient('fiftyonedegrees_robots_generate_success');
     if ($generate_success !== false):
         delete_transient('fiftyonedegrees_robots_generate_success');
     ?>
         <div class="notice notice-success is-dismissible">
-            <p><?php echo esc_html(FiftyOneDegreesStrings::get('robots.notice.generate_success')); ?></p>
+            <p> echo esc_html(FiftyOneDegreesStrings::get('robots.notice.generate_success')); ?></p>
         </div>
-    <?php endif; ?>
+     endif; ?>
 
-    <?php
+    
     // Suppress the transient cloud-error notice when a metadata-failure
     // signal is already being rendered — same root cause, one notice.
     $robots_cloud_error = get_transient('fiftyonedegrees_robots_cloud_error');
     if ($robots_cloud_error !== false && $cloud_failure_signal === null): ?>
         <div class="notice notice-error">
-            <p><?php echo wp_kses_post(FiftyOneDegreesStrings::get('robots.notice.cloud_api_error', esc_html($robots_cloud_error))); ?></p>
+            <p> echo wp_kses_post(FiftyOneDegreesStrings::get('robots.notice.cloud_api_error', esc_html($robots_cloud_error))); ?></p>
         </div>
-    <?php endif; ?>
+     endif; ?>
 
-    <?php if (is_array($last_refresh) && isset($last_refresh['status'])):
+     if (is_array($last_refresh) && isset($last_refresh['status'])):
         // Error-state deduped against $cloud_failure_signal; success still useful.
         if ($last_refresh['status'] === 'error' && $cloud_failure_signal === null): ?>
             <div class="notice notice-warning">
-                <p><?php echo wp_kses_post(FiftyOneDegreesStrings::get(
+                <p> echo wp_kses_post(FiftyOneDegreesStrings::get(
                     'robots.notice.last_refresh_error',
                     esc_html(isset($last_refresh['message']) ? $last_refresh['message'] : ''),
                     esc_html(isset($last_refresh['timestamp']) ? gmdate('Y-m-d H:i:s', $last_refresh['timestamp']) . ' UTC' : '')
                 )); ?></p>
             </div>
-        <?php elseif ($last_refresh['status'] === 'success'): ?>
+         elseif ($last_refresh['status'] === 'success'): ?>
             <p class="description">
-                <?php echo esc_html(FiftyOneDegreesStrings::get(
+                 echo esc_html(FiftyOneDegreesStrings::get(
                     'robots.notice.last_refresh_success',
                     isset($last_refresh['timestamp']) ? gmdate('Y-m-d H:i:s', $last_refresh['timestamp']) . ' UTC' : ''
                 )); ?>
             </p>
-        <?php endif;
+         endif;
     endif; ?>
 
-    <?php if (file_exists(ABSPATH . 'robots.txt')): ?>
+     if (file_exists(ABSPATH . 'robots.txt')): ?>
         <div class="notice notice-error">
-            <p><?php echo wp_kses_post(FiftyOneDegreesStrings::get('robots.notice.physical_file')); ?></p>
+            <p> echo wp_kses_post(FiftyOneDegreesStrings::get('robots.notice.physical_file')); ?></p>
         </div>
-    <?php endif; ?>
+     endif; ?>
 
     <form method="post" action="options.php">
-        <?php settings_fields(Options::ROBOTS_GROUP_KEY); ?>
+         settings_fields(Options::ROBOTS_GROUP_KEY); ?>
 
-        <input type="hidden" name="<?php echo Options::ROBOTS_ENABLE; ?>" value="off">
-        <input type="hidden" name="<?php echo Options::ROBOTS_ENFORCE; ?>" value="off">
+        <input type="hidden" name=" echo Options::ROBOTS_ENABLE; ?>" value="off">
+        <input type="hidden" name=" echo Options::ROBOTS_ENFORCE; ?>" value="off">
 
         <table class="form-table">
             <tr valign="top">
-                <th scope="row"><?php echo esc_html(FiftyOneDegreesStrings::get('robots.field.enable_label')); ?></th>
+                <th scope="row"> echo esc_html(FiftyOneDegreesStrings::get('robots.field.enable_label')); ?></th>
                 <td>
                     <label>
-                        <input type="checkbox" name="<?php echo Options::ROBOTS_ENABLE; ?>" value="on" <?php checked('on', $robots_enable); ?> />
-                        <?php echo esc_html(FiftyOneDegreesStrings::get('robots.field.enable_checkbox')); ?>
+                        <input type="checkbox" name=" echo Options::ROBOTS_ENABLE; ?>" value="on"  checked('on', $robots_enable); ?> />
+                         echo esc_html(FiftyOneDegreesStrings::get('robots.field.enable_checkbox')); ?>
                     </label>
-                    <p class="description"><?php echo wp_kses_post(FiftyOneDegreesStrings::get('robots.field.enable_description')); ?></p>
+                    <p class="description"> echo wp_kses_post(FiftyOneDegreesStrings::get('robots.field.enable_description')); ?></p>
                 </td>
             </tr>
 
             <tr valign="top">
-                <th scope="row"><?php echo esc_html(FiftyOneDegreesStrings::get('robots.field.enforce_label')); ?></th>
+                <th scope="row"> echo esc_html(FiftyOneDegreesStrings::get('robots.field.enforce_label')); ?></th>
                 <td>
                     <label>
-                        <input type="checkbox" name="<?php echo Options::ROBOTS_ENFORCE; ?>" value="on" <?php checked('on', $robots_enforce); ?> />
-                        <?php echo esc_html(FiftyOneDegreesStrings::get('robots.field.enforce_checkbox')); ?>
+                        <input type="checkbox" name=" echo Options::ROBOTS_ENFORCE; ?>" value="on"  checked('on', $robots_enforce); ?> />
+                         echo esc_html(FiftyOneDegreesStrings::get('robots.field.enforce_checkbox')); ?>
                     </label>
-                    <p class="description"><?php echo wp_kses_post(FiftyOneDegreesStrings::get('robots.field.enforce_description')); ?></p>
+                    <p class="description"> echo wp_kses_post(FiftyOneDegreesStrings::get('robots.field.enforce_description')); ?></p>
                 </td>
             </tr>
 
             <tr valign="top">
-                <th scope="row"><label for="<?php echo Options::ROBOTS_REDIRECT_URL; ?>"><?php echo esc_html(FiftyOneDegreesStrings::get('robots.field.redirect_url_label')); ?></label></th>
+                <th scope="row"><label for=" echo Options::ROBOTS_REDIRECT_URL; ?>"> echo esc_html(FiftyOneDegreesStrings::get('robots.field.redirect_url_label')); ?></label></th>
                 <td>
-                    <input type="url" name="<?php echo Options::ROBOTS_REDIRECT_URL; ?>" id="<?php echo esc_attr(Options::ROBOTS_REDIRECT_URL); ?>" value="<?php echo esc_attr($redirect_url); ?>" class="large-text" placeholder="<?php echo esc_attr(FiftyOneDegreesStrings::get('robots.field.redirect_url_placeholder')); ?>" />
-                    <p class="description"><?php echo esc_html(FiftyOneDegreesStrings::get('robots.field.redirect_url_description')); ?></p>
-                    <?php
+                    <input type="url" name=" echo Options::ROBOTS_REDIRECT_URL; ?>" id=" echo esc_attr(Options::ROBOTS_REDIRECT_URL); ?>" value=" echo esc_attr($redirect_url); ?>" class="large-text" placeholder=" echo esc_attr(FiftyOneDegreesStrings::get('robots.field.redirect_url_placeholder')); ?>" />
+                    <p class="description"> echo esc_html(FiftyOneDegreesStrings::get('robots.field.redirect_url_description')); ?></p>
+                    
                     fiftyonedegrees_render_page_picker(
                         Options::ROBOTS_REDIRECT_URL,
                         FiftyOneDegreesStrings::get('common.page_picker.placeholder')
@@ -186,13 +209,13 @@ $plaintext_cache      = get_option(Options::ROBOTS_PLAINTEXT_CACHE, '');
             </tr>
 
             <tr valign="top">
-                <th scope="row"><?php echo esc_html(FiftyOneDegreesStrings::get('robots.field.categories_label')); ?></th>
+                <th scope="row"> echo esc_html(FiftyOneDegreesStrings::get('robots.field.categories_label')); ?></th>
                 <td>
                     <fieldset>
-                        <p class="description"><?php echo wp_kses_post(FiftyOneDegreesStrings::get('robots.field.categories_description')); ?></p>
+                        <p class="description"> echo wp_kses_post(FiftyOneDegreesStrings::get('robots.field.categories_description')); ?></p>
                         <br>
-                        <?php foreach ($crawler_categories as $cat_name => $cat_desc): ?>
-                            <?php
+                         foreach ($crawler_categories as $cat_name => $cat_desc): ?>
+                            
                             if ($saved_allowed === null || $saved_allowed === false) {
                                 $is_allowed = !in_array($cat_name, $default_denied, true);
                             } else {
@@ -201,81 +224,81 @@ $plaintext_cache      = get_option(Options::ROBOTS_PLAINTEXT_CACHE, '');
                             ?>
                             <label style="display:block; margin-bottom: 12px;">
                                 <input type="checkbox"
-                                    name="<?php echo esc_attr(Options::ROBOTS_ALLOWED_CATEGORIES); ?>[]"
-                                    value="<?php echo esc_attr($cat_name); ?>"
-                                    <?php checked($is_allowed); ?>>
-                                <strong><?php echo esc_html($cat_name); ?></strong>
-                                <?php if (!empty($cat_desc)): ?>
-                                    <span class="description" style="display:block; margin-left: 24px; margin-top: 2px;"><?php echo esc_html($cat_desc); ?></span>
-                                <?php endif; ?>
+                                    name=" echo esc_attr(Options::ROBOTS_ALLOWED_CATEGORIES); ?>[]"
+                                    value=" echo esc_attr($cat_name); ?>"
+                                     checked($is_allowed); ?>>
+                                <strong> echo esc_html($cat_name); ?></strong>
+                                 if (!empty($cat_desc)): ?>
+                                    <span class="description" style="display:block; margin-left: 24px; margin-top: 2px;"> echo esc_html($cat_desc); ?></span>
+                                 endif; ?>
                             </label>
-                        <?php endforeach; ?>
+                         endforeach; ?>
                     </fieldset>
                 </td>
             </tr>
 
             <tr valign="top">
-                <th scope="row"><?php echo esc_html(FiftyOneDegreesStrings::get('robots.field.tdl_label')); ?></th>
+                <th scope="row"> echo esc_html(FiftyOneDegreesStrings::get('robots.field.tdl_label')); ?></th>
                 <td>
                     <fieldset>
 
-                        <?php if (!empty($standard_tdls)): ?>
-                        <p><strong><?php echo esc_html(FiftyOneDegreesStrings::get('robots.field.tdl_standard_section_label')); ?></strong></p>
-                        <p class="description"><?php echo wp_kses_post(FiftyOneDegreesStrings::get('robots.field.tdl_standard_section_description')); ?></p>
+                         if (!empty($standard_tdls)): ?>
+                        <p><strong> echo esc_html(FiftyOneDegreesStrings::get('robots.field.tdl_standard_section_label')); ?></strong></p>
+                        <p class="description"> echo wp_kses_post(FiftyOneDegreesStrings::get('robots.field.tdl_standard_section_description')); ?></p>
                         <br>
-                        <?php foreach ($standard_tdls as $tdl_entry): ?>
-                            <?php $entry_id = $tdl_entry['id']; ?>
+                         foreach ($standard_tdls as $tdl_entry): ?>
+                             $entry_id = $tdl_entry['id']; ?>
                             <label style="display:block; margin-bottom: 12px;">
                                 <input type="checkbox"
-                                    name="<?php echo esc_attr(Options::ROBOTS_STANDARD_TDL_SELECTED); ?>[]"
-                                    value="<?php echo esc_attr($entry_id); ?>"
-                                    <?php checked(in_array($entry_id, $standard_selected, true)); ?>>
-                                <strong><?php echo esc_html($tdl_entry['label']); ?></strong>
-                                <?php if (!empty($tdl_entry['description'])): ?>
-                                    <span class="description" style="display:block; margin-left: 24px; margin-top: 2px;"><?php echo esc_html($tdl_entry['description']); ?></span>
-                                <?php endif; ?>
+                                    name=" echo esc_attr(Options::ROBOTS_STANDARD_TDL_SELECTED); ?>[]"
+                                    value=" echo esc_attr($entry_id); ?>"
+                                     checked(in_array($entry_id, $standard_selected, true)); ?>>
+                                <strong> echo esc_html($tdl_entry['label']); ?></strong>
+                                 if (!empty($tdl_entry['description'])): ?>
+                                    <span class="description" style="display:block; margin-left: 24px; margin-top: 2px;"> echo esc_html($tdl_entry['description']); ?></span>
+                                 endif; ?>
                             </label>
-                        <?php endforeach; ?>
+                         endforeach; ?>
                         <hr style="margin: 15px 0;">
-                        <?php endif; ?>
+                         endif; ?>
 
-                        <p class="description"><?php echo wp_kses_post(FiftyOneDegreesStrings::get('robots.field.tdl_custom_description')); ?></p>
+                        <p class="description"> echo wp_kses_post(FiftyOneDegreesStrings::get('robots.field.tdl_custom_description')); ?></p>
                         <br>
                         <textarea
-                            name="<?php echo esc_attr(Options::ROBOTS_CUSTOM_TDL); ?>"
+                            name=" echo esc_attr(Options::ROBOTS_CUSTOM_TDL); ?>"
                             class="large-text code"
                             rows="5"
-                            placeholder="<?php echo esc_attr(FiftyOneDegreesStrings::get('robots.field.tdl_custom_placeholder')); ?>"
-                        ><?php echo esc_textarea(implode("\n", $custom_tdl)); ?></textarea>
+                            placeholder=" echo esc_attr(FiftyOneDegreesStrings::get('robots.field.tdl_custom_placeholder')); ?>"
+                        > echo esc_textarea(implode("\n", $custom_tdl)); ?></textarea>
                     </fieldset>
                 </td>
             </tr>
 
             <tr valign="top">
-                <th scope="row"><label for="<?php echo Options::ROBOTS_CUSTOM_TOP; ?>"><?php echo esc_html(FiftyOneDegreesStrings::get('robots.field.custom_top_label')); ?></label></th>
+                <th scope="row"><label for=" echo Options::ROBOTS_CUSTOM_TOP; ?>"> echo esc_html(FiftyOneDegreesStrings::get('robots.field.custom_top_label')); ?></label></th>
                 <td>
-                    <textarea name="<?php echo Options::ROBOTS_CUSTOM_TOP; ?>" rows="5" class="large-text code" placeholder="<?php echo esc_attr(FiftyOneDegreesStrings::get('robots.field.custom_top_placeholder')); ?>"><?php echo esc_textarea($custom_top); ?></textarea>
-                    <p class="description"><?php echo esc_html(FiftyOneDegreesStrings::get('robots.field.custom_top_description')); ?></p>
+                    <textarea name=" echo Options::ROBOTS_CUSTOM_TOP; ?>" rows="5" class="large-text code" placeholder=" echo esc_attr(FiftyOneDegreesStrings::get('robots.field.custom_top_placeholder')); ?>"> echo esc_textarea($custom_top); ?></textarea>
+                    <p class="description"> echo esc_html(FiftyOneDegreesStrings::get('robots.field.custom_top_description')); ?></p>
                 </td>
             </tr>
 
             <tr valign="top">
-                <th scope="row"><label for="<?php echo Options::ROBOTS_CUSTOM_BOTTOM; ?>"><?php echo esc_html(FiftyOneDegreesStrings::get('robots.field.custom_bottom_label')); ?></label></th>
+                <th scope="row"><label for=" echo Options::ROBOTS_CUSTOM_BOTTOM; ?>"> echo esc_html(FiftyOneDegreesStrings::get('robots.field.custom_bottom_label')); ?></label></th>
                 <td>
-                    <textarea name="<?php echo Options::ROBOTS_CUSTOM_BOTTOM; ?>" rows="5" class="large-text code" placeholder="<?php echo esc_attr(FiftyOneDegreesStrings::get('robots.field.custom_bottom_placeholder')); ?>"><?php echo esc_textarea($custom_bottom); ?></textarea>
-                    <p class="description"><?php echo esc_html(FiftyOneDegreesStrings::get('robots.field.custom_bottom_description')); ?></p>
+                    <textarea name=" echo Options::ROBOTS_CUSTOM_BOTTOM; ?>" rows="5" class="large-text code" placeholder=" echo esc_attr(FiftyOneDegreesStrings::get('robots.field.custom_bottom_placeholder')); ?>"> echo esc_textarea($custom_bottom); ?></textarea>
+                    <p class="description"> echo esc_html(FiftyOneDegreesStrings::get('robots.field.custom_bottom_description')); ?></p>
                 </td>
             </tr>
         </table>
 
-        <?php submit_button(FiftyOneDegreesStrings::get('robots.button.save')); ?>
+         submit_button(FiftyOneDegreesStrings::get('robots.button.save')); ?>
     </form>
 
     <hr>
 
-    <h3><?php echo esc_html(FiftyOneDegreesStrings::get('robots.preview.title')); ?></h3>
-    <p><?php echo esc_html(FiftyOneDegreesStrings::get('robots.preview.description')); ?></p>
-    <pre style="background: #f0f0f1; padding: 15px; border: 1px solid #ccc; max-height: 400px; overflow: auto; white-space: pre-wrap;"><?php
+    <h3> echo esc_html(FiftyOneDegreesStrings::get('robots.preview.title')); ?></h3>
+    <p> echo esc_html(FiftyOneDegreesStrings::get('robots.preview.description')); ?></p>
+    <pre style="background: #f0f0f1; padding: 15px; border: 1px solid #ccc; max-height: 400px; overflow: auto; white-space: pre-wrap;">
         $output = FiftyOneDegreesRobotsTxt::generate_robots_txt_content(get_option('blog_public'));
         if (empty(trim($output))) {
             $output = FiftyOneDegreesStrings::get('robots.preview.empty');
@@ -284,6 +307,6 @@ $plaintext_cache      = get_option(Options::ROBOTS_PLAINTEXT_CACHE, '');
     ?></pre>
 
     <p>
-        <a href="<?php echo esc_url(home_url('/robots.txt')); ?>" target="_blank"><?php echo esc_html(FiftyOneDegreesStrings::get('robots.links.view')); ?></a>
+        <a href=" echo esc_url(home_url('/robots.txt')); ?>" target="_blank"> echo esc_html(FiftyOneDegreesStrings::get('robots.links.view')); ?></a>
     </p>
 </div>
