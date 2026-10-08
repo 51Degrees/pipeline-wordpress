@@ -519,6 +519,7 @@ class FiftyoneService {
 
             // update_option above triggers a synchronous pipeline rebuild
             // that sets PIPELINE_VALIDATION_ERROR on failure.
+
             if (!get_option(Options::PIPELINE_VALIDATION_ERROR)) {
                 if (get_option(Options::ENABLE_GA) &&
                     get_option(Options::RESOURCE_KEY_UPDATED)) {
@@ -899,6 +900,22 @@ class FiftyoneService {
         if (function_exists('delete_transient')) {
             delete_transient(self::PIPELINE_REBUILD_BACKOFF_TRANSIENT);
         }
+        self::queue_pipeline_rebuild_event(10);
+    }
+
+    /**
+     * Queues the PIPELINE_REBUILD_CRON_ACTION single event $delay seconds
+     * out, unless one is already queued. The event is one-shot, so every
+     * exit of fiftyonedegrees_maybe_rebuild_pipeline() that leaves
+     * PIPELINE_REBUILD_PENDING set calls this again -- otherwise a site
+     * with no admin visits never retries after a cloud blip.
+     *
+     * No-op on single-process php -S (see schedule_pipeline_rebuild).
+     *
+     * @param int $delay seconds from now
+     * @return void
+     */
+    private static function queue_pipeline_rebuild_event($delay) {
         if (self::is_single_process_cli_server()) {
             return;
         }
@@ -910,9 +927,11 @@ class FiftyoneService {
             !function_exists('wp_schedule_single_event')) {
             return;
         }
+        // WP-Cron unschedules an event before running its callback, so
+        // inside the cron run this sees no queued event and re-queues.
         if (!wp_next_scheduled(self::PIPELINE_REBUILD_CRON_ACTION)) {
             wp_schedule_single_event(
-                time() + 10,
+                time() + $delay,
                 self::PIPELINE_REBUILD_CRON_ACTION
             );
         }
@@ -956,9 +975,10 @@ class FiftyoneService {
      * Cloud-failure handling: build_and_save_pipeline writes
      * Options::PIPELINE_VALIDATION_ERROR on failure and leaves the
      * cached pipeline alone. We only clear the rebuild-pending flag on
-     * success, so transient cloud failures retry on the next admin_init
-     * or scheduled cron run instead of silently leaving the site on a
-     * stale baked endpoint forever.
+     * success, and every unfinished exit (failure, backoff, lock held)
+     * queues a follow-up cron event one backoff window out, so transient
+     * cloud failures retry on the next admin_init or cron run instead of
+     * silently leaving the site on a stale baked endpoint forever.
      *
      * @return void
      */
@@ -980,6 +1000,7 @@ class FiftyoneService {
         // transient is cleared on the first successful rebuild.
         if (function_exists('get_transient') &&
             get_transient(self::PIPELINE_REBUILD_BACKOFF_TRANSIENT)) {
+            self::queue_pipeline_rebuild_event(self::PIPELINE_REBUILD_BACKOFF_TTL);
             return;
         }
         // Stale-lock recovery. The `finally` below releases the lock
@@ -995,6 +1016,9 @@ class FiftyoneService {
         // add_option returns false atomically if the option already exists
         // -- effective mutex without needing a separate transient layer.
         if (!add_option(Options::PIPELINE_REBUILD_LOCK, time(), '', 'no')) {
+            // The peer holding the lock may die before finishing; the
+            // follow-up attempt reclaims its lock once it goes stale.
+            self::queue_pipeline_rebuild_event(self::PIPELINE_REBUILD_BACKOFF_TTL);
             return;
         }
         try {
@@ -1034,6 +1058,7 @@ class FiftyoneService {
                     (string) $error,
                     MINUTE_IN_SECONDS
                 );
+                self::queue_pipeline_rebuild_event(self::PIPELINE_REBUILD_BACKOFF_TTL);
             }
         } finally {
             delete_option(Options::PIPELINE_REBUILD_LOCK);

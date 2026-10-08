@@ -1140,6 +1140,106 @@ class PipelineTests extends TestCase {
     }
 
     /**
+     * Scenarios in which fiftyonedegrees_maybe_rebuild_pipeline() exits
+     * with PIPELINE_REBUILD_PENDING still set. Each one consumes the
+     * single cron event, so the handler must queue the next attempt.
+     */
+    public static function provideUnfinishedRebuildScenarios() {
+        return [
+            'cloud failure' => ['failure'],
+            'backoff active' => ['backoff'],
+            'lock held by peer' => ['lock'],
+        ];
+    }
+
+    /**
+     * Stubs WP for a pending rebuild that ends unfinished in the given
+     * scenario, and records cron scheduling calls.
+     *
+     * @param string $scenario failure | backoff | lock
+     * @param int|false $nextScheduled what wp_next_scheduled() reports
+     * @return array reference to the list of [timestamp, hook] scheduled
+     */
+    private function stubUnfinishedRebuild($scenario, $nextScheduled) {
+        Patchwork\redefine(
+            'Pipeline::make_pipeline',
+            Patchwork\always([
+                'pipeline' => null,
+                'available_engines' => null,
+                'engine_properties' => null,
+                'error' => 'Cloud unreachable',
+            ])
+        );
+        $errorWritten = false;
+        Functions\when('get_option')->alias(function ($name, $default = null) use (&$errorWritten) {
+            if ($name === Options::PIPELINE_REBUILD_PENDING) return 1;
+            if ($name === Options::RESOURCE_KEY) return 'VALID-KEY';
+            if ($name === Options::PIPELINE_VALIDATION_ERROR) return $errorWritten ? 'Cloud unreachable' : false;
+            return $default;
+        });
+        Functions\when('add_option')->justReturn($scenario !== 'lock');
+        Functions\when('update_option')->alias(function ($key) use (&$errorWritten) {
+            if ($key === Options::PIPELINE_VALIDATION_ERROR) $errorWritten = true;
+            return true;
+        });
+        Functions\when('delete_option')->alias(function ($key) use (&$errorWritten) {
+            if ($key === Options::PIPELINE_VALIDATION_ERROR) $errorWritten = false;
+            return true;
+        });
+        Functions\when('get_transient')->alias(function ($key) use ($scenario) {
+            return $scenario === 'backoff' &&
+                $key === FiftyoneService::PIPELINE_REBUILD_BACKOFF_TRANSIENT ? 1 : false;
+        });
+        Functions\when('set_transient')->justReturn(true);
+        Functions\when('delete_transient')->justReturn(true);
+        Functions\when('wp_next_scheduled')->justReturn($nextScheduled);
+        $this->scheduled = [];
+        Functions\when('wp_schedule_single_event')->alias(function ($time, $hook) {
+            $this->scheduled[] = [$time, $hook];
+            return true;
+        });
+    }
+
+    /** @var array cron events recorded by stubUnfinishedRebuild() */
+    private $scheduled = [];
+
+    /**
+     * Test that an unfinished rebuild queues a follow-up cron attempt one
+     * backoff window out. Without it, an admin-less site whose single cron
+     * attempt hit a cloud blip never retries.
+     *
+     * @dataProvider provideUnfinishedRebuildScenarios
+     */
+    public function testMaybeRebuildPending_Unfinished_SchedulesRetry($scenario) {
+        $this->stubUnfinishedRebuild($scenario, false);
+
+        $before = time();
+        $service = new FiftyoneService();
+        $service->fiftyonedegrees_maybe_rebuild_pipeline();
+
+        $this->assertCount(1, $this->scheduled, "A retry must be scheduled ($scenario)");
+        [$time, $hook] = $this->scheduled[0];
+        $this->assertSame(FiftyoneService::PIPELINE_REBUILD_CRON_ACTION, $hook);
+        $this->assertGreaterThanOrEqual($before + FiftyoneService::PIPELINE_REBUILD_BACKOFF_TTL, $time);
+        $this->assertLessThanOrEqual(time() + FiftyoneService::PIPELINE_REBUILD_BACKOFF_TTL, $time);
+    }
+
+    /**
+     * Test that an unfinished rebuild does not stack a second event when
+     * one is already queued.
+     *
+     * @dataProvider provideUnfinishedRebuildScenarios
+     */
+    public function testMaybeRebuildPending_Unfinished_RetryAlreadyQueued_NoDuplicate($scenario) {
+        $this->stubUnfinishedRebuild($scenario, time() + 60);
+
+        $service = new FiftyoneService();
+        $service->fiftyonedegrees_maybe_rebuild_pipeline();
+
+        $this->assertSame([], $this->scheduled, "No duplicate event when one is queued ($scenario)");
+    }
+
+    /**
      * Test that a leaked PIPELINE_REBUILD_LOCK (older than the recovery
      * window) is force-reclaimed instead of blocking rebuilds forever
      * after a PHP fatal mid-rebuild.
