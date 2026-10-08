@@ -798,6 +798,94 @@ class HookTests extends TestCase {
     }
 
     /**
+     * Key-change scenarios for submit_rk_submit_action: the stored
+     * validation error left by the PREVIOUS key, what the cloud says about
+     * the NEW key, and the tab the admin must land on.
+     */
+    public static function provideResourceKeySubmitScenarios() {
+        return [
+            'valid -> invalid lands on setup' =>
+                [false, 'Resource key not recognised', 'tab=setup'],
+            'invalid -> valid lands on GA' =>
+                ['Resource key not recognised', null, 'tab=google-analytics'],
+        ];
+    }
+
+    /**
+     * submit_rk_submit_action picks the post-save redirect from
+     * PIPELINE_VALIDATION_ERROR. Since the RESOURCE_KEY hook defers the
+     * rebuild, the handler must validate the new key itself — otherwise it
+     * routes on the previous key's error and, with GA enabled, runs the GA
+     * steps against the old pipeline.
+     *
+     * @dataProvider provideResourceKeySubmitScenarios
+     */
+    public function testSubmitResourceKey_RedirectReflectsNewKey(
+        $staleError, $cloudError, $expectedTab) {
+        $store = new \stdClass();
+        $store->data = [
+            Options::RESOURCE_KEY => 'OLD-KEY',
+            Options::PIPELINE => HookTests::$pipeline,
+            Options::PIPELINE_CACHE_VERSION => FiftyoneService::PIPELINE_CACHE_VERSION,
+            Options::ENABLE_GA => true,
+        ];
+        if ($staleError) {
+            $store->data[Options::PIPELINE_VALIDATION_ERROR] = $staleError;
+        }
+        $service = new FiftyoneService();
+
+        Functions\when('get_option')->alias(function ($key, $default = false) use ($store) {
+            return array_key_exists($key, $store->data) ? $store->data[$key] : $default;
+        });
+        // Fire the real updated_option hook, as WordPress would.
+        Functions\when('update_option')->alias(function ($key, $value) use ($store, $service) {
+            $old = $store->data[$key] ?? false;
+            $store->data[$key] = $value;
+            $service->fiftyonedegrees_update_option($key, $old, $value);
+            return true;
+        });
+        Functions\when('add_option')->alias(function ($key, $value) use ($store) {
+            if (array_key_exists($key, $store->data)) return false;
+            $store->data[$key] = $value;
+            return true;
+        });
+        Functions\when('delete_option')->alias(function ($key) use ($store) {
+            unset($store->data[$key]);
+            return true;
+        });
+        Functions\when('get_transient')->justReturn(false);
+        Functions\when('set_transient')->justReturn(true);
+        Functions\when('delete_transient')->justReturn(true);
+        Functions\when('sanitize_text_field')->returnArg();
+        Functions\when('wp_unslash')->returnArg();
+        Functions\when('get_admin_url')->justReturn('admin/');
+        // Throw instead of returning so the handler's exit() is never hit.
+        Functions\when('wp_redirect')->alias(function ($url) {
+            throw new \RuntimeException('redirect:' . $url);
+        });
+        Patchwork\redefine(
+            'Pipeline::make_pipeline',
+            function () use ($cloudError) {
+                return $cloudError === null
+                    ? HookTests::$pipeline
+                    : ['pipeline' => null, 'available_engines' => null,
+                       'engine_properties' => null, 'error' => $cloudError];
+            }
+        );
+
+        $_POST[Options::RESOURCE_KEY] = 'NEW-KEY';
+        $_POST['action'] = 'update';
+        try {
+            $service->submit_rk_submit_action();
+            $this->fail('Expected a redirect');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString($expectedTab, $e->getMessage());
+        } finally {
+            unset($_POST[Options::RESOURCE_KEY], $_POST['action']);
+        }
+    }
+
+    /**
      * Clearing the resource key (empty new value) needs no cloud call, so
      * the cached pipeline + validation error are wiped inline — matches
      * pre-defer behavior of build_and_save_pipeline('').

@@ -517,8 +517,15 @@ class FiftyoneService {
                 $_POST[Options::RESOURCE_KEY]));
             update_option(Options::RESOURCE_KEY, $resource_key);
 
-            // update_option above triggers a synchronous pipeline rebuild
-            // that sets PIPELINE_VALIDATION_ERROR on failure.
+            // The RESOURCE_KEY hook only schedules the rebuild, so
+            // validate the new key here before picking the redirect --
+            // otherwise PIPELINE_VALIDATION_ERROR still describes the
+            // previous key. This is the admin's own POST, so the cloud
+            // round-trip is not on a visitor path; the cli-server gate,
+            // lock and backoff inside the handler still apply. Drop the
+            // old key's error first so a skipped rebuild is not misread.
+            delete_option(Options::PIPELINE_VALIDATION_ERROR);
+            $this->fiftyonedegrees_maybe_rebuild_pipeline();
 
             if (!get_option(Options::PIPELINE_VALIDATION_ERROR)) {
                 if (get_option(Options::ENABLE_GA) &&
@@ -603,10 +610,9 @@ class FiftyoneService {
                 // already built for #62 and is correct for this case too —
                 // validation error surfaces via
                 // Options::PIPELINE_VALIDATION_ERROR on the next admin
-                // pageload, which admin_init runs before page render.
-                // TODO(plugin polish): surface the error via admin_notices
-                // from a transient for explicit feedback on the redirected
-                // page.
+                // pageload, which admin_init runs before page render, and
+                // via fiftyonedegrees_rebuild_failed_notice. The Setup-tab
+                // form validates inline in submit_rk_submit_action.
                 self::schedule_pipeline_rebuild();
             }
 
@@ -1164,7 +1170,7 @@ class FiftyoneService {
         // asset paired with a stale inline pipeline snippet. The inline
         // `getJavaScript()` output is part of the page HTML, so full-page
         // caches (WP Super Cache, W3TC, edge caches) still need a flush
-        // -- see the upgrade notice in readme.txt.
+        // after an upgrade that changes the baked endpoint (issue #62).
         wp_enqueue_script(
             "fiftyonedegrees",
             plugin_dir_url(__FILE__) . "../assets/js/fod.js",
