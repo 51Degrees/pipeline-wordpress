@@ -38,6 +38,47 @@ use fiftyone\pipeline\cloudrequestengine\HttpClient;
 class FiftyOneDegreesWpHttpClient extends HttpClient
 {
     /**
+     * Timeout for admin, cron and build-time cloud calls (pipeline build
+     * and key validation, robots.txt, metadata). Nobody is waiting on
+     * these in a visitor request, so a slow cold handshake must not turn
+     * into a false "cloud unreachable".
+     */
+    public const TIMEOUT = 10;
+
+    /**
+     * Timeout for the per-visitor cloud call in Pipeline::process(). Kept
+     * short so a throttled cloud releases PHP workers quickly instead of
+     * stacking up visitor requests.
+     */
+    public const VISITOR_TIMEOUT = 3;
+
+    /**
+     * Static rather than per-instance: the client is serialized inside
+     * the cached pipeline, so a property set at build time would be
+     * replayed on every visitor request.
+     *
+     * @var bool
+     */
+    private static $onVisitorPath = false;
+
+    /**
+     * Runs $fn with cloud requests capped at VISITOR_TIMEOUT.
+     *
+     * @param callable $fn
+     * @return mixed whatever $fn returns
+     */
+    public static function onVisitorPath(callable $fn)
+    {
+        $previous = self::$onVisitorPath;
+        self::$onVisitorPath = true;
+        try {
+            return $fn();
+        } finally {
+            self::$onVisitorPath = $previous;
+        }
+    }
+
+    /**
      * Returns the WP site's own URL formatted as an HTTP Origin header
      * value (scheme://host[:port], no path), suitable for the
      * `cloudRequestOrigin` setting / 4th `makeCloudRequest` argument.
@@ -82,7 +123,7 @@ class FiftyOneDegreesWpHttpClient extends HttpClient
 
         $args = [
             'method'  => strtoupper($type),
-            'timeout' => 10,
+            'timeout' => self::$onVisitorPath ? self::VISITOR_TIMEOUT : self::TIMEOUT,
             'headers' => [],
         ];
         if (!empty($originHeader)) {

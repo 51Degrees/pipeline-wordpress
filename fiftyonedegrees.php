@@ -96,6 +96,16 @@ class Fiftyonedegrees {
         // Setting Global Values.
         define('FIFTYONEDEGREES_PLUGIN_DIR', plugin_dir_path( __FILE__ ));
         define('FIFTYONEDEGREES_PLUGIN_URL', plugin_dir_url(__FILE__));
+        // Used as wp_enqueue_script() $ver to bust browser/CDN caches on
+        // upgrade. Derived from the `Version:` header above so a release
+        // bump touches a single line (no separate constant to keep in
+        // sync). get_file_data() is loaded before plugins_loaded fires;
+        // the empty-string fallback only matters if this code somehow
+        // runs before wp-includes/functions.php (CLI tests bypassing WP).
+        $plugin_header = function_exists('get_file_data')
+            ? get_file_data(__FILE__, ['Version' => 'Version'])
+            : ['Version' => ''];
+        define('FIFTYONEDEGREES_VERSION', $plugin_header['Version']);
         define('FIFTYONEDEGREES_PROMPT', 'consent');
         define('FIFTYONEDEGREES_ACCESS_TYPE', 'offline');
         define('FIFTYONEDEGREES_CUSTOM_DIMENSION_SCOPE', "HIT");
@@ -240,11 +250,16 @@ register_uninstall_hook(__FILE__, 'fiftyonedegrees_uninstall');
 
 function fiftyonedegrees_deactivate() {
     wp_clear_scheduled_hook('fiftyonedegrees_refresh_robots_txt');
+    wp_clear_scheduled_hook(FiftyoneService::PIPELINE_REBUILD_CRON_ACTION);
     FiftyOneDegreesCloudMetadata::invalidate_all();
 }
 
 function fiftyonedegrees_uninstall() {
     wp_clear_scheduled_hook('fiftyonedegrees_refresh_robots_txt');
     Fiftyonedegrees::get_instance()->delete_options();
+    // After get_instance(): FiftyoneService is only loaded by the plugin
+    // constructor, and plugin_loaded never fires for an inactive plugin
+    // being uninstalled.
+    wp_clear_scheduled_hook(FiftyoneService::PIPELINE_REBUILD_CRON_ACTION);
     FiftyOneDegreesCloudMetadata::invalidate_all();
 }
