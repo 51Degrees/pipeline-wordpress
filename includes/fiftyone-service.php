@@ -40,8 +40,8 @@ class FiftyoneService {
      * Options::PIPELINE_CACHE_VERSION and schedules a deferred rebuild
      * when they disagree.
      *
-     * Version 2 was introduced in 1.0.13 when Pipeline::getRestEndpoint()
-     * switched to the permalink-agnostic `?rest_route=` form (issue #62).
+     * Version 2: Pipeline::getRestEndpoint() switched to the
+     * permalink-agnostic `index.php?rest_route=` form (issue #62).
      */
     public const PIPELINE_CACHE_VERSION = 2;
 
@@ -837,11 +837,12 @@ class FiftyoneService {
      * shipped with this release.
      *
      * Triggered by upgrades that change the serialized pipeline shape --
-     * e.g. 1.0.13's switch to the permalink-agnostic `?rest_route=` JS
-     * endpoint (issue #62), which would otherwise leave installations
-     * upgraded from 1.0.12 with a pretty-permalink endpoint baked in that
-     * can 404 if the admin later switches to plain permalinks (because
-     * we no longer rebuild on permalink_structure change).
+     * e.g. the switch to the permalink-agnostic `index.php?rest_route=`
+     * JS endpoint (issue #62), which would otherwise leave installations
+     * upgraded from an earlier release with a pretty-permalink endpoint
+     * baked in that can 404 if the admin later switches to plain
+     * permalinks (because we no longer rebuild on permalink_structure
+     * change).
      *
      * Strategy: DO NOT delete the cached pipeline here -- that would
      * leave the plugin silent on the front-end (Pipeline::process()
