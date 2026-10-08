@@ -121,8 +121,11 @@ try {
             }
         }
 
+        # curl rather than Invoke-WebRequest: when the cloud call fails the
+        # endpoint answers 200 with an empty body (see Pipeline::getJSON),
+        # which Invoke-WebRequest reports as a "ResponseEnded" exception.
         Test-WordPress "REST endpoint responds (HTTP 200)" {
-            (Invoke-WebRequest -Uri "$env:WORDPRESS_URL/wp-json/fiftyonedegrees/v4/json" -Method POST).StatusCode -eq 200
+            (curl -s -o /dev/null -w '%{http_code}' -X POST "$env:WORDPRESS_URL/wp-json/fiftyonedegrees/v4/json") -eq '200'
         }
 
         Test-WordPress "51Degrees JavaScript snippet is injected into page" {

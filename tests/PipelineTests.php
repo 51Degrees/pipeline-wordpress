@@ -764,6 +764,17 @@ class PipelineTests extends TestCase {
     }
 
     /**
+     * Test that getJSON returns null (an empty REST body) when there is no
+     * processed data, so the client does not cache a failure for the rest
+     * of the browser session.
+     */
+    public function testGetJSON_NoData_ReturnsNull() {
+        Pipeline::reset();
+
+        $this->assertNull(Pipeline::getJSON());
+    }
+
+    /**
      * Test that a permalink_structure change invalidates the session-cached
      * evidence but does NOT trigger a synchronous pipeline rebuild (issue
      * #62). Pipeline::make_pipeline must never be invoked from this hook.

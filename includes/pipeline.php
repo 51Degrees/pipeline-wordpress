@@ -337,6 +337,13 @@ class Pipeline
     /**
      * Retrieves processed flow data as a JSON object.
      *
+     * Returns null on failure on purpose: WP REST then sends an empty
+     * body, which the client-side JavaScriptResource fails to parse, so
+     * it clears its sessionStorage cache and retries on the next page.
+     * Any valid JSON (even `[]`) would be cached and replayed for the
+     * rest of the browser session, hiding one transient cloud failure
+     * from every later page.
+     *
      * @return null|object flow data as a JSON Object
      */
     public static function getJSON()
@@ -344,12 +351,12 @@ class Pipeline
         $data = Pipeline::$data;
 
         if (!$data) {
-            return [];
+            return null;
         }
         if (isset($data['errors']) && count($data['errors'])) {
             error_log('Errors processing Flow Data' . $data['errors']);
 
-            return [];
+            return null;
         }
 
         $flowData = $data['flowData'];
@@ -359,7 +366,7 @@ class Pipeline
         } catch (\Exception $e) {
             error_log($e->getMessage());
 
-            return [];
+            return null;
         }
     }
 
