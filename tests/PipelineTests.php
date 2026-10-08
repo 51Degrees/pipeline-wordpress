@@ -734,19 +734,19 @@ class PipelineTests extends TestCase {
         return array(
             'root install' => array(
                 'http://localhost/',
-                '/?rest_route=/fiftyonedegrees/v4/json'
+                '/index.php?rest_route=/fiftyonedegrees/v4/json'
             ),
             'subdirectory install' => array(
                 'http://localhost/blog/',
-                '/blog/?rest_route=/fiftyonedegrees/v4/json'
+                '/blog/index.php?rest_route=/fiftyonedegrees/v4/json'
             ),
             'subdirectory install without trailing slash' => array(
                 'http://localhost/blog',
-                '/blog/?rest_route=/fiftyonedegrees/v4/json'
+                '/blog/index.php?rest_route=/fiftyonedegrees/v4/json'
             ),
             'multisite subsite path' => array(
                 'http://network.example.com/site1/',
-                '/site1/?rest_route=/fiftyonedegrees/v4/json'
+                '/site1/index.php?rest_route=/fiftyonedegrees/v4/json'
             ),
         );
     }

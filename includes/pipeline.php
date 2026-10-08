@@ -463,19 +463,22 @@ class Pipeline
     /**
      * Gets the REST API endpoint path for the 51Degrees JSON callback.
      *
-     * Returns the permalink-agnostic `?rest_route=` form regardless of the
-     * site's permalink_structure setting. WP core's rest_api_loaded() (in
-     * wp-includes/rest-api.php) fires on parse_request unconditionally, so
-     * this form works whether or not rewrite rules are in place. Used by
-     * Gutenberg, WP-CLI and WordPress.com for the same reason.
+     * Returns the permalink-agnostic `index.php?rest_route=` form regardless
+     * of the site's permalink_structure setting. WP core's rest_api_loaded()
+     * (in wp-includes/rest-api.php) fires on parse_request unconditionally,
+     * so this form works whether or not rewrite rules are in place. It is
+     * the same form get_rest_url() builds for plain permalinks, including
+     * the explicit index.php: the JS callback is a POST, and core avoids
+     * relying on the web server mapping a bare "/" to index.php for
+     * non-GET methods (its nginx workaround).
      *
      * Decoupling the baked JS endpoint from permalink_structure lets the
      * cached pipeline (Options::PIPELINE) stay valid across permalink
      * changes -- no synchronous cloud-rebuild needed when the admin flips
      * Settings -> Permalinks.
      *
-     * @return string the endpoint path (e.g. "/?rest_route=/fiftyonedegrees/v4/json"
-     *                or "/blog/?rest_route=/fiftyonedegrees/v4/json" for subdir)
+     * @return string the endpoint path (e.g. "/index.php?rest_route=/fiftyonedegrees/v4/json"
+     *                or "/blog/index.php?rest_route=/fiftyonedegrees/v4/json" for subdir)
      */
     public static function getRestEndpoint()
     {
@@ -484,7 +487,7 @@ class Pipeline
             $homePath .= '/';
         }
 
-        return $homePath . '?rest_route=/fiftyonedegrees/v4/json';
+        return $homePath . 'index.php?rest_route=/fiftyonedegrees/v4/json';
     }
 
     /**
