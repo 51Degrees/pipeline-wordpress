@@ -145,6 +145,44 @@ class CloudOriginHeaderTests extends TestCase {
     }
 
     /**
+     * Admin/cron/build-time cloud calls get the long timeout; only calls
+     * wrapped in onVisitorPath() (Pipeline::process) get the short one,
+     * and the flag is restored afterwards even if the call throws.
+     */
+    public function testMakeCloudRequest_TimeoutDependsOnCallPath() {
+        $timeouts = [];
+        Functions\when('wp_remote_request')->alias(function ($url, $args) use (&$timeouts) {
+            $timeouts[] = $args['timeout'];
+            return 'RESPONSE';
+        });
+        Functions\when('is_wp_error')->justReturn(false);
+        Functions\when('wp_remote_retrieve_response_code')->justReturn(200);
+        Functions\when('wp_remote_retrieve_body')->justReturn('{"Products":{}}');
+        Functions\when('wp_remote_retrieve_headers')->justReturn([]);
+
+        $client = new FiftyOneDegreesWpHttpClient();
+        $request = function () use ($client) {
+            $client->makeCloudRequest('GET', 'https://cloud.example.com/api/v4/x', null, null);
+        };
+
+        $request();
+        FiftyOneDegreesWpHttpClient::onVisitorPath($request);
+        try {
+            FiftyOneDegreesWpHttpClient::onVisitorPath(function () {
+                throw new \RuntimeException('boom');
+            });
+        } catch (\RuntimeException $e) {
+        }
+        $request();
+
+        $this->assertSame([
+            FiftyOneDegreesWpHttpClient::TIMEOUT,
+            FiftyOneDegreesWpHttpClient::VISITOR_TIMEOUT,
+            FiftyOneDegreesWpHttpClient::TIMEOUT,
+        ], $timeouts);
+    }
+
+    /**
      * The user-facing "cloud rejected" error must name the actual cloud host
      * being contacted (derived from FOD_CLOUD_API_URL), so a domain/host
      * mismatch is diagnosable instead of an opaque generic message.
