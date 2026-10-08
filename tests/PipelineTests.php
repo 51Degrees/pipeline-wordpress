@@ -36,6 +36,9 @@ class PipelineTests extends TestCase {
         FiftyOneDegreesStrings::reset();
         parent::set_up();
         Brain\Monkey\setUp();
+        // Once a test stubs wp_doing_ajax the function stays defined, so
+        // later tests reaching the rebuild handler need a default.
+        Functions\when('wp_doing_ajax')->justReturn(false);
         // Stub the upstream header() call — output-buffer state from the prior
         // test suite makes header() throw "headers already sent" otherwise.
         Patchwork\redefine(
@@ -866,6 +869,9 @@ class PipelineTests extends TestCase {
             if ($name === Options::PIPELINE_CACHE_VERSION) {
                 return 1; // older than current (2)
             }
+            if ($name === Options::PIPELINE) {
+                return ['pipeline' => 'cached-stub'];
+            }
             return $default;
         });
         Functions\when('update_option')->alias(function ($key, $value) use (&$writes) {
@@ -911,6 +917,7 @@ class PipelineTests extends TestCase {
         $deletedTransients = [];
         Functions\when('get_option')->alias(function ($name, $default = null) {
             if ($name === Options::PIPELINE_CACHE_VERSION) return 1;
+            if ($name === Options::PIPELINE) return ['pipeline' => 'cached-stub'];
             return $default;
         });
         Functions\when('update_option')->justReturn(true);
@@ -1251,51 +1258,118 @@ class PipelineTests extends TestCase {
     }
 
     /**
+     * In-memory PIPELINE_REBUILD_LOCK for the lock tests: add_option fails
+     * while the lock is held, delete_option releases it.
+     *
+     * @param int|null $lockTs acquisition timestamp of an existing lock
+     * @return \stdClass ->lock (current timestamp or null), ->log (calls)
+     */
+    private function stubRebuildLock($lockTs) {
+        $state = new \stdClass();
+        $state->lock = $lockTs;
+        $state->log = [];
+        Functions\when('get_option')->alias(function ($name, $default = null) use ($state) {
+            if ($name === Options::PIPELINE_REBUILD_PENDING) return 1;
+            if ($name === Options::PIPELINE_REBUILD_LOCK) return $state->lock ?? $default;
+            if ($name === Options::RESOURCE_KEY) return 'VALID-KEY';
+            return $default;
+        });
+        Functions\when('add_option')->alias(function ($key, $value) use ($state) {
+            if ($key !== Options::PIPELINE_REBUILD_LOCK) return true;
+            $state->log[] = 'add';
+            if ($state->lock !== null) return false;
+            $state->lock = $value;
+            return true;
+        });
+        Functions\when('delete_option')->alias(function ($key) use ($state) {
+            if ($key === Options::PIPELINE_REBUILD_LOCK) {
+                $state->log[] = 'delete';
+                $state->lock = null;
+            }
+            return true;
+        });
+        Functions\when('update_option')->justReturn(true);
+        Functions\when('get_transient')->justReturn(false);
+        Functions\when('set_transient')->justReturn(true);
+        Functions\when('delete_transient')->justReturn(true);
+        return $state;
+    }
+
+    /**
      * Test that a leaked PIPELINE_REBUILD_LOCK (older than the recovery
      * window) is force-reclaimed instead of blocking rebuilds forever
      * after a PHP fatal mid-rebuild.
      */
     public function testMaybeRebuildPending_StaleLock_IsReclaimed() {
+        $rebuildCalls = 0;
         Patchwork\redefine(
             'Pipeline::make_pipeline',
-            Patchwork\always([
-                'pipeline' => 'rebuilt-stub',
-                'available_engines' => [],
-                'engine_properties' => [],
-                'error' => null,
-            ])
+            function () use (&$rebuildCalls) {
+                $rebuildCalls++;
+                return ['pipeline' => 'rebuilt-stub', 'available_engines' => [],
+                        'engine_properties' => [], 'error' => null];
+            }
         );
-        $deletes = [];
-        $addOptionCalls = 0;
-        $staleLockTs = time() - (FiftyoneService::PIPELINE_REBUILD_LOCK_TTL + 60);
-        Functions\when('get_option')->alias(function ($name, $default = null) use ($staleLockTs) {
-            if ($name === Options::PIPELINE_REBUILD_PENDING) return 1;
-            if ($name === Options::PIPELINE_REBUILD_LOCK) return $staleLockTs;
-            if ($name === Options::RESOURCE_KEY) return 'VALID-KEY';
-            return $default;
-        });
-        Functions\when('add_option')->alias(function () use (&$addOptionCalls) {
-            $addOptionCalls++;
-            return true;
-        });
-        Functions\when('update_option')->justReturn(true);
-        Functions\when('delete_option')->alias(function ($key) use (&$deletes) {
-            $deletes[] = $key;
-            return true;
-        });
-        Functions\when('get_transient')->justReturn(false);
-        Functions\when('set_transient')->justReturn(true);
-        Functions\when('delete_transient')->justReturn(true);
+        $state = $this->stubRebuildLock(
+            time() - (FiftyoneService::PIPELINE_REBUILD_LOCK_TTL + 60));
 
         $service = new FiftyoneService();
         $service->fiftyonedegrees_maybe_rebuild_pipeline();
 
-        $this->assertContains(
-            Options::PIPELINE_REBUILD_LOCK,
-            $deletes,
-            'Stale lock must be force-deleted before the add_option re-acquire'
+        $this->assertSame(1, $rebuildCalls, 'A stale lock must not block the rebuild');
+        $this->assertSame(
+            ['delete', 'add', 'delete'],
+            $state->log,
+            'Stale lock is deleted, re-acquired, then released after the rebuild'
         );
-        $this->assertSame(1, $addOptionCalls, 'Lock must be re-acquired after stale-lock recovery');
+    }
+
+    /**
+     * Test that the lock is released when the rebuild throws, so the next
+     * attempt does not have to wait out the stale-lock window.
+     */
+    public function testMaybeRebuildPending_RebuildThrows_ReleasesLock() {
+        Patchwork\redefine(
+            'Pipeline::make_pipeline',
+            function () {
+                throw new \RuntimeException('unexpected');
+            }
+        );
+        $state = $this->stubRebuildLock(null);
+
+        $service = new FiftyoneService();
+        try {
+            $service->fiftyonedegrees_maybe_rebuild_pipeline();
+            $this->fail('Expected the rebuild exception to propagate');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('unexpected', $e->getMessage());
+        }
+
+        $this->assertNull($state->lock, 'Lock must be released on exception (finally block)');
+    }
+
+    /**
+     * Test that a pending rebuild is not run inside admin-ajax.php, which
+     * WordPress also serves to front-end visitors (nopriv actions).
+     */
+    public function testMaybeRebuildPending_DuringAjax_Skips() {
+        $rebuildCalls = 0;
+        Patchwork\redefine(
+            'Pipeline::make_pipeline',
+            function () use (&$rebuildCalls) {
+                $rebuildCalls++;
+                return ['pipeline' => null, 'available_engines' => null,
+                        'engine_properties' => null, 'error' => null];
+            }
+        );
+        $state = $this->stubRebuildLock(null);
+        Functions\when('wp_doing_ajax')->justReturn(true);
+
+        $service = new FiftyoneService();
+        $service->fiftyonedegrees_maybe_rebuild_pipeline();
+
+        $this->assertSame(0, $rebuildCalls, 'No cloud round-trip on an AJAX request');
+        $this->assertSame([], $state->log, 'Lock must not even be attempted');
     }
 
     /**
@@ -1452,8 +1526,12 @@ class PipelineTests extends TestCase {
     public function testMigratePipelineCache_NoStoredVersion_TreatedAsOld() {
         $writes = [];
         $deletes = [];
-        // get_option returns the default (1) when no value is stored.
+        // get_option returns the default (1) when no version is stored,
+        // e.g. an upgrade from a release that predates the option.
         Functions\when('get_option')->alias(function ($name, $default = null) {
+            if ($name === Options::PIPELINE) {
+                return ['pipeline' => 'cached-stub'];
+            }
             return $default;
         });
         Functions\when('update_option')->alias(function ($key, $value) use (&$writes) {
@@ -1478,6 +1556,37 @@ class PipelineTests extends TestCase {
     }
 
     /**
+     * Test that a site with no cached pipeline (fresh install, or no key
+     * saved yet) only records the schema version -- there is nothing with
+     * an old endpoint to rebuild, so no pending flag and no cron event.
+     */
+    public function testMigratePipelineCache_NoCachedPipeline_OnlyStampsVersion() {
+        $writes = [];
+        Functions\when('get_option')->alias(function ($name, $default = null) {
+            return $default;
+        });
+        Functions\when('update_option')->alias(function ($key, $value) use (&$writes) {
+            $writes[$key] = $value;
+            return true;
+        });
+        $scheduled = 0;
+        Functions\when('wp_next_scheduled')->justReturn(false);
+        Functions\when('wp_schedule_single_event')->alias(function () use (&$scheduled) {
+            $scheduled++;
+            return true;
+        });
+
+        $service = new FiftyoneService();
+        $service->maybe_migrate_pipeline_cache();
+
+        $this->assertSame(
+            [Options::PIPELINE_CACHE_VERSION => FiftyoneService::PIPELINE_CACHE_VERSION],
+            $writes
+        );
+        $this->assertSame(0, $scheduled);
+    }
+
+    /**
      * Test concurrency safety: a second invocation in the same request
      * (post-bump) must short-circuit without re-setting the rebuild flag
      * or re-bumping the version.
@@ -1492,6 +1601,9 @@ class PipelineTests extends TestCase {
         Functions\when('get_option')->alias(function ($name, $default = null) use (&$stored) {
             if ($name === Options::PIPELINE_CACHE_VERSION) {
                 return $stored;
+            }
+            if ($name === Options::PIPELINE) {
+                return ['pipeline' => 'cached-stub'];
             }
             return $default;
         });

@@ -318,8 +318,9 @@ class Options
      * Lock used by FiftyoneService::fiftyonedegrees_maybe_rebuild_pipeline()
      * to serialize concurrent rebuild attempts (e.g. admin opening multiple
      * tabs, admin_init firing alongside the WP-Cron fallback event). Written
-     * via add_option which returns false atomically when the option already
-     * exists -- so exactly one request enters the rebuild body.
+     * via add_option, which returns false when the option already exists.
+     * Best-effort: core's add_option is check-then-upsert, so two racing
+     * requests can occasionally both enter the rebuild body.
      */
     const PIPELINE_REBUILD_LOCK = "fiftyonedegrees_pipeline_rebuild_lock";
 
