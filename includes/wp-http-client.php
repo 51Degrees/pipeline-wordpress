@@ -86,7 +86,12 @@ class FiftyOneDegreesWpHttpClient extends HttpClient
             'headers' => [],
         ];
         if (!empty($originHeader)) {
-            $args['headers']['Origin'] = $originHeader;
+            // Domain-restricted resource keys: the cloud's allow-list check
+            // reads Referer with priority over Origin (a browser sends both).
+            // Send both so the key is recognised even behind a proxy that
+            // forwards Referer but strips the Origin security header.
+            $args['headers']['Origin']  = $originHeader;
+            $args['headers']['Referer'] = $originHeader;
         }
         if ($content !== null && strcasecmp($type, 'POST') === 0) {
             $args['body'] = $content;

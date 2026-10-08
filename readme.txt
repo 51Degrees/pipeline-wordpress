@@ -1,12 +1,12 @@
 === 51Degrees ===
 
 Contributors: 51Degrees
-Donate link: https://51degrees.com/
+Donate link: https://51degrees.com/?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.txt&utm_term=51degrees
 Tags: 51degrees, device detection, location, Google Analytics, device, detect, device type, smartphone, tablet, desktop, mobile, optimize, detection, customizable, personalized, tailored, targeting, responsive, mobile website, mobile friendly, user experience, ecommerce, OpenStreetMap, Digital element, Geolocation
 Requires at least: 4.7
-Tested up to: 6.9.1
+Tested up to: 7.0
 Requires PHP: 8.2
-Stable tag: 1.0.13
+Stable tag: 0.0.0
 License: EUPL
 
 The best plugin for WordPress to send Device properties as Custom Dimensions to Google Analytics to get richer insights of device specifications and capabilities.
@@ -15,7 +15,7 @@ The best plugin for WordPress to send Device properties as Custom Dimensions to 
 
 Integrating 51Degrees Device Detection with your website will allow you to make informed decisions about what content a user engages with and how it is displayed. Combining the information learned from your analytics data with real-time enhanced device data on your website will empower you to produce a page built for that specific device’s needs. Taking this one step further, you have an additional 280+ device properties available to enhance your user's user experience. The possibilities are endless as to what you can do with the information - it’s remarkably powerful.
 
-This plugin makes use of the 51Degrees Pipeline API to deliver various data intelligence [services](https://51degrees.com/services). You can also add custom dimensions to your Google Analytics solution which will enhance your analytical data. With 51Degrees you can capture data that Google Analytics doesn't readily collect, such as detailed information on specific device hardware.
+This plugin makes use of the 51Degrees Pipeline API to deliver various data intelligence [services](https://51degrees.com/services?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.txt&utm_term=description). You can also add custom dimensions to your Google Analytics solution which will enhance your analytical data. With 51Degrees you can capture data that Google Analytics doesn't readily collect, such as detailed information on specific device hardware.
 
 == Features ==
 
@@ -33,11 +33,13 @@ Use 51Degrees device detection to intelligently manage your robots.txt file and 
 
 ## Preference Management Platform (PMP)
 
-Add a 51Degrees consent popup to your site. Visitors choose Standard, Personalized, or a publisher-defined alternative (e.g. "Remove ads"). The choice is stored client-side in `localStorage` — no cookies, no extra server round-trips. Configure the brand, the alternative button, and the terms/privacy URL from the `PMP` tab.
+Add a 51Degrees consent popup to your site. Visitors choose Standard, Personalized, or a publisher-defined alternative (e.g. "Remove ads"). The choice is stored in the browser under `localStorage`, and the plugin itself writes no cookies and keeps no preference on the server. Configure the brand, the alternative button, and the terms/privacy URL from the `PMP` tab.
 
 Publishers can react to the visitor's choice by overriding a single global callback on their page:
 
-`window.onPMPCompletion = function (preference) { /* preference is 'standard' or 'personalized' */ };`
+`window.onPMPCompletion = function (preference) { /* preference is 'standard', 'personalized' or 'non-marketing' */ };`
+
+The alternative button stores `non-marketing`, not `standard`.
 
 The plugin ships a no-op default, so the popup works out of the box without any custom JavaScript.
 
@@ -66,18 +68,22 @@ For instructions on how to install the plugin manually or by uploading a zip fil
 = After activation =
 
 1. Visit the new `51Degrees` Settings menu.
-2. To start using this plugin, you will need to create a `Resource Key`. This enables access to the data you need via the 51Degrees cloud service. You can create a `Resource Key` for free, using the [configurator](https://configure.51degrees.com/) to select the properties you want.
+2. To start using this plugin, you will need to create a `Resource Key`. This enables access to the data you need via the 51Degrees cloud service. You can create a `Resource Key` for free, using the [configurator](https://configure.51degrees.com/?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.txt&utm_term=after-activation) to select the properties you want.
 
-For a demo video on how to use our configurator, [click here](https://51degrees.com/documentation/_concepts__configurator.html).
+For a demo video on how to use our configurator, [click here](https://51degrees.com/documentation/_concepts__configurator.html?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.txt&utm_term=after-activation).
 
-= Integration with Google Analytics =
+= Integration with Google Analytics (GA4) =
 
-1. To integrate with Google Analytics go to the `Google Analytics` tab and click `Log in with Google Analytics Account` button, then follow the steps to give the 51Degrees plugin the required permissions. Copy the provided Google Analytics `Access Code’.
-2. Enter the copied Code in the `Access Code` text field and click `Authenticate`. This will connect your Google Analytics Account to the 51Degrees Plugin.
-3. After authentication, select your preferred profiles for which you want to enable Custom Dimensions Tracking via the `Google Analytics Property` dropdown.
-4. Check `Send Page View` if you want to send Default Page View hit along with Custom Dimensions. It is only recommended if you have not already integrated with any other Google Analytics plugin to avoid data duplication.
-5. Click `Save Changes`. This will prompt to the new Custom Dimensions Screen where you can find all the Custom Dimensions available with your Resource Key.
-6. Click on `Enable Google Analytics Tracking` to enable tracking of all the Device Data Properties as Custom Dimensions.
+The plugin uses Google Analytics 4. If your property still uses the deprecated Universal Analytics, create a GA4 property and a Web data stream in Google Analytics first; Universal Analytics was retired by Google on 2024-07-01 and is no longer reachable by this plugin.
+
+1. Open the `Google Analytics` tab in `Settings > 51Degrees` and click `Connect Google Analytics`. You will be redirected to Google's consent screen — accept the requested permissions to give the 51Degrees plugin access to your GA4 properties (read + the ability to create Custom Dimensions).
+2. On return, select your GA4 property from the `Analytics Account/Property` dropdown. The plugin automatically resolves your property's first Web data stream and stores both the Property ID and the Measurement ID (`G-XXXXXXX`).
+3. Check `Send Page View` if you want a default Page View event to fire on each page along with the Custom Dimensions event. Skip this if another plugin already sends page views for the same property — otherwise events will duplicate.
+4. Click `Save Changes`. The Custom Dimensions screen appears.
+5. Review the mapping. Each 51Degrees property gets a default GA4 parameter name (`<engine>_<property>`) plus a dropdown of Custom Dimensions that already exist on the property — pick the default to auto-create, or pick an existing dimension to map onto it.
+6. Click `Enable Google Analytics Tracking`. The plugin creates the missing GA4 Custom Dimensions on the property (up to GA4's per-property cap of 50 in the free tier) and starts emitting the inline gtag snippet on every page render. Custom Dimension values arrive as parameters on the `fod` event.
+
+The OAuth redirect is single-site only in this release. Multisite OAuth support is on the roadmap.
 
 
 == Screenshots ==
@@ -92,7 +98,7 @@ For a demo video on how to use our configurator, [click here](https://51degrees.
 
 = Is the 51Degrees plugin free? =
 
-The 51Degrees plugin is free and open source. However Our [Cloud Configurator](https://configure.51degrees.com/) contains both FREE and PAID properties. The properties you will need to pay for are shown with a dollar icon. You can buy what you need on our [Pricing page](https://51degrees.com/pricing).
+The 51Degrees plugin is free and open source. However Our [Cloud Configurator](https://configure.51degrees.com/?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.txt&utm_term=is-the-51degrees-plugin-free) contains both FREE and PAID properties. The properties you will need to pay for are shown with a dollar icon. You can buy what you need on our [Pricing page](https://51degrees.com/pricing?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.txt&utm_term=is-the-51degrees-plugin-free).
 
 = What happens if I already use another plugin to integrate Google Analytics? =
 
@@ -101,23 +107,3 @@ You can continue using your existing installed plugins to send Custom Dimensions
 = Where should I submit my support request? =
 
 If you're experiencing any issues, use the WordPress.org [support forums](https://wordpress.org/support/plugin/51degrees-optimize-by-device-location/). If you have a technical issue with the plugin where you already have more insight on how to fix it, you can also open an issue on [GitHub](https://github.com/51Degrees/pipeline-wordpress/issues).
-
-== Changelog ==
-
-= 1.0.13 =
-* FIX: Nightly CI builds no longer hang on plain-permalink test runs. The cached pipeline's baked JS endpoint is now decoupled from the site's permalink_structure setting, so changing permalinks no longer triggers a synchronous cloud rebuild (issue #62).
-* INTERNAL: The cached pipeline (Options::PIPELINE) is automatically invalidated once on upgrade so the new permalink-agnostic endpoint format is picked up on the next request.
-
-= 1.0.12 =
-* FIX: /robots.txt is now always reachable to crawlers regardless of the configured robots-enforce policy. Previously, disallowed crawlers were 302-redirected when fetching /robots.txt itself, defeating the policy the file advertises (issue #60).
-
-= 1.0.0 =
-* Initial Release.
-
-== Upgrade Notice ==
-
-= 1.0.13 =
-After updating, purge your full-page cache (WP Super Cache / W3TC / CDN / managed hosting edge cache) so visitors fetch HTML with the refreshed device-detection JS endpoint. If your security plugin or host blocks query-string REST routes, configure an exception for `?rest_route=/fiftyonedegrees/*`.
-
-= 1.0.0 =
-* Install 51Degrees Plugin.

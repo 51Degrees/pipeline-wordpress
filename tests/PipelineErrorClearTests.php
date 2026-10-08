@@ -75,6 +75,55 @@ class PipelineErrorClearTests extends TestCase {
     }
 
     /**
+     * Re-saving the SAME resource key must re-validate. WordPress fires
+     * updated_option (and the rebuild wired to it) only when the value
+     * changes, so without a sanitize-time rebuild a stale "rejected" error
+     * sticks forever once its cause is fixed. The register_setting
+     * sanitize_callback runs on every save, so an unchanged key must still
+     * trigger make_pipeline and clear the stale validation error on success.
+     */
+    public function testSanitizeResourceKey_UnchangedKeyReValidatesAndClearsError() {
+        $optionStore = [
+            Options::RESOURCE_KEY              => 'SAME_KEY',
+            Options::PIPELINE_VALIDATION_ERROR => 'old validation error',
+        ];
+
+        Functions\when('get_option')->alias(function($k, $default = false) use (&$optionStore) {
+            return array_key_exists($k, $optionStore) ? $optionStore[$k] : $default;
+        });
+        Functions\when('update_option')->alias(function($k, $v) use (&$optionStore) {
+            $optionStore[$k] = $v;
+            return true;
+        });
+        Functions\when('delete_option')->alias(function($k) use (&$optionStore) {
+            unset($optionStore[$k]);
+            return true;
+        });
+
+        $makePipelineCalled = false;
+        Patchwork\redefine(
+            'Pipeline::make_pipeline',
+            function($key) use (&$makePipelineCalled) {
+                $makePipelineCalled = true;
+                return ['pipeline' => 'P', 'available_engines' => ['device'], 'engine_properties' => []];
+            }
+        );
+
+        $ret = FiftyoneService::fiftyonedegrees_sanitize_resource_key('SAME_KEY');
+
+        $this->assertSame('SAME_KEY', $ret, 'sanitize_callback must return the value so WP persists it.');
+        $this->assertTrue(
+            $makePipelineCalled,
+            'Re-saving the unchanged key must re-validate via make_pipeline.'
+        );
+        $this->assertArrayNotHasKey(
+            Options::PIPELINE_VALIDATION_ERROR,
+            $optionStore,
+            'A successful re-validation must clear the stale validation error.'
+        );
+    }
+
+    /**
      * Test that setup.php does not render any error or success box when
      * the resource key is empty, even if stale option state would
      * otherwise produce one. Defense-in-depth render-side guard.

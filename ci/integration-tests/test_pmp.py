@@ -219,16 +219,17 @@ class TestBrowserFlow:
 
         save_pmp_settings(wp_admin_session)
 
-        # The plugin composes the bundle URL from the shared FOD_CLOUD_API_URL
-        # env var (same one robots / suspicious / cloud metadata respect).
-        # The dev environment must point that variable at PMP_CLOUD_URL for
-        # this test to load the bundle from the local cloud; otherwise the
-        # rendered tag still targets production and the browser flow won't
-        # exercise local code.
+        # The plugin composes the loader address from the shared
+        # FOD_CLOUD_API_URL env var (same one robots / suspicious / cloud
+        # metadata respect). The dev environment must point that variable at
+        # PMP_CLOUD_URL for this test to load PMP from the local cloud,
+        # otherwise the rendered tag still targets production and the browser
+        # flow won't exercise local code. The Resource Key is a path segment
+        # and the address ends in '.js'.
         page_resp = requests.get(WORDPRESS_URL)
-        if f'{PMP_CLOUD_URL}/api/v4/pmp?' not in page_resp.text:
+        if f'{PMP_CLOUD_URL}/api/v4/pmp/' not in page_resp.text:
             pytest.skip(
-                f'PMP bundle URL does not target {PMP_CLOUD_URL}. Set '
+                f'PMP loader address does not target {PMP_CLOUD_URL}. Set '
                 f'FOD_CLOUD_API_URL="{PMP_CLOUD_URL}" in the environment.'
             )
 

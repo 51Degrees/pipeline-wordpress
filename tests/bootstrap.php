@@ -12,6 +12,12 @@ if (!defined('HOUR_IN_SECONDS')) {
 if (!defined('MINUTE_IN_SECONDS')) {
     define('MINUTE_IN_SECONDS', 60);
 }
+if (!defined('WEEK_IN_SECONDS')) {
+    define('WEEK_IN_SECONDS', 7 * DAY_IN_SECONDS);
+}
+if (!defined('MONTH_IN_SECONDS')) {
+    define('MONTH_IN_SECONDS', 30 * DAY_IN_SECONDS);
+}
 
 if (!class_exists('WP_REST_Response')) {
     class WP_REST_Response {

@@ -90,7 +90,7 @@ try {
         # parent -d directives, so raise max_execution_time by appending to
         # the loaded php.ini directly. Last directive wins on PHP ini parse.
         $phpIni = (php -r "echo php_ini_loaded_file();").Trim()
-        Add-Content -Path $phpIni -Value "`nmax_execution_time=120"
+        Add-Content -Path $phpIni -Value "`nmax_execution_time=300"
         # Nightly Pipeline intermittently segfaults in `php -S` on the first
         # POST after WP login under PHP 8.4/8.5 — symptom matches OPcache JIT
         # race conditions. Disable JIT for the test server only.

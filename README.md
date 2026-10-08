@@ -1,8 +1,8 @@
 # 51Degrees Pipeline API
 
-![51Degrees](https://51degrees.com/img/logo.png?utm_source=github&utm_medium=repository&utm_campaign=varnish_open_source&utm_content=readme_main "Data rewards the curious") **Pipeline API - WordPress plugin**
+![51Degrees](https://51degrees.com/img/logo.png?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.md&utm_term=51degrees-pipeline-api "Data rewards the curious") **Pipeline API - WordPress plugin**
 
-[Developer Documentation](https://51degrees.com/device-detection-php/md__home_vsts_work_1_s_apis_device-detection-php_readme.html "Developer Documentation")
+[Developer Documentation](https://51degrees.com/device-detection-php/md__home_vsts_work_1_s_apis_device-detection-php_readme.html?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.md&utm_term=51degrees-pipeline-api "Developer Documentation")
 # Introduction
 Optimize your website for a range of devices and personalize your content
 based on your user’s location.
@@ -19,7 +19,7 @@ by searching for `51Degrees`.
 2. To start using this plugin, you will need to create a `Resource Key`.
 This enables access to the data you need via the 51Degrees cloud service.
 You can create a `Resource Key` for free, using the
-[configurator](https://configure.51degrees.com/) to select the properties
+[configurator](https://configure.51degrees.com/?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.md&utm_term=after-activation) to select the properties
 you want.
 
 
@@ -79,12 +79,14 @@ The `PMP` tab adds the 51Degrees consent popup to public pages. Visitors
 choose Standard, Personalized, or an alternative (e.g. Remove ads)
 experience; the choice is persisted in the browser's `localStorage` and
 exposed to publisher code via the `window.onPMPCompletion` callback.
-PMP is a client-side consent layer — the plugin does not write cookies,
-make follow-up REST calls, or persist the preference server-side.
+The plugin itself writes no cookies and stores no preference on the
+server. PMP fetches the rest of itself from the cloud once the loader
+has run, and it adds the 51Degrees client script to the page when no
+client script object is there already.
 
 PMP activates as soon as a Resource Key is configured. The popup
-remains useful even on keys that don't include the 51DiD identity
-properties (`IdProbGlobal` / `IdProbLic`) — those drive 51DiD gating
+remains useful even on keys that don't include the 51Did identity
+properties (`IdProbGlobal` / `IdProbLic`) — those drive 51Did gating
 elsewhere in the pipeline but are not required by the consent flow.
 
 ### Settings
@@ -111,20 +113,26 @@ fields have runtime defaults so the popup works out of the box.
 - **Show Standard Marketing Option** — show the Standard button
   alongside Personalized and the alternative (off by default).
 
-The TCF Vendor ID used by the popup (`cmpId`) is hardcoded to `51`
-for now; randomized rotation will be implemented at runtime in a
-follow-up.
+The plugin puts a `data-tcf-vendor-id="51"` attribute on the tag.
+PMP does not read that attribute, so the value has no effect today.
 
-The bundle URL is built as
-`{base}/api/v4/pmp?resource={resource-key}`, where `{base}` comes
+The loader address is built as
+`{base}/api/v4/pmp/{resource-key}.js`, where `{base}` comes
 from the same `FOD_CLOUD_API_URL` env var the rest of the plugin
 honours (robots, suspicious, cloud metadata) and defaults to
 `https://cloud.51degrees.com`. Point it at a staging or local
-server when running the cloud yourself; production deployments
-need no configuration. Locale negotiation is left to the browser's
-`Accept-Language` request header — the cloud resolves the closest
-available bundle and falls back to `en-us` when nothing matches,
-so no allowlist lives in the plugin.
+server when running the cloud yourself, because production
+deployments need no configuration.
+
+The Resource Key has to be a path segment and the address has to end
+in `.js`. The small loader served from that address works out where
+the rest of PMP lives by reading its own `src` attribute, dropping
+any query string and any `.js` ending, and appending the locale it
+picked, so a query-string form leaves it with no key to carry
+forward. The locale is chosen in the browser from
+`navigator.languages`, matched against the locales the loader was
+built with and falling back to `en-us`, so no allowlist lives in the
+plugin.
 
 The settings tab also surfaces the visitor's current preference (read
 from `localStorage['__51d_pmp_pref']` on the admin's own browser) and
@@ -150,11 +158,15 @@ separate consent manager is not needed:
 ```html
 <script>
 window.onPMPCompletion = function (preference) {
-    // preference is 'standard' | 'personalized'
+    // preference is 'standard', 'personalized' or 'non-marketing'
     dataLayer.push({ event: 'pmp_choice', pmp_preference: preference });
 };
 </script>
 ```
+
+`non-marketing` is the value the alternative button stores, so a
+visitor who clicks "Remove ads" arrives here as `non-marketing` and
+not as `standard`. PMP suppresses `__tcfapi` for that choice.
 
 The override may run before or after the plugin's PMP script — last
 assignment wins, and the widget only invokes the function when the

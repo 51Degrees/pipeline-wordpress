@@ -1,0 +1,10 @@
+node_modules
+lib/vendor
+.wp-env-mu-plugins
+conditional-group-block/build
+
+# Runtime-generated artifacts. Plugin rewrites these files on every render
+# via fopen("w") in includes/ga-tracking-gtag.php. Their content reflects
+# the last render and is not source code — lint the PHP template instead.
+assets/js/ga-51d-tracking.js
+assets/js/ga-integration-tracking.js

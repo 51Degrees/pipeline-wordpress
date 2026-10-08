@@ -1,11 +1,11 @@
 <?php
 /**
  *  Plugin Name: 51Degrees
- *  Plugin URI:  https://51degrees.com/
+ *  Plugin URI:  https://51degrees.com/?utm_source=packagist&utm_medium=package&utm_campaign=pipeline-wordpress&utm_content=includes-fiftyone-service.php&utm_term=plugin-uri
  *  Description: Device detection and location-aware content for WordPress, with cloud-driven robots.txt management for AI/search crawlers and suspicious-activity protection against abusive traffic.
  *  Version:     1.0.11
  *  Author:      51Degrees
- *  Author URI:  https://51degrees.com/
+ *  Author URI:  https://51degrees.com/?utm_source=packagist&utm_medium=package&utm_campaign=pipeline-wordpress&utm_content=includes-fiftyone-service.php&utm_term=author-uri
  *  Text Domain: fiftyonedegrees
  *  License:     EUPL-1.2
  *
@@ -285,7 +285,8 @@ class FiftyoneService {
         // Register the new settings with wordpress.
         register_setting(
             Options::GROUP_KEY,
-            Options::RESOURCE_KEY);
+            Options::RESOURCE_KEY,
+            ['sanitize_callback' => array($this, 'fiftyonedegrees_sanitize_resource_key')]);
 
         // Suspicious activity detection settings.
         add_option(Options::SUSPICIOUS_ENABLE, 'off');
@@ -516,10 +517,12 @@ class FiftyoneService {
                 $_POST[Options::RESOURCE_KEY]));
             update_option(Options::RESOURCE_KEY, $resource_key);
 
-            if (!isset($cachedPipeline['error'])) {
+            // update_option above triggers a synchronous pipeline rebuild
+            // that sets PIPELINE_VALIDATION_ERROR on failure.
+            if (!get_option(Options::PIPELINE_VALIDATION_ERROR)) {
                 if (get_option(Options::ENABLE_GA) &&
                     get_option(Options::RESOURCE_KEY_UPDATED)) {
-                
+
                     wp_redirect(get_admin_url() .
                         'options-general.php?page=51Degrees&tab=google-analytics');
                     exit();
@@ -616,7 +619,10 @@ class FiftyoneService {
             
         }
 
-        if ($option === Options::GA_TRACKING_ID &&
+        // GA4 property selection invalidates any saved
+        // property->parameter dimension mapping — the new property
+        // may not share Custom Dimensions with the old one.
+        if ($option === Options::GA_PROPERTY_ID &&
             $old_value !== $new_value) {
             update_option(Options::GA_ID_UPDATED, true);
             delete_option(Options::GA_DIMENSIONS);
@@ -659,6 +665,26 @@ class FiftyoneService {
             // see comment there for rationale.
             self::schedule_pipeline_rebuild();
         }
+    }
+
+    /**
+     * register_setting sanitize_callback for the Resource Key. Runs on every
+     * settings save, even when the value is unchanged — which is the only
+     * place we can re-validate an unchanged key. WordPress fires
+     * updated_option (and the rebuild wired to it in fiftyonedegrees_update_option)
+     * only when the value actually changes, so without this an unchanged
+     * re-save never re-validates and a stale "rejected" error persists even
+     * after its cause is fixed. Changed keys are left to the updated_option
+     * path to avoid a duplicate cloud call.
+     *
+     * @param mixed $value the submitted resource key
+     * @return mixed the value to persist (unchanged)
+     */
+    static function fiftyonedegrees_sanitize_resource_key($value) {
+        if ($value === get_option(Options::RESOURCE_KEY)) {
+            self::build_and_save_pipeline($value);
+        }
+        return $value;
     }
 
     // On error: leave PIPELINE alone, record error string for setup.php.
@@ -1171,19 +1197,28 @@ class FiftyoneService {
     }
 
     /**
-     * Composes the PMP bundle URL for the new query-parameter endpoint.
-     * Returns an empty string when the resource key is missing -- the
-     * enqueue path uses that to short-circuit registration.
+     * Composes the PMP loader address. Returns an empty string when the
+     * resource key is missing, and the enqueue path uses that to
+     * short-circuit registration.
+     *
+     * The Resource Key goes in the path and the address ends in '.js',
+     * because the loader served from that address works out where to
+     * fetch the rest of PMP from by reading its own 'src' attribute,
+     * dropping any query string and any '.js' ending, then appending the
+     * locale it picked. A query-string form leaves nothing in the path
+     * for the loader to carry the key forward with, so the key has to be
+     * a path segment. rawurlencode is still the right escape, because
+     * the key is now a path segment rather than a query value.
      *
      * The base URL comes from FiftyOneDegreesCloudMetadata, which honours
      * the FOD_CLOUD_API_URL env var used across the plugin (robots,
      * suspicious, cloud metadata) and falls back to
      * https://cloud.51degrees.com when unset.
      *
-     * Locale negotiation is delegated to the visitor's Accept-Language
-     * request header — the browser fetches this <script src> and sends
-     * the header for free, the cloud picks the closest available bundle
-     * and falls back to en-us when nothing matches.
+     * The locale is chosen in the browser by the loader, which matches
+     * navigator.languages against the locales it was built with and
+     * falls back to en-us, so no allowlist and no locale handling lives
+     * in the plugin.
      *
      * @return string
      */
@@ -1193,7 +1228,7 @@ class FiftyoneService {
             return '';
         }
         return sprintf(
-            '%s/api/v4/pmp?resource=%s',
+            '%s/api/v4/pmp/%s.js',
             FiftyOneDegreesCloudMetadata::get_cloud_host_url(),
             rawurlencode($key));
     }
