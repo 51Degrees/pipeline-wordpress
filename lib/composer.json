@@ -16,9 +16,21 @@
     "require": {
         "php": ">=8.2",
         "51degrees/fiftyone.pipeline.cloudrequestengine": "4.*",
+        "51degrees/fiftyone.pipeline.did": "dev-main",
+        "swan-community/owid": "dev-main",
         "google/apiclient": "^2.10",
         "ext-json": "*"
     },
+    "repositories": [
+        {
+            "type": "git",
+            "url": "https://github.com/51Degrees/pipeline-php-did"
+        },
+        {
+            "type": "git",
+            "url": "https://github.com/51Degrees/owid-php"
+        }
+    ],
     "scripts": {
         "pre-autoload-dump": "Google\\Task\\Composer::cleanup"
     },
