@@ -10,7 +10,7 @@ if (!$Keys.TestResourceKey) {
 }
 
 # The CI workflow now feeds TestResourceKey from the org secret
-# RESOURCE_KEY_CLOUD_V5_BESPOKE (a Cloud V5 bespoke key with IsCrawler +
+# _51DEGREES_RESOURCE_KEY_BESPOKE (a Cloud V5 bespoke key with IsCrawler +
 # CrawlerUsage). Selenium tests read $env:RESOURCE_KEY.
 $env:RESOURCEKEY = $Keys.TestResourceKey
 $env:RESOURCE_KEY = $Keys.TestResourceKey
