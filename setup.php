@@ -1,3 +1,26 @@
+<?php
+/* *********************************************************************
+ * This Original Work is copyright of 51 Degrees Mobile Experts Limited.
+ * Copyright 2026 51 Degrees Mobile Experts Limited, Davidson House,
+ * Forbury Square, Reading, Berkshire, United Kingdom RG1 3EU.
+ *
+ * This Original Work is licensed under the European Union Public Licence
+ * (EUPL) v.1.2 and is subject to its terms as set out below.
+ *
+ * If a copy of the EUPL was not distributed with this file, You can obtain
+ * one at https://opensource.org/licenses/EUPL-1.2.
+ *
+ * The 'Compatible Licences' set out in the Appendix to the EUPL (as may be
+ * amended by the European Commission) shall be deemed incompatible for
+ * the purposes of the Work and the provisions of the compatibility
+ * clause in Article 5 of the EUPL shall not apply.
+ *
+ * If using the Work as, or as part of, a network application, by
+ * including the attribution notice(s) required under Article 5 of the EUPL
+ * in the end user terms of the application under an appropriate heading,
+ * such notice(s) shall fulfill the requirements of that article.
+ * ********************************************************************* */
+
 <!--
     This Original Work is copyright of 51 Degrees Mobile Experts Limited.
     Copyright 2019 51 Degrees Mobile Experts Limited, 5 Charlotte Close,
@@ -17,9 +40,9 @@
 
 <form method="post" action="options.php">
 
-    <?php settings_fields(Options::GROUP_KEY); ?>
+     settings_fields(Options::GROUP_KEY); ?>
 
-    <?php
+    
 
         $cachedPipeline  = get_option(Options::PIPELINE);
         $validationError = get_option(Options::PIPELINE_VALIDATION_ERROR, '');
@@ -71,20 +94,20 @@
         <tbody>
             <tr>
                 <th scope="row">
-                    <label for="<?php echo Options::RESOURCE_KEY; ?>">Resource Key</label>
+                    <label for=" echo Options::RESOURCE_KEY; ?>">Resource Key</label>
                 </th>
                 <td>
-                    <input name="<?php echo Options::RESOURCE_KEY; ?>" type="text" id="<?php echo Options::RESOURCE_KEY; ?>" value="<?php echo esc_attr(get_option(Options::RESOURCE_KEY));?>" class="regular-text">
+                    <input name=" echo Options::RESOURCE_KEY; ?>" type="text" id=" echo Options::RESOURCE_KEY; ?>" value=" echo esc_attr(get_option(Options::RESOURCE_KEY));?>" class="regular-text">
                 </td>
             </tr>
             <tr>
                 <th scope="row">
-                    <label for="<?php echo Options::PIPELINE_ENABLE; ?>">Device Detection</label>
+                    <label for=" echo Options::PIPELINE_ENABLE; ?>">Device Detection</label>
                 </th>
                 <td>
-                    <input type="hidden" name="<?php echo Options::PIPELINE_ENABLE; ?>" value="off">
+                    <input type="hidden" name=" echo Options::PIPELINE_ENABLE; ?>" value="off">
                     <label>
-                        <input name="<?php echo Options::PIPELINE_ENABLE; ?>" type="checkbox" id="<?php echo Options::PIPELINE_ENABLE; ?>" value="on" <?php checked(get_option(Options::PIPELINE_ENABLE, 'on'), 'on'); ?>>
+                        <input name=" echo Options::PIPELINE_ENABLE; ?>" type="checkbox" id=" echo Options::PIPELINE_ENABLE; ?>" value="on"  checked(get_option(Options::PIPELINE_ENABLE, 'on'), 'on'); ?>>
                         Enable 51Degrees device detection on every request
                     </label>
                     <p class="description">
