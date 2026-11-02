@@ -3,6 +3,12 @@ param (
     [Parameter(Mandatory)][hashtable]$Keys
 )
 $ErrorActionPreference = "Stop"
+# Make a non-zero exit from a native command (php, wp-cli, zip, pip...)
+# stop the script too -- $ErrorActionPreference only covers cmdlets. Without
+# this a failed setup step (e.g. `wp core download`) was ignored and surfaced
+# later as misleading test FAILs. Where a non-zero exit is an expected
+# result, turn it off locally: & { $PSNativeCommandUseErrorActionPreference = $false; ... }
+$PSNativeCommandUseErrorActionPreference = $true
 
 if (!$Keys.TestResourceKey) {
     Write-Host "::warning file=$($MyInvocation.ScriptName),line=$($MyInvocation.ScriptLineNumber),title=No Resource Key::No resource key was provided, so integration tests will not run."
@@ -51,12 +57,24 @@ Write-Host "=== Starting the database"
 sudo systemctl start mysql.service
 
 Write-Host "=== Installing wp-cli"
-Invoke-WebRequest -OutFile 'wp-cli.phar' -Uri 'https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar'
+Invoke-WebRequest -OutFile 'wp-cli.phar' -Uri 'https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar' `
+    -MaximumRetryCount 3 -RetryIntervalSec 10
 $wp = "$PWD/wp-cli.phar"
 php $wp --info
 
 Write-Host "=== Downloading WordPress"
-php $wp core download --path=wp
+# Retried: a transient DNS/network error on the runner is the usual cause.
+# --force lets a retry overwrite a partially downloaded wp/ directory.
+for ($attempt = 1; ; ++$attempt) {
+    try {
+        php $wp core download --path=wp --force
+        break
+    } catch {
+        if ($attempt -ge 3) { throw }
+        Write-Host "WordPress download attempt $attempt failed: $_ -- retrying in 10s"
+        Start-Sleep 10
+    }
+}
 Push-Location wp
 try {
     Write-Host "=== Setting up the database"
@@ -128,7 +146,11 @@ try {
         Write-Host "=== Running Selenium tests"
         Push-Location "$PSScriptRoot/integration-tests"
         try {
-            python -m pytest || $(++$failed)
+            # pytest failing is a test result, not a script error. The
+            # counter is bumped outside the block: inside & { } it would only
+            # change a local copy.
+            & { $PSNativeCommandUseErrorActionPreference = $false; python -m pytest }
+            if ($LASTEXITCODE -ne 0) { ++$failed }
         } finally {
             Pop-Location
         }
