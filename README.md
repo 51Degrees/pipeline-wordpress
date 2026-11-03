@@ -1,29 +1,41 @@
-# 51Degrees Pipeline API
+# 51Degrees Device Detection and User-Agent parser for WordPress
 
-![51Degrees](https://51degrees.com/img/logo.png?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.md&utm_term=51degrees-pipeline-api "Data rewards the curious") **Pipeline API - WordPress plugin**
+<img src=".github/images/logo.png" alt="51Degrees" title="Data rewards the curious" width="120">
+
+**Pipeline API - WordPress plugin**
+
+Our User-Agent parser for WordPress supports Device Detection, browser detection, mobile detection, and crawler detection through the cloud service.
+
+It reads User-Agent and User-Agent Client Hints, HTTP request headers that carry browser and device information. The plugin also provides location services, a dynamic robots.txt with crawler detection, and redirects for suspicious activity.
+
+## Install
+
+Install from the [WordPress plugin directory](https://wordpress.org/plugins/51degrees-optimize-by-device-location/), or search for `51Degrees` in the WordPress plugin manager. See the manual installation sections below.
+
+To install a package built with the manual GitHub installation steps below:
+
+```sh
+wp plugin install --activate /path/to/your/zip
+```
+
+Try the [User-Agent tester](https://51degrees.com/developers/user-agent-tester?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.md&utm_term=install). For cloud use, [create a Resource Key](https://configure.51degrees.com/?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.md&utm_term=after-activation).
 
 [Developer Documentation](https://51degrees.com/device-detection-php/md__home_vsts_work_1_s_apis_device-detection-php_readme.html?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.md&utm_term=51degrees-pipeline-api "Developer Documentation")
+
 # Introduction
-Optimize your website for a range of devices and personalize your content
-based on your user’s location.
+Use device type and location to personalize content and add device properties to your analytics reports.
 
-Using real-time data, our plugin can optimize your website for users,
-based on device type and location. Upgrade your analytic reporting with a
-click of a button. Install from the
-[WordPress plugin manager](https://wordpress.org/plugins/51degrees/)
-by searching for `51Degrees`.
-
-# After Activation
+# After activation
 
 1. Visit the new `51Degrees` Settings menu.
 2. To start using this plugin, you will need to create a `Resource Key`.
 This enables access to the data you need via the 51Degrees cloud service.
 You can create a `Resource Key` for free, using the
-[configurator](https://configure.51degrees.com/?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.md&utm_term=after-activation) to select the properties
+[property selection page](https://configure.51degrees.com/?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.md&utm_term=after-activation) to select the properties
 you want.
 
 
-## Integration With Google Analytics
+## Integration with Google Analytics
 
 1. To integrate with Google Analytics go to the `Google Analytics` tab
 and click `Log in with Google Analytics Account` button, then follow the steps
@@ -48,7 +60,7 @@ you can find all the Custom Dimensions available with Resource Key.
 Device Data Properties as Custom Dimensions.
 
 
-## Dynamic Robots.txt with Crawler Detection
+## Dynamic robots.txt with crawler detection
 
 Use the `Robots.txt` tab in `Settings > 51Degrees` to manage your site's
 `robots.txt` from the admin UI. The plugin fetches a robots.txt body from the
@@ -58,26 +70,26 @@ sections. The cached body is refreshed daily and re-served by WordPress at
 `/robots.txt`.
 
 When `Enforce` is enabled, requests identified as crawlers via 51Degrees
-device detection are redirected to a configurable URL (or shown a default
+Device Detection are redirected to a configurable URL (or shown a default
 "access denied" page) when their crawler category is not on the allow list.
 This requires a Resource Key with the `IsCrawler` and `CrawlerUsage`
-properties; without `CrawlerUsage`, enforcement falls back to path-based
+properties. Without `CrawlerUsage`, enforcement falls back to path-based
 rules from the generated robots.txt.
 
-## Suspicious Activity Detection
+## Suspicious activity detection
 
 The `Suspicious` tab in `Settings > 51Degrees` lets you redirect visitors
 that exceed a request threshold within a sliding time window. Configure the
-maximum requests, window length (seconds), and the redirect URL — the plugin
+maximum requests, window length (seconds), and the redirect URL. The plugin
 tracks per-IP request counts and redirects offenders once the threshold is
-crossed. Useful as a low-friction first line of defence against scraping and
+crossed. Useful as a low-friction first line of defense against scraping and
 brute-force traffic.
 
 ## PMP (Preference Management Platform)
 
 The `PMP` tab adds the 51Degrees consent popup to public pages. Visitors
 choose Standard, Personalized, or an alternative (e.g. Remove ads)
-experience; the choice is persisted in the browser's `localStorage` and
+experience. The choice is persisted in the browser's `localStorage` and
 exposed to publisher code via the `window.onPMPCompletion` callback.
 The plugin itself writes no cookies and stores no preference on the
 server. PMP fetches the rest of itself from the cloud once the loader
@@ -85,32 +97,32 @@ has run, and it adds the 51Degrees client script to the page when no
 client script object is there already.
 
 PMP activates as soon as a Resource Key is configured. The popup
-remains useful even on keys that don't include the 51Did identity
-properties (`IdProbGlobal` / `IdProbLic`) — those drive 51Did gating
+remains useful even on keys that don't include the 51Did identifier
+properties (`IdProbGlobal` / `IdProbLic`). Those drive 51Did gating
 elsewhere in the pipeline but are not required by the consent flow.
 
 ### Settings
 
-Three fields are required when Enable PMP is on: Terms / Privacy URL,
+Three fields are required when Enable PMP is on. These fields are Terms / Privacy URL,
 Alternative Button Label, Alternative Button URL. The remaining
 fields have runtime defaults so the popup works out of the box.
 
-- **Enable PMP** — turn the popup on for public pages.
-- **TCF Vendor String** — static TCF v2 vendor consent string. The
+- **Enable PMP**. Turn the popup on for public pages.
+- **TCF Vendor String**. Static TCF v2 vendor consent string. The
   built-in default grants consent to every vendor, purpose and
-  special feature from IAB GVL v158; admins can override per-site
+  special feature from IAB GVL v158. Admins can override per-site
   with their own string generated via TCF Tools.
-- **Alternative Button Label** `*` — label of the alternative button.
+- **Alternative Button Label** `*`. Label of the alternative button.
   Defaults to `Remove ads`.
-- **Alternative Button URL** `*` — destination of the alternative
+- **Alternative Button URL** `*`. Destination of the alternative
   button. Defaults to `https://example.com`. A page-picker dropdown
   lets you select a published page instead.
-- **Brand Name** — defaults to `51Degrees` when empty.
-- **Brand Logo URL** — defaults to the 51Degrees logo bundled with
+- **Brand Name**. Defaults to `51Degrees` when empty.
+- **Brand Logo URL**. Defaults to the 51Degrees logo bundled with
   the plugin (`assets/images/logo.png`) when empty.
-- **Terms / Privacy URL** `*` — required. A page-picker dropdown lets
+- **Terms / Privacy URL** `*`. Required. A page-picker dropdown lets
   you select a published page.
-- **Show Standard Marketing Option** — show the Standard button
+- **Show Standard Marketing Option**. Show the Standard button
   alongside Personalized and the alternative (off by default).
 
 The plugin puts a `data-tcf-vendor-id="51"` attribute on the tag.
@@ -119,7 +131,7 @@ PMP does not read that attribute, so the value has no effect today.
 The loader address is built as
 `{base}/api/v4/pmp/{resource-key}.js`, where `{base}` comes
 from the same `FOD_CLOUD_API_URL` env var the rest of the plugin
-honours (robots, suspicious, cloud metadata) and defaults to
+honors (robots, suspicious, cloud metadata) and defaults to
 `https://cloud.51degrees.com`. Point it at a staging or local
 server when running the cloud yourself, because production
 deployments need no configuration.
@@ -139,7 +151,7 @@ from `localStorage['__51d_pmp_pref']` on the admin's own browser) and
 a **Clear Preference** button that wipes it so the popup re-appears on
 the next public-page visit.
 
-### Continuation hook: `window.onPMPCompletion`
+### Continuation hook for `window.onPMPCompletion`
 
 When the visitor makes a choice, the PMP widget invokes
 `window.onPMPCompletion(preference)`. The plugin registers a no-op
@@ -150,7 +162,7 @@ window.onPMPCompletion = window.onPMPCompletion || function (preference) {};
 ```
 
 Override it on your page to bootstrap anything that depends on the
-visitor's preference — analytics, Prebid.js initialisation, lazy ad
+visitor's preference, such as analytics, Prebid.js initialization, lazy ad
 stacks, or any other publisher-side logic. PMP itself acts as the CMP
 via the TCF API (sets the TC String and exposes `__tcfapi`), so a
 separate consent manager is not needed:
@@ -168,7 +180,7 @@ window.onPMPCompletion = function (preference) {
 visitor who clicks "Remove ads" arrives here as `non-marketing` and
 not as `standard`. PMP suppresses `__tcfapi` for that choice.
 
-The override may run before or after the plugin's PMP script — last
+The override may run before or after the plugin's PMP script. The last
 assignment wins, and the widget only invokes the function when the
 visitor actually clicks a button.
 
@@ -178,7 +190,7 @@ visitor actually clicks a button.
 2. On first visit the popup is shown. The visitor's choice is persisted
    in `localStorage` under `__51d_pmp_pref`.
 3. PMP invokes `window.onPMPCompletion(preference)` and dismisses the
-   dialog. The plugin's default is a no-op; publisher code overrides
+   dialog. The plugin's default is a no-op. Publisher code overrides
    it to react to the choice.
 4. PMP signals TCF status to its `__tcfapi` listeners using the
    configured TCF Vendor String.
@@ -204,7 +216,7 @@ the 'Usage in Content' column on the 'Properties' tab of the plugin.
 This feature allows you to show/hide content based on the property values
 supplied by the Pipeline API. To start, click add a new block and select the
 `51Degrees conditional group block`. Select the block to display the
-configuration UI on the right-hand side. For example, upu can configure the
+configuration UI on the right-hand side. For example, you can configure the
 block to only appear if the hardware vendor property is 'Apple'.
 
 
@@ -318,7 +330,7 @@ are available. For example:
 </script>
 ```
 
-## Manual installation using WordPress Plugin Manager
+## Manual installation using WordPress plugin manager
 
 1. Download `fiftyonedegrees` zip package from
 [WordPress Plugin Manager](https://wordpress.org/plugins/wp-plugin-manager/).
@@ -330,7 +342,7 @@ are available. For example:
 
 4. Activate the 51Degrees plugin.
 
-## Manual installation using GitHub Repository
+## Manual installation using GitHub repository
 
 If you want to build the plugin yourself and install locally,
 you will need to follow these steps:
@@ -344,7 +356,7 @@ you will need to follow these steps:
 
 5. Install [wp-cli](https://wp-cli.org/) and  run `wp plugin install --activate /path/to/your/zip` in the WordPress directory.
 
-# Plugin Tests
+# Plugin tests
 
 Tests for this plugin are located in the `tests` folder.
 They make use of the [Brain Monkey](https://brain-wp.github.io/BrainMonkey/)
@@ -352,3 +364,10 @@ package to facilitate WordPress specific tests via it's mocking capabilities.
 Also the [PHPUnit Polyfills](https://github.com/Yoast/PHPUnit-Polyfills)
 package to ensure tests which are backwards compatible with PHPUnit versions.
 For more info see the recommendation on [PHPUnit versions page](https://phpunit.de/supported-versions.html).
+
+## Find out more
+
+- [Device Detection](https://51degrees.com/device-detection?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.md&utm_term=find-out-more)
+- [Bots and humans](https://51degrees.com/bots-and-humans?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.md&utm_term=find-out-more)
+- [Documentation](https://51degrees.com/documentation/index.html?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.md&utm_term=find-out-more)
+- https://github.com/51Degrees/51degrees-cxx
