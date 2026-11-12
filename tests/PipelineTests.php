@@ -85,7 +85,7 @@ class PipelineTests extends TestCase {
         $resourceKey = $_ENV["RESOURCEKEY"];
         if ($resourceKey === "!!YOUR_RESOURCE_KEY!!") {
             $this->fail("You need to create a Resource Key at " .
-            "https://configure.51degrees.com and paste it into the " .
+            "https://51degrees.com/configure and paste it into the " .
             "phpunit.xml config file, " .
             "replacing !!YOUR_RESOURCE_KEY!!.");
         }
@@ -228,7 +228,7 @@ class PipelineTests extends TestCase {
 
         $this->assertNull($result['pipeline']);
         $this->assertStringContainsString('Cloud rejected', $result['error']);
-        $this->assertStringContainsString('configure.51degrees.com', $result['error']);
+        $this->assertStringContainsString('51degrees.com/configure', $result['error']);
     }
 
     /**
@@ -517,7 +517,7 @@ class PipelineTests extends TestCase {
         $resourceKey = $_ENV["RESOURCEKEY"];
         if ($resourceKey === "!!YOUR_RESOURCE_KEY!!") {
             $this->fail("You need to create a Resource Key at " .
-            "https://configure.51degrees.com and paste it into the " .
+            "https://51degrees.com/configure and paste it into the " .
             "phpunit.xml config file, " .
             "replacing !!YOUR_RESOURCE_KEY!!.");
         }

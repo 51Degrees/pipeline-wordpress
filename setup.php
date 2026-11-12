@@ -51,7 +51,7 @@
 
     <p>
         To get started visit
-        <a href="https://configure.51degrees.com/zHPMyDk6?utm_source=code&utm_medium=comment&utm_campaign=pipeline-wordpress&utm_content=setup.php&utm_term=body" target="_blank">the Configurator</a>
+        <a href="https://51degrees.com/configure/zHPMyDk6?utm_source=code&utm_medium=comment&utm_campaign=pipeline-wordpress&utm_content=setup.php&utm_term=body" target="_blank">the Configurator</a>
         to get a 51Degrees Resource Key for the device detection properties you
         want to get access to.
         </br>
