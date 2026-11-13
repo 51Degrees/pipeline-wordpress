@@ -73,8 +73,8 @@ When `Enforce` is enabled, requests identified as crawlers via 51Degrees
 Device Detection are redirected to a configurable URL (or shown a default
 "access denied" page) when their crawler category is not on the allow list.
 This requires a Resource Key with the `IsCrawler` and `CrawlerUsage`
-properties. Without `CrawlerUsage`, enforcement falls back to path-based
-rules from the generated robots.txt.
+properties. Without `CrawlerUsage`, category selections have no effect
+and enforcement blocks or redirects nothing.
 
 ## Suspicious activity detection
 
@@ -89,10 +89,18 @@ brute-force traffic.
 
 The `PMP` tab adds the 51Degrees consent popup to public pages. Visitors
 choose Standard, Personalized, or an alternative (e.g. Remove ads)
-experience. The choice is persisted in the browser's `localStorage` and
-exposed to publisher code via the `window.onPMPCompletion` callback.
-The plugin itself writes no cookies and stores no preference on the
-server. PMP fetches the rest of itself from the cloud once the loader
+experience. PMP keeps the choice in a first-party cookie named
+`__mtm_pref`, whose value is `standard`, `personalized` or
+`non-marketing`, and records in a second cookie, `__51d_pmp_share`,
+whether the visitor shared the choice across sites. Both cookies are set
+with `Path=/` and no `Domain`, because the plugin does not set PMP's
+`data-cookie-domain` attribute. The choice also reaches publisher code
+through the `window.onPMPCompletion` callback. The plugin's PHP sets no
+cookies and stores no preference on the server, but turning PMP on adds
+a script that sets the two cookies above. [Preferences](https://51degrees.com/documentation/_identifiers__p_m_p__preferences.html?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.md&utm_term=pmp-cookies)
+describes both cookies.
+
+PMP fetches the rest of itself from the cloud once the loader
 has run, and it adds the 51Degrees client script to the page when no
 client script object is there already.
 
@@ -146,10 +154,13 @@ forward. The locale is chosen in the browser from
 built with and falling back to `en-us`, so no allowlist lives in the
 plugin.
 
-The settings tab also surfaces the visitor's current preference (read
-from `localStorage['__51d_pmp_pref']` on the admin's own browser) and
-a **Clear Preference** button that wipes it so the popup re-appears on
-the next public-page visit.
+The settings tab also shows the choice PMP keeps in the admin's own
+browser, read from the `__mtm_pref` and `__51d_pmp_share` cookies, and
+a **Clear Preference** button that expires both with `Path=/`, so the
+popup appears again on the next public page visit. A choice shared
+across sites is also kept by the 51Degrees cloud service in a cookie on
+its own domain, which the button cannot clear, and PMP can take the
+choice from there instead of showing the popup.
 
 ### Continuation hook for `window.onPMPCompletion`
 
@@ -187,8 +198,8 @@ visitor actually clicks a button.
 ### Flow
 
 1. The browser loads the PMP widget from the composed bundle URL.
-2. On first visit the popup is shown. The visitor's choice is persisted
-   in `localStorage` under `__51d_pmp_pref`.
+2. On first visit the popup is shown. PMP keeps the visitor's choice in
+   the `__mtm_pref` cookie.
 3. PMP invokes `window.onPMPCompletion(preference)` and dismisses the
    dialog. The plugin's default is a no-op. Publisher code overrides
    it to react to the choice.
@@ -332,11 +343,11 @@ are available. For example:
 
 ## Manual installation using WordPress plugin manager
 
-1. Download `fiftyonedegrees` zip package from
-[WordPress Plugin Manager](https://wordpress.org/plugins/wp-plugin-manager/).
+1. Download the zip package from the plugin's page in the
+[WordPress plugin directory](https://wordpress.org/plugins/51degrees-optimize-by-device-location/).
 
-2. Upload the entire `fiftyonedegrees` zip folder to the
-`/wp-content/plugins/` directory.
+2. Unzip it and upload the `51degrees-optimize-by-device-location` folder
+it holds to the `/wp-content/plugins/` directory.
 
 3. Visit `Plugins`.
 
