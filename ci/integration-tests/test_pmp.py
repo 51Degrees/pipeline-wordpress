@@ -5,9 +5,9 @@ on public pages, and the inline ``window.onPMPCompletion`` no-op default
 that publisher code can override to react to the visitor's choice.
 Browser-flow assertions (popup visibility, __tcfapi state) need a
 running PMP cloud at ``PMP_CLOUD_URL`` and skip if it is unreachable.
-The plugin does not set cookies and does not persist the preference
-server-side; the PMP widget bundle stores it in
-``localStorage['__51d_pmp_pref']``.
+The plugin's PHP sets no cookies and keeps no preference on the server.
+PMP keeps the visitor's choice in the ``__mtm_pref`` cookie and records
+whether it is shared across sites in the ``__51d_pmp_share`` cookie.
 """
 
 import os
@@ -17,7 +17,7 @@ import pytest
 import requests
 from selenium.webdriver.support.ui import WebDriverWait
 
-from conftest import WORDPRESS_URL
+from conftest import ADMIN_PASS, ADMIN_USER, WORDPRESS_URL
 
 PMP_CLOUD_URL = os.environ.get('PMP_CLOUD_URL', 'https://localhost:5001')
 PMP_REQUIRED_FIELDS = {
@@ -268,3 +268,56 @@ class TestBrowserFlow:
                 'return new Promise(r => __tcfapi("ping", 2, p => r(p.cmpStatus)));'
             ) == 'loaded'
         )
+
+
+def _browser_login(browser):
+    """Log the browser in to wp-admin and wait for the dashboard."""
+    base = WORDPRESS_URL.rstrip('/')
+    browser.get(base + '/wp-login.php')
+    browser.delete_all_cookies()
+    # Load the form again so WordPress sets its test cookie, which the
+    # login checks for.
+    browser.get(base + '/wp-login.php')
+    browser.find_element('id', 'user_login').send_keys(ADMIN_USER)
+    browser.find_element('id', 'user_pass').send_keys(ADMIN_PASS)
+    browser.find_element('id', 'wp-submit').click()
+    WebDriverWait(browser, 30).until(
+        lambda d: '/wp-admin' in d.current_url
+        and '/wp-login.php' not in d.current_url
+    )
+
+
+class TestCurrentPreferencePanel:
+    """The PMP tab shows the cookies PMP keeps the choice in, and Clear
+    Preference expires both of them. Needs no PMP cloud, because the
+    test writes the cookies the way PMP does, for this host with
+    ``Path=/``."""
+
+    TAB = '/wp-admin/options-general.php?page=51Degrees&tab=pmp'
+
+    @staticmethod
+    def _text(browser, element_id):
+        return browser.find_element('id', element_id).text
+
+    def test_panel_reads_and_clears_the_cookies(self, browser):
+        _browser_login(browser)
+        browser.get(WORDPRESS_URL.rstrip('/') + self.TAB)
+        browser.execute_script(
+            "document.cookie = '__mtm_pref=personalized; Path=/';"
+            "document.cookie = '__51d_pmp_share=shared; Path=/';"
+        )
+        browser.refresh()
+
+        WebDriverWait(browser, 30).until(
+            lambda d: self._text(d, 'fod-pmp-current-pref') == 'personalized'
+        )
+        assert self._text(browser, 'fod-pmp-current-share') == 'shared'
+
+        browser.find_element('id', 'fod-pmp-clear-pref').click()
+
+        WebDriverWait(browser, 30).until(
+            lambda d: self._text(d, 'fod-pmp-current-pref') == '(none)'
+        )
+        assert self._text(browser, 'fod-pmp-current-share') == '(none)'
+        assert browser.get_cookie('__mtm_pref') is None
+        assert browser.get_cookie('__51d_pmp_share') is None
