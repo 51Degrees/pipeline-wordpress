@@ -25,8 +25,11 @@ PMP_REQUIRED_FIELDS = {
     'fiftyonedegrees_pmp_alt_label':       'Pay',
     'fiftyonedegrees_pmp_alt_url':         'https://example.com',
 }
-# The plugin passes the string to PMP as entered, so any value will do.
-PMP_TCF_VENDOR_STRING = 'CPYBS-test.vendor-string'
+# The example TC string in the IAB TCF consent string format, being a Core
+# TC String, a Disclosed Vendors segment and a Publisher TC segment, and
+# its Core TC String alone, which the plugin refuses to save.
+PMP_TCF_CORE = 'CQSbk4AQSbk4ANwAAAENAwCgAAAAAAAAAAYgACPAAAAA'
+PMP_TCF_VENDOR_STRING = PMP_TCF_CORE + '.IDKQA4AAgAKAGQAygAAA.YAAAAAAAAAAA'
 
 
 def _get_admin_nonce(session, tab):
@@ -182,6 +185,38 @@ class TestScriptTagOnFrontend:
         assert m.group(1).strip() == '', (
             'TCF Vendor String box is not empty when the option is empty'
         )
+
+    def test_tcf_vendor_string_without_disclosed_vendors_is_refused(
+        self, wp_admin_session
+    ):
+        save_pmp_settings(
+            wp_admin_session,
+            fiftyonedegrees_pmp_tcf_vendor_string=PMP_TCF_VENDOR_STRING,
+        )
+        save_pmp_settings(
+            wp_admin_session,
+            fiftyonedegrees_pmp_tcf_vendor_string=PMP_TCF_CORE,
+        )
+
+        # WordPress shows the save's settings errors on the page it
+        # redirects to.
+        tab_url = WORDPRESS_URL.rstrip('/') + (
+            '/wp-admin/options-general.php?page=51Degrees&tab=pmp'
+            '&settings-updated=true'
+        )
+        html = wp_admin_session.get(tab_url).text
+        assert 'setting-error-pmp_tcf_vendor_string_refused' in html, (
+            'No settings error for a string without Disclosed Vendors'
+        )
+
+        # The refused value is not stored, so the earlier string stays.
+        resp = requests.get(WORDPRESS_URL)
+        m = re.search(
+            r'<script\b[^>]*\bid="fiftyonedegrees-pmp-js"[^>]*>',
+            resp.text,
+        )
+        assert m, 'PMP script tag was not rendered'
+        assert f'data-tcf-vendor="{PMP_TCF_VENDOR_STRING}"' in m.group(0)
 
     def test_script_absent_when_disabled(self, wp_admin_session):
         disable_pmp(wp_admin_session)

@@ -468,6 +468,104 @@ class PmpTests extends TestCase
             'FiftyoneService->pmp_remove_old_default_tcf_vendor_string()'));
     }
 
+    // -------- sanitize_tcf_vendor_string --------
+
+    /**
+     * The segments of the example TC string in the IAB TCF consent string
+     * format, being a Core TC String, a Disclosed Vendors segment and a
+     * Publisher TC segment.
+     */
+    private const SPEC_CORE = 'CQSbk4AQSbk4ANwAAAENAwCgAAAAAAAAAAYgACPAAAAA';
+    private const SPEC_DISCLOSED_VENDORS = 'IDKQA4AAgAKAGQAygAAA';
+    private const SPEC_PUBLISHER_TC = 'YAAAAAAAAAAA';
+
+    /**
+     * An empty value is saved, and means no string is sent.
+     */
+    public function testSanitizeTcfVendorStringAllowsEmpty()
+    {
+        foreach (['', '  ', null] as $empty) {
+            self::assertSame(
+                '', FiftyoneService::sanitize_tcf_vendor_string($empty));
+        }
+        self::assertCount(0, $this->settingsErrors);
+    }
+
+    /**
+     * A Core TC String followed by a Disclosed Vendors segment is saved
+     * as given, whatever order the later segments come in.
+     */
+    public function testSanitizeTcfVendorStringAcceptsCoreWithDisclosedVendors()
+    {
+        $valid = [
+            self::SPEC_CORE . '.' . self::SPEC_DISCLOSED_VENDORS,
+            self::SPEC_CORE . '.' . self::SPEC_DISCLOSED_VENDORS
+                . '.' . self::SPEC_PUBLISHER_TC,
+            self::SPEC_CORE . '.' . self::SPEC_PUBLISHER_TC
+                . '.' . self::SPEC_DISCLOSED_VENDORS,
+            self::OLD_BUILT_IN_TCF_VENDOR_STRING,
+        ];
+        foreach ($valid as $value) {
+            self::assertSame(
+                $value, FiftyoneService::sanitize_tcf_vendor_string($value));
+        }
+        self::assertCount(0, $this->settingsErrors);
+    }
+
+    /**
+     * Anything else is refused with a settings error saying what to
+     * enter, and the stored value is kept.
+     */
+    public function testSanitizeTcfVendorStringRefusesOtherValues()
+    {
+        $this->options[Options::PMP_TCF_VENDOR_STRING] = 'stored';
+        $refused = [
+            'core only' => self::SPEC_CORE,
+            'no disclosed vendors' =>
+                self::SPEC_CORE . '.' . self::SPEC_PUBLISHER_TC,
+            'core not first' =>
+                self::SPEC_DISCLOSED_VENDORS . '.' . self::SPEC_CORE,
+            'version 1 core' => 'BOEFEAyOEFEAyAHABDENAI4AAAB9vABAASA.'
+                . self::SPEC_DISCLOSED_VENDORS,
+            'empty segment' =>
+                self::SPEC_CORE . '..' . self::SPEC_DISCLOSED_VENDORS,
+            'not URL-safe base64' => 'CQSbk4AQSbk4ANwAAAENAwCg+/==.'
+                . self::SPEC_DISCLOSED_VENDORS,
+            'other text' => 'not a TC string',
+        ];
+        foreach ($refused as $case => $value) {
+            $this->settingsErrors = [];
+            self::assertSame(
+                'stored',
+                FiftyoneService::sanitize_tcf_vendor_string($value),
+                $case);
+            self::assertCount(1, $this->settingsErrors, $case);
+            self::assertStringContainsString(
+                'Disclosed Vendors',
+                $this->settingsErrors[0]['message'],
+                $case);
+        }
+    }
+
+    /**
+     * The TCF Vendor String setting is saved through that check.
+     */
+    public function testTcfVendorStringSettingIsSavedThroughTheCheck()
+    {
+        $settings = [];
+        Functions\when('add_option')->justReturn(true);
+        Functions\when('register_setting')->alias(
+            function ($group, $name, $args = []) use (&$settings) {
+                $settings[$name] = $args;
+            });
+
+        (new FiftyoneService())->fiftyonedegrees_register_settings();
+
+        self::assertSame(
+            ['FiftyoneService', 'sanitize_tcf_vendor_string'],
+            $settings[Options::PMP_TCF_VENDOR_STRING]['sanitize_callback']);
+    }
+
     /**
      * PMP_SHOW_STANDARD = 'on' adds the data-show-standard="true" hint.
      */
