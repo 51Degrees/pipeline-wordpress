@@ -288,7 +288,7 @@ class FiftyoneService {
         ]);
         register_setting(Options::PMP_GROUP_KEY, Options::PMP_TCF_VENDOR_STRING, [
             'type' => 'string',
-            'sanitize_callback' => 'sanitize_text_field',
+            'sanitize_callback' => ['FiftyoneService', 'sanitize_tcf_vendor_string'],
         ]);
         register_setting(Options::PMP_GROUP_KEY, Options::PMP_ALT_LABEL, [
             'type' => 'string',
@@ -955,6 +955,70 @@ class FiftyoneService {
     public static function pmp_tcf_vendor_string() {
         $value = get_option(Options::PMP_TCF_VENDOR_STRING, '');
         return is_string($value) ? $value : '';
+    }
+
+    /**
+     * The URL-safe base64 alphabet a TC string is written in. A
+     * character's position is the 6 bit value it encodes.
+     */
+    private const TCF_BASE64URL =
+        'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+
+    /**
+     * Saves the TCF Vendor String only when it is empty, which sends no
+     * string, or a TC string with a Core TC String and a Disclosed
+     * Vendors segment, which the TCF consent string format requires from
+     * version 2.3. Anything else is refused with a settings error saying
+     * what to enter, and the stored value is kept.
+     *
+     * @param  mixed $value the submitted value
+     * @return string the value to store
+     */
+    public static function sanitize_tcf_vendor_string($value) {
+        $value = trim(sanitize_text_field((string) $value));
+        if ($value === '' || self::has_core_and_disclosed_vendors($value)) {
+            return $value;
+        }
+        add_settings_error(
+            Options::PMP_GROUP_KEY,
+            'pmp_tcf_vendor_string_refused',
+            __('The TCF Vendor String was not saved, because it does not hold a Core TC String followed by a Disclosed Vendors segment, joined by a dot, which version 2.3 and later of the TCF consent string format require. Enter the whole TC string your TCF tool gives you, or leave the box empty to send no string.', 'fiftyonedegrees'),
+            'error'
+        );
+        return self::pmp_tcf_vendor_string();
+    }
+
+    /**
+     * Whether the value is TC string segments joined by dots, the first a
+     * Core TC String and a later one a Disclosed Vendors segment. The
+     * first character of a segment holds its first 6 bits. A Core TC
+     * String starts with a 6 bit Version of 2, and every later segment
+     * with a 3 bit SegmentType, which is 1 for Disclosed Vendors. The
+     * rest of each segment is not decoded.
+     *
+     * @param  string $value the trimmed value
+     * @return bool
+     */
+    private static function has_core_and_disclosed_vendors($value) {
+        $segments = explode('.', $value);
+        if (count($segments) < 2) {
+            return false;
+        }
+        foreach ($segments as $segment) {
+            if ($segment === ''
+                || strspn($segment, self::TCF_BASE64URL) !== strlen($segment)) {
+                return false;
+            }
+        }
+        if (strpos(self::TCF_BASE64URL, $segments[0][0]) !== 2) {
+            return false;
+        }
+        foreach (array_slice($segments, 1) as $segment) {
+            if ((strpos(self::TCF_BASE64URL, $segment[0]) >> 3) === 1) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

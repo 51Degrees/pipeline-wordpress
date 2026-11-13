@@ -57,7 +57,7 @@ require_once __DIR__ . '/includes/page-picker.php';
                               class="large-text code"
                               rows="4"><?php echo esc_textarea(FiftyoneService::pmp_tcf_vendor_string()); ?></textarea>
                     <p class="description">
-                        <?php esc_html_e('An IAB TCF v2 consent string carrying the vendor consents your site signals, generated with a TCF tool. For a Standard or Personalized choice, PMP rewrites the purpose consents, the dates, the CMP ID and the policy and vendor list versions, keeps every other field as entered, and gives the result to scripts on the page through __tcfapi. There is no default. With the box empty the plugin gives PMP no string, and PMP reports an empty TC string.', 'fiftyonedegrees'); ?>
+                        <?php esc_html_e('An IAB TCF v2 consent string carrying the vendor consents your site signals, generated with a TCF tool. It must hold a Core TC String followed by a Disclosed Vendors segment, joined by a dot, as version 2.3 and later of the TCF consent string format require, and the plugin refuses to save anything else. For a Standard or Personalized choice, PMP rewrites the purpose consents, the dates, the CMP ID and the policy and vendor list versions, keeps every other field as entered, and gives the result to scripts on the page through __tcfapi. There is no default. With the box empty the plugin gives PMP no string, and PMP reports an empty TC string.', 'fiftyonedegrees'); ?>
                     </p>
                 </td>
             </tr>

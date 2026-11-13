@@ -109,10 +109,15 @@ fields are optional.
 
 - **Enable PMP**. Turn the popup on for public pages.
 - **TCF Vendor String**. An IAB TCF v2 consent string carrying the
-  vendor consents the site signals, generated with a TCF tool. It is
-  empty by default, and the plugin ships no string of its own. While
-  it is empty the plugin leaves `data-tcf-vendor` off the tag, and
-  PMP reports an empty TC string. With a string set, PMP rewrites the
+  vendor consents the site signals, generated with a TCF tool. It must
+  hold a Core TC String followed by a Disclosed Vendors segment, joined
+  by a dot, as version 2.3 and later of the
+  [TCF consent string format](https://github.com/InteractiveAdvertisingBureau/GDPR-Transparency-and-Consent-Framework/blob/778c8c4272ce664f3f7f3be140b63508f1e02e8b/TCFv2/IAB%20Tech%20Lab%20-%20Consent%20string%20and%20vendor%20list%20formats%20v2.md#tc-string-format)
+  require, and saving the tab refuses anything else with a message
+  saying what to enter. It is empty by default, and the plugin ships
+  no string of its own. While it is empty the plugin leaves
+  `data-tcf-vendor` off the tag, and PMP reports an empty TC string.
+  With a string set, PMP rewrites the
   purpose consents, the dates, the CMP ID and the policy and vendor
   list versions for each Standard or Personalized choice and keeps
   every other field as entered, as
