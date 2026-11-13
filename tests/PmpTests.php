@@ -27,6 +27,7 @@ class PmpTests extends TestCase
     private $options = [];
     private $postBackup;
     private $settingsErrors = [];
+    private $deleted = [];
 
     public function set_up()
     {
@@ -303,9 +304,8 @@ class PmpTests extends TestCase
     /**
      * Empty options fall back to runtime defaults: '51Degrees' for the
      * brand, the bundled plugin logo for the brand logo, 'Remove ads' for
-     * the alt label, 'https://example.com' for the alt URL, and the
-     * built-in all-vendors TCF Vendor String. Terms URL has no fallback
-     * and stays absent from the tag.
+     * the alt label and 'https://example.com' for the alt URL. Terms URL
+     * and TCF Vendor String have no fallback and stay absent from the tag.
      */
     public function testPmpAddDataAttributesUsesFallbacksWhenOptionsEmpty()
     {
@@ -323,14 +323,149 @@ class PmpTests extends TestCase
         );
         self::assertStringContainsString('data-alt-name="Remove ads"', $result);
         self::assertStringContainsString('data-alt-url="https://example.com"', $result);
-        self::assertStringContainsString(
-            'data-tcf-vendor="' . FiftyoneService::PMP_DEFAULT_TCF_VENDOR_STRING . '"',
-            $result
-        );
+        self::assertStringNotContainsString('data-tcf-vendor="', $result);
         self::assertStringContainsString('data-tcf-vendor-id="51"', $result);
         self::assertStringContainsString('data-action-url=', $result);
         // Terms URL has no fallback and is skipped when empty.
         self::assertStringNotContainsString('data-brand-terms-url=""', $result);
+    }
+
+    // -------- TCF Vendor String --------
+
+    /**
+     * The TCF Vendor String that versions 4.5.15 to 4.5.30 put in the
+     * PMP tab's box when the option was empty, so that saving the tab
+     * stored it as the site's own value.
+     */
+    private const OLD_BUILT_IN_TCF_VENDOR_STRING =
+        'CQkMqUAQkMqUAAfABAENCfFsAP_wAEPgAAAAMetR_G__bWlr-bb3abtkeYxP9_hr7sQxBgbIkm4FzLvW7JwHx2EZNAzatiIKmRIAu3TBIQNlHJDURUCgKIgFryDMaE2U4TNKJ6BkiFMZI2tQCFxvm4tjeQCY4ur_9kc1mB-t7dr82dzyy6hHn3a5fmS1UJCdIYetDfv8ZBOT-9IEd-x8v4v4_EbpEm8eS1n_pGtp4jc6Yns_dBmxt-Tyff7Pn__7l_e7X_ve_n3zv8oXn7rr____f_-7___2b_-___b-__7Z_zI_4MegAmGh0QRlkQKBAoCEECABQVhABQIAgAASAogIATBgQ5AwAXWESAEAKAAYIAQAAgwABAAAJAAhEAEABAIAQIBAoAAwAIAgIAGBgADABQiAQAAgOgYpgQQCBYAJEZUBpgQgAJBAS2VCCUDAgrhCkWOAQQIiYKAAAEAAoAAEB8LAQklBKxIIAuILoAEAAAAKIEWBFIWYAgqDNFoKwJOAyNMASPMEiSnQRAEwQkZBkQmqCQeKYohQQ5AbFLMAdPEFADLtZIQ_1As3AIAA.IMetX_H__bX9v-f736ft0eY1f9_j77uQxBhfJs-4FzLvW_JwX32E7NF36tqYKmRIEu3bBIQNtHJnUTVihaogVrzHsak2c4TtKJ-BkiHMZe29YCF5vm4tj-QKZ5_r_93d92T_9_dv-3dzy3_1nv3f9_-f1eLide5_tH_v_bROb-_I_9_7-_4v8_t_rk2_eT1v_9evv7__-________9_____________-____f________________________f__________9____4AA';
+
+    /**
+     * Stubs delete_option to record each key and drop it from the stub
+     * option store.
+     */
+    private function recordDeletes()
+    {
+        $this->deleted = [];
+        $opts = &$this->options;
+        $deleted = &$this->deleted;
+        Functions\when('delete_option')->alias(
+            function ($key) use (&$opts, &$deleted) {
+                $deleted[] = $key;
+                unset($opts[$key]);
+                return true;
+            });
+    }
+
+    /**
+     * The plugin ships no TCF Vendor String of its own.
+     */
+    public function testNoBuiltInTcfVendorString()
+    {
+        self::assertFalse(
+            defined('FiftyoneService::PMP_DEFAULT_TCF_VENDOR_STRING'));
+    }
+
+    /**
+     * An empty or missing option gives an empty string, which is what
+     * the PMP tab's box shows.
+     */
+    public function testPmpTcfVendorStringIsEmptyWhenOptionEmpty()
+    {
+        self::assertSame('', FiftyoneService::pmp_tcf_vendor_string());
+
+        $this->options[Options::PMP_TCF_VENDOR_STRING] = false;
+        self::assertSame('', FiftyoneService::pmp_tcf_vendor_string());
+    }
+
+    /**
+     * A string the site entered comes back unchanged.
+     */
+    public function testPmpTcfVendorStringReturnsTheStoredString()
+    {
+        $this->options[Options::PMP_TCF_VENDOR_STRING] = 'CPYBS';
+        self::assertSame('CPYBS', FiftyoneService::pmp_tcf_vendor_string());
+    }
+
+    /**
+     * With the option empty or missing, the tag carries no
+     * data-tcf-vendor attribute, so PMP is given no TCF string.
+     */
+    public function testPmpAddDataAttributesOmitsTcfVendorWhenOptionEmpty()
+    {
+        foreach (['', false] as $empty) {
+            $this->options[Options::PMP_TCF_VENDOR_STRING] = $empty;
+            $result = (new FiftyoneService())->pmp_add_data_attributes(
+                '<script id="fiftyonedegrees-pmp-js" src="x"></script>',
+                'fiftyonedegrees-pmp',
+                'x'
+            );
+
+            self::assertStringNotContainsString('data-tcf-vendor="', $result);
+            self::assertStringContainsString('data-tcf-vendor-id="51"', $result);
+        }
+    }
+
+    /**
+     * A stored copy of the old built-in string is deleted.
+     */
+    public function testRemovesTheStoredCopyOfTheOldBuiltInString()
+    {
+        $this->options[Options::PMP_TCF_VENDOR_STRING] =
+            self::OLD_BUILT_IN_TCF_VENDOR_STRING;
+        $this->recordDeletes();
+
+        FiftyoneService::pmp_remove_old_default_tcf_vendor_string();
+
+        self::assertSame([Options::PMP_TCF_VENDOR_STRING], $this->deleted);
+        self::assertSame('', FiftyoneService::pmp_tcf_vendor_string());
+    }
+
+    /**
+     * A string the site entered is kept, including one of the same
+     * length as the old built-in string.
+     */
+    public function testKeepsATcfVendorStringTheSiteEntered()
+    {
+        $sameLength =
+            substr(self::OLD_BUILT_IN_TCF_VENDOR_STRING, 0, -1) . 'B';
+        foreach (['CPYBS', $sameLength] as $own) {
+            $this->options[Options::PMP_TCF_VENDOR_STRING] = $own;
+            $this->recordDeletes();
+
+            FiftyoneService::pmp_remove_old_default_tcf_vendor_string();
+
+            self::assertSame([], $this->deleted);
+            self::assertSame($own, FiftyoneService::pmp_tcf_vendor_string());
+        }
+    }
+
+    /**
+     * An empty or missing option is left alone.
+     */
+    public function testLeavesAnEmptyTcfVendorStringAlone()
+    {
+        foreach (['', false] as $empty) {
+            $this->options[Options::PMP_TCF_VENDOR_STRING] = $empty;
+            $this->recordDeletes();
+
+            FiftyoneService::pmp_remove_old_default_tcf_vendor_string();
+
+            self::assertSame([], $this->deleted);
+        }
+    }
+
+    /**
+     * The removal runs on plugins_loaded, before any page is built, so
+     * an upgraded site stops sending the old string without anyone
+     * opening wp-admin.
+     */
+    public function testOldBuiltInStringRemovedOnPluginsLoaded()
+    {
+        (new FiftyoneService())->setup_wp_actions();
+        self::assertNotFalse(has_action(
+            'plugins_loaded',
+            'FiftyoneService->pmp_remove_old_default_tcf_vendor_string()'));
     }
 
     /**
