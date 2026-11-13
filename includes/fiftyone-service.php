@@ -44,6 +44,12 @@ class FiftyoneService {
      */
     public function setup_wp_actions() {
 
+        // Removes a stored copy of the old built-in TCF Vendor String
+        // before any page is built.
+        add_action(
+            'plugins_loaded',
+            array($this, 'pmp_remove_old_default_tcf_vendor_string'));
+
         // The main init action. This runs the processing.
         add_action(
             'init',
@@ -374,9 +380,10 @@ class FiftyoneService {
         }
         // Terms / Privacy URL plus the two alternative-button fields
         // are required server-side. PMP widget rejects an empty alt
-        // button outright; Terms URL has no runtime fallback. The
-        // remaining fields (TCF Vendor String, Brand Name) have
-        // sensible runtime defaults so they stay optional.
+        // button outright, and Terms URL has no runtime fallback. TCF
+        // Vendor String and Brand Name stay optional. An empty TCF
+        // Vendor String leaves data-tcf-vendor off the tag, and Brand
+        // Name falls back to '51Degrees'.
         $required = [
             Options::PMP_BRAND_TERMS_URL => 'Terms / Privacy URL',
             Options::PMP_ALT_LABEL       => 'Alternative Button Label',
@@ -804,8 +811,7 @@ class FiftyoneService {
         // it to bootstrap anything that depends on the visitor's
         // preference -- analytics, Prebid.js initialisation, lazy ad
         // stacks, etc. -- by defining their own window.onPMPCompletion.
-        // The default is a no-op. PMP itself acts as the CMP via TCF
-        // API, so no separate consent manager is needed.
+        // The default is a no-op.
         wp_add_inline_script(
             'fiftyonedegrees-pmp',
             '(function(){window.onPMPCompletion=window.onPMPCompletion||function(preference){};})();',
@@ -932,24 +938,40 @@ class FiftyoneService {
     }
 
     /**
-     * Default TCF Vendor String -- core segment with consent granted
-     * to every vendor, purpose and special feature from IAB GVL
-     * version 158 (cmpId=51, publisherCountryCode=AA). Regenerate
-     * via the @iabtcf/core script when the GVL bumps a major
-     * version; admins can override per-site via the PMP settings.
+     * SHA-256 digest and length of the TCF Vendor String that versions
+     * 4.5.15 to 4.5.30 put in the PMP tab's box when the option was
+     * empty, so that saving the tab stored it as the site's own value.
+     * Only the digest is kept, so the plugin carries no TCF string.
      */
-    public const PMP_DEFAULT_TCF_VENDOR_STRING =
-        'CQkMqUAQkMqUAAfABAENCfFsAP_wAEPgAAAAMetR_G__bWlr-bb3abtkeYxP9_hr7sQxBgbIkm4FzLvW7JwHx2EZNAzatiIKmRIAu3TBIQNlHJDURUCgKIgFryDMaE2U4TNKJ6BkiFMZI2tQCFxvm4tjeQCY4ur_9kc1mB-t7dr82dzyy6hHn3a5fmS1UJCdIYetDfv8ZBOT-9IEd-x8v4v4_EbpEm8eS1n_pGtp4jc6Yns_dBmxt-Tyff7Pn__7l_e7X_ve_n3zv8oXn7rr____f_-7___2b_-___b-__7Z_zI_4MegAmGh0QRlkQKBAoCEECABQVhABQIAgAASAogIATBgQ5AwAXWESAEAKAAYIAQAAgwABAAAJAAhEAEABAIAQIBAoAAwAIAgIAGBgADABQiAQAAgOgYpgQQCBYAJEZUBpgQgAJBAS2VCCUDAgrhCkWOAQQIiYKAAAEAAoAAEB8LAQklBKxIIAuILoAEAAAAKIEWBFIWYAgqDNFoKwJOAyNMASPMEiSnQRAEwQkZBkQmqCQeKYohQQ5AbFLMAdPEFADLtZIQ_1As3AIAA.IMetX_H__bX9v-f736ft0eY1f9_j77uQxBhfJs-4FzLvW_JwX32E7NF36tqYKmRIEu3bBIQNtHJnUTVihaogVrzHsak2c4TtKJ-BkiHMZe29YCF5vm4tj-QKZ5_r_93d92T_9_dv-3dzy3_1nv3f9_-f1eLide5_tH_v_bROb-_I_9_7-_4v8_t_rk2_eT1v_9evv7__-________9_____________-____f________________________f__________9____4AA';
+    private const PMP_OLD_DEFAULT_TCF_VENDOR_STRING_SHA256 =
+        'ab78304933450246c3c86ab2d1261aa0f10a54cb65921cb61ab86509fa7f822f';
+    private const PMP_OLD_DEFAULT_TCF_VENDOR_STRING_LENGTH = 849;
 
     /**
-     * Returns the configured TCF Vendor String or the built-in
-     * all-vendors-enabled default when none is set.
+     * Returns the configured TCF Vendor String, or an empty string when
+     * none is set. An empty string leaves data-tcf-vendor off the PMP
+     * tag, so PMP is given no TCF string.
      */
     public static function pmp_tcf_vendor_string() {
-        $value = get_option(Options::PMP_TCF_VENDOR_STRING);
-        return empty($value)
-            ? self::PMP_DEFAULT_TCF_VENDOR_STRING
-            : $value;
+        $value = get_option(Options::PMP_TCF_VENDOR_STRING, '');
+        return is_string($value) ? $value : '';
+    }
+
+    /**
+     * Deletes the stored TCF Vendor String when it is a copy of the old
+     * built-in string, and keeps any other value. Hooked on
+     * plugins_loaded, so the copy is gone before any page is built. The
+     * length is compared first, so the digest is only worked out for a
+     * value that could match.
+     */
+    public static function pmp_remove_old_default_tcf_vendor_string() {
+        $value = get_option(Options::PMP_TCF_VENDOR_STRING, '');
+        if (is_string($value)
+            && strlen($value) === self::PMP_OLD_DEFAULT_TCF_VENDOR_STRING_LENGTH
+            && hash('sha256', $value) ===
+                self::PMP_OLD_DEFAULT_TCF_VENDOR_STRING_SHA256) {
+            delete_option(Options::PMP_TCF_VENDOR_STRING);
+        }
     }
 
     /**
