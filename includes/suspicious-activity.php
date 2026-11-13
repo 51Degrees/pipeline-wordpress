@@ -148,12 +148,12 @@ class SuspiciousActivity
     }
 
     /**
-     * Extracts the stable value from a base64-encoded 51Did (an OWID v3
+     * Extracts the match key from a base64-encoded 51Did (an OWID v3
      * envelope) and returns it as a hex string.
      *
      * The envelope's ECDSA signature is regenerated on every request
      * (random nonce), so hashing the full token would produce a new
-     * tracking key per request. The value is what the cloud computed
+     * tracking key per request. The match key is what the cloud computed
      * from the visitor and is stable per visitor, so that is what this
      * returns.
      *
@@ -162,26 +162,25 @@ class SuspiciousActivity
      * alphabet with or without padding, and answers with a result
      * rather than raising when the token is not a 51Did. The package
      * owns the layout, so a self-hosted creator domain and a creator
-     * context section after the value are read correctly without this
-     * plugin holding any offsets or lengths of its own.
+     * context section after the match key are read correctly without
+     * this plugin holding any offsets or lengths of its own.
      *
      * A Probabilistic or HashedEmail identifier gives 64 hex characters
-     * and a Random one gives 32, because the value itself is shorter.
+     * and a Random one gives 32, because its match key is shorter.
      * The caller only uses the result as a per-visitor key, so the
      * shorter string is still a complete and stable identity. The
      * Reserved type is refused here, because the package reads its
-     * value as a best effort of whatever length follows the header,
+     * match key as a best effort of whatever length follows the header,
      * which would not give a key that is stable, so the caller falls
      * back instead.
      *
-     * The signature is not verified, which is unchanged from the reader
-     * this replaces, so a token that parses is grouped by its value and
-     * is not proved genuine.
+     * The signature is not verified, so a token that parses is grouped
+     * by its match key and is not proved genuine.
      *
      * @access public
      *
      * @param  mixed       $token base64-encoded 51Did
-     * @return string|null hex value, or null on malformed input
+     * @return string|null hex of the match key, or null on malformed input
      */
     public static function extract_owid_identifier($token)
     {
@@ -196,7 +195,7 @@ class SuspiciousActivity
         if (!$result->ok || $result->fodId->getType() === IdType::Reserved) {
             return null;
         }
-        return bin2hex($result->fodId->getHash());
+        return bin2hex($result->fodId->getMatchKey());
     }
 
     /**
