@@ -3,11 +3,10 @@ param (
     [Parameter(Mandatory)][hashtable]$Keys
 )
 $ErrorActionPreference = "Stop"
-# Make a non-zero exit from a native command (php, wp-cli, zip, pip...)
-# stop the script too -- $ErrorActionPreference only covers cmdlets. Without
-# this a failed setup step (e.g. `wp core download`) was ignored and surfaced
-# later as misleading test FAILs. Where a non-zero exit is an expected
-# result, turn it off locally: & { $PSNativeCommandUseErrorActionPreference = $false; ... }
+# A non-zero exit from a native command (php, wp-cli, zip or pip) stops the
+# script, as $ErrorActionPreference covers only cmdlets. Where a non-zero exit
+# is a result rather than a failure, the setting is turned off in its own
+# scope with & { $PSNativeCommandUseErrorActionPreference = $false; ... }.
 $PSNativeCommandUseErrorActionPreference = $true
 
 if (!$Keys.TestResourceKey) {
@@ -15,7 +14,7 @@ if (!$Keys.TestResourceKey) {
     return
 }
 
-# The CI workflow now feeds TestResourceKey from the org secret
+# The CI workflow feeds TestResourceKey from the org secret
 # _51DEGREES_RESOURCE_KEY_BESPOKE (a Cloud V5 bespoke key with IsCrawler +
 # CrawlerUsage). Selenium tests read $env:RESOURCE_KEY.
 $env:RESOURCEKEY = $Keys.TestResourceKey
@@ -63,15 +62,15 @@ $wp = "$PWD/wp-cli.phar"
 php $wp --info
 
 Write-Host "=== Downloading WordPress"
-# Retried: a transient DNS/network error on the runner is the usual cause.
-# --force lets a retry overwrite a partially downloaded wp/ directory.
+# A failed download is tried again, as a network error on the runner is the
+# usual cause, and --force lets a retry overwrite a partly downloaded wp/.
 for ($attempt = 1; ; ++$attempt) {
     try {
         php $wp core download --path=wp --force
         break
     } catch {
         if ($attempt -ge 3) { throw }
-        Write-Host "WordPress download attempt $attempt failed: $_ -- retrying in 10s"
+        Write-Host "WordPress download attempt $attempt failed, trying again in 10 seconds: $_"
         Start-Sleep 10
     }
 }
@@ -109,7 +108,7 @@ try {
         # the loaded php.ini directly. Last directive wins on PHP ini parse.
         $phpIni = (php -r "echo php_ini_loaded_file();").Trim()
         Add-Content -Path $phpIni -Value "`nmax_execution_time=600"
-        # Start-Process with -RedirectStandard* writes directly to disk —
+        # Start-Process with -RedirectStandard* writes straight to disk,
         # unlike PowerShell jobs, which drop native-process stderr.
         $server = Start-Process -FilePath "php" `
             -ArgumentList @("$wp", "server") `
@@ -146,9 +145,9 @@ try {
         Write-Host "=== Running Selenium tests"
         Push-Location "$PSScriptRoot/integration-tests"
         try {
-            # pytest failing is a test result, not a script error. The
-            # counter is bumped outside the block: inside & { } it would only
-            # change a local copy.
+            # A pytest failure is a test result, not a script error. The
+            # counter is raised outside the block, as inside & { } it would
+            # change only a local copy.
             & { $PSNativeCommandUseErrorActionPreference = $false; python -m pytest }
             if ($LASTEXITCODE -ne 0) { ++$failed }
         } finally {
