@@ -613,18 +613,42 @@ class SuspiciousActivityTests extends TestCase
     /**
      * Test that a HashedEmail identifier, which sets bit 7 of the flags
      * and carries a 32-byte value like the Probabilistic type, gives the
-     * same 64-character key.
+     * same 64-character key. Bit 0 is the non-marketing usage, which
+     * every identifier the cloud creates carries.
      */
     public function testIdentityHashedEmailTypeReadsValue()
     {
         $identity = str_repeat("\x0c", 32);
         $token = $this->buildEnvelope(
-            $this->buildPayload($identity, 0x80, $this->buildContext(19))
+            $this->buildPayload($identity, 0x81, $this->buildContext(19))
         );
 
         $result = $this->identityFromToken($token);
         self::assertEquals(bin2hex($identity), $result);
         self::assertEquals(64, strlen($result));
+    }
+
+    /**
+     * Test that a payload whose usage bits are all clear falls back to
+     * the IP and User-Agent hash. The 51Did specification says a reader
+     * must refuse such a payload, as the cloud never creates one.
+     */
+    public function testIdentityNoUsageFallsBackToIpUa()
+    {
+        foreach ([0x00, 0x40, 0x80] as $flags) {
+            $token = $this->buildEnvelope(
+                $this->buildPayload(str_repeat("\x5a", 32), $flags)
+            );
+
+            self::assertNull(
+                SuspiciousActivity::extract_owid_identifier($token),
+                sprintf('flags 0x%02X', $flags)
+            );
+            self::assertEquals(
+                $this->ipUaFallback(),
+                $this->identityFromToken($token)
+            );
+        }
     }
 
     /**
