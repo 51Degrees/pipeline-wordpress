@@ -105,13 +105,26 @@ elsewhere in the pipeline but are not required by the consent flow.
 
 Three fields are required when Enable PMP is on. These fields are Terms / Privacy URL,
 Alternative Button Label, Alternative Button URL. The remaining
-fields have runtime defaults so the popup works out of the box.
+fields are optional.
 
 - **Enable PMP**. Turn the popup on for public pages.
-- **TCF Vendor String**. Static TCF v2 vendor consent string. The
-  built-in default grants consent to every vendor, purpose and
-  special feature from IAB GVL v158. Admins can override per-site
-  with their own string generated via TCF Tools.
+- **TCF Vendor String**. An IAB TCF v2 consent string carrying the
+  vendor consents the site signals, generated with a TCF tool. It must
+  hold a Core TC String followed by a Disclosed Vendors segment, joined
+  by a dot, as version 2.3 and later of the
+  [TCF consent string format](https://github.com/InteractiveAdvertisingBureau/GDPR-Transparency-and-Consent-Framework/blob/778c8c4272ce664f3f7f3be140b63508f1e02e8b/TCFv2/IAB%20Tech%20Lab%20-%20Consent%20string%20and%20vendor%20list%20formats%20v2.md#tc-string-format)
+  require, and saving the tab refuses anything else with a message
+  saying what to enter. It is empty by default, and the plugin ships
+  no string of its own. While it is empty the plugin leaves
+  `data-tcf-vendor` off the tag, and PMP reports an empty TC string.
+  With a string set, PMP rewrites the
+  purpose consents, the dates, the CMP ID and the policy and vendor
+  list versions for each Standard or Personalized choice and keeps
+  every other field as entered, as
+  [Configuration attributes](https://51degrees.com/documentation/_identifiers__p_m_p__configuration.html?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.md&utm_term=tcf-vendor-string)
+  describes. Versions 4.5.15 to 4.5.30 showed a built-in string in
+  this box when it was empty, so saving the tab stored that string.
+  Upgrading deletes a stored copy of that string and keeps any other.
 - **Alternative Button Label** `*`. Label of the alternative button.
   Defaults to `Remove ads`.
 - **Alternative Button URL** `*`. Destination of the alternative
@@ -163,9 +176,16 @@ window.onPMPCompletion = window.onPMPCompletion || function (preference) {};
 
 Override it on your page to bootstrap anything that depends on the
 visitor's preference, such as analytics, Prebid.js initialization, lazy ad
-stacks, or any other publisher-side logic. PMP itself acts as the CMP
-via the TCF API (sets the TC String and exposes `__tcfapi`), so a
-separate consent manager is not needed:
+stacks, or any other publisher-side logic. PMP also gives scripts on
+the page the TCF API, `__tcfapi`, with a TC string built from the TCF
+Vendor String setting, which is empty while that setting is empty.
+PMP follows the TCF's technical format without being a consent
+management platform registered with IAB Europe, as
+[Compared with a consent management platform](https://51degrees.com/documentation/_identifiers__p_m_p__cmp_comparison.html?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.md&utm_term=cmp-comparison)
+explains. On a page where another consent management platform has
+already defined `__tcfapi`, PMP writes a console warning and shows
+nothing. An override that passes the choice to a data layer looks
+like this.
 
 ```html
 <script>
@@ -192,8 +212,9 @@ visitor actually clicks a button.
 3. PMP invokes `window.onPMPCompletion(preference)` and dismisses the
    dialog. The plugin's default is a no-op. Publisher code overrides
    it to react to the choice.
-4. PMP signals TCF status to its `__tcfapi` listeners using the
-   configured TCF Vendor String.
+4. For a Standard or Personalized choice, PMP gives its `__tcfapi`
+   listeners a TC string built from the TCF Vendor String, which is
+   empty while that setting is empty.
 
 When PMP is disabled the plugin emits no `<script>` tag.
 
