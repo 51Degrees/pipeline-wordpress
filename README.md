@@ -341,7 +341,7 @@ are available. For example:
 </script>
 ```
 
-## Manual installation using WordPress plugin manager
+## Manual installation from WordPress.org
 
 1. Download the zip package from the plugin's page in the
 [WordPress plugin directory](https://wordpress.org/plugins/51degrees-optimize-by-device-location/).
