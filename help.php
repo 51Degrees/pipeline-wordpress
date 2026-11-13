@@ -1,3 +1,26 @@
+<?php
+/* *********************************************************************
+ * This Original Work is copyright of 51 Degrees Mobile Experts Limited.
+ * Copyright 2026 51 Degrees Mobile Experts Limited, Davidson House,
+ * Forbury Square, Reading, Berkshire, United Kingdom RG1 3EU.
+ *
+ * This Original Work is licensed under the European Union Public Licence
+ * (EUPL) v.1.2 and is subject to its terms as set out below.
+ *
+ * If a copy of the EUPL was not distributed with this file, You can obtain
+ * one at https://opensource.org/licenses/EUPL-1.2.
+ *
+ * The 'Compatible Licences' set out in the Appendix to the EUPL (as may be
+ * amended by the European Commission) shall be deemed incompatible for
+ * the purposes of the Work and the provisions of the compatibility
+ * clause in Article 5 of the EUPL shall not apply.
+ *
+ * If using the Work as, or as part of, a network application, by
+ * including the attribution notice(s) required under Article 5 of the EUPL
+ * in the end user terms of the application under an appropriate heading,
+ * such notice(s) shall fulfill the requirements of that article.
+ * ********************************************************************* */
+
 <!--
     This Original Work is copyright of 51 Degrees Mobile Experts Limited.
     Copyright 2019 51 Degrees Mobile Experts Limited, 5 Charlotte Close,
@@ -22,7 +45,7 @@
      Universal Analytics Access-Code flow that was removed in 1.0.13,
      so we hide it until a fresh recording is available — leaving the
      stale video in would actively mislead first-time integrators.
-<script src=<?php echo esc_url("https://player.vimeo.com/api/player.js"); ?>></script>
+<script src= echo esc_url("https://player.vimeo.com/api/player.js"); ?>></script>
 <div style="padding:47.25% 0 0 0;position:relative;height:0px">
     <iframe src="https://player.vimeo.com/video/631017900?h=8e8c844804&badge=0&autopause=0&player_id=0&app_id=58479" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%;" title="51Degrees WordPress Plugin explainer"></iframe>
 </div>
@@ -67,7 +90,7 @@
             redirected to the Google consent screen.
         </p>
         <p>
-            <img src="<?php echo plugin_dir_url( __FILE__ ) . "assets/images/screenshot-1.png"?>" alt="GoogleAnalytics1">
+            <img src=" echo plugin_dir_url( __FILE__ ) . "assets/images/screenshot-1.png"?>" alt="GoogleAnalytics1">
         </p>
     </li>
 
@@ -81,7 +104,7 @@
             automatically — no codes to copy.
         </p>
         <p>
-            <img src="<?php echo plugin_dir_url( __FILE__ ) . "assets/images/screenshot-2.png"?>" alt="GoogleAnalytics2">
+            <img src=" echo plugin_dir_url( __FILE__ ) . "assets/images/screenshot-2.png"?>" alt="GoogleAnalytics2">
         </p>
     </li>
 
@@ -109,7 +132,7 @@
             yourself on the property.
         </p>
         <p>
-            <img src="<?php echo plugin_dir_url( __FILE__ ) . "assets/images/screenshot-3.png"?>" alt="GoogleAnalytics3">
+            <img src=" echo plugin_dir_url( __FILE__ ) . "assets/images/screenshot-3.png"?>" alt="GoogleAnalytics3">
         </p>
     </li>
 
@@ -124,7 +147,7 @@
             the GA4 console.
         </p>
         <p>
-            <img src="<?php echo plugin_dir_url( __FILE__ ) . "assets/images/screenshot-4.png"?>" alt="GoogleAnalytics4">
+            <img src=" echo plugin_dir_url( __FILE__ ) . "assets/images/screenshot-4.png"?>" alt="GoogleAnalytics4">
         </p>
     </li>
 </ol>
