@@ -185,6 +185,72 @@ class PmpTests extends TestCase
         self::assertStringContainsString('Alternative Button URL', $message);
     }
 
+    // -------- pmp_resolve_script_url --------
+
+    /**
+     * Calls the private composer through reflection so the address the
+     * plugin actually registers is covered without widening the class
+     * surface.
+     */
+    private function resolveScriptUrl()
+    {
+        $method = new ReflectionMethod(FiftyoneService::class, 'pmp_resolve_script_url');
+        $method->setAccessible(true);
+        return $method->invoke(null);
+    }
+
+    /**
+     * The Resource Key is a path segment and the address ends in '.js'.
+     * The loader reads its own 'src', drops any query string and any
+     * '.js' ending and appends the locale, so a query-string form would
+     * leave it with no key to carry forward.
+     */
+    public function testPmpScriptUrlPutsTheKeyInThePath()
+    {
+        self::assertEquals(
+            'https://cloud.51degrees.com/api/v4/pmp/test-key.js',
+            $this->resolveScriptUrl()
+        );
+    }
+
+    /**
+     * The old query-string form answers 404 on the current service, so
+     * guard against it coming back.
+     */
+    public function testPmpScriptUrlCarriesNoQueryString()
+    {
+        $url = $this->resolveScriptUrl();
+
+        self::assertStringNotContainsString('?', $url);
+        self::assertStringNotContainsString('resource=', $url);
+    }
+
+    /**
+     * A key with characters that are not safe in a path is escaped for a
+     * path segment, so the '/' becomes %2F rather than splitting the
+     * address into another segment.
+     */
+    public function testPmpScriptUrlEscapesTheKeyForAPathSegment()
+    {
+        $this->options[Options::RESOURCE_KEY] = 'a b/c';
+
+        self::assertEquals(
+            'https://cloud.51degrees.com/api/v4/pmp/a%20b%2Fc.js',
+            $this->resolveScriptUrl()
+        );
+    }
+
+    /**
+     * No Resource Key means no address, which is what stops the enqueue
+     * path registering the script at all.
+     */
+    public function testPmpScriptUrlIsEmptyWithoutAResourceKey()
+    {
+        $this->options[Options::RESOURCE_KEY] = '';
+
+        self::assertEquals('', $this->resolveScriptUrl());
+    }
+
     // -------- pmp_add_data_attributes --------
 
     /**

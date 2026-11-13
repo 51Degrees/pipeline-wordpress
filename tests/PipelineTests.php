@@ -105,12 +105,9 @@ class PipelineTests extends TestCase {
 
     /** Test that an invalid Resource Key surfaces the friendly cloud-rejected message and the raw SDK detail goes to the PHP error log. */
     public function testMakePipeline_InValidResourceKey() {
-        // TODO(cloud-regression 2026-05-18,
-        // https://github.com/51Degrees/cloud/issues/111): re-enable when
-        // the cloud is fixed. The cloud regressed around 2026-05-15 and
-        // now answers a malformed key like "XXXXXXXXXXXXXX" with a
-        // generic "Invalid request" that no longer echoes the key —
-        // which this test asserts ends up in the PHP error log.
+        // Skipped until the cloud service echoes a malformed resource key
+        // in its error answer again, which this test checks reaches the
+        // PHP error log.
         $this->markTestSkipped(
             'Cloud regression: response no longer echoes the invalid '
             . 'resource key — re-enable after cloud fix.'

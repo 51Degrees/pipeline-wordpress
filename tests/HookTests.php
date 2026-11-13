@@ -311,6 +311,31 @@ class HookTests extends TestCase {
         $this->assertTrue(true);
     }
 
+    /**
+     * The address registered for the PMP handle carries the Resource Key
+     * as a path segment and ends in '.js'. The loader served from that
+     * address reads its own 'src', drops any query string and any '.js'
+     * ending and appends the locale, so a query-string form leaves it
+     * with no key to carry forward and the service answers 404.
+     */
+    public function testPmpRegisteredWithKeyInThePath() {
+        $this->stagePmpEnqueueEnv([], '/about');
+
+        $registered = null;
+        Functions\expect('wp_register_script')
+            ->once()
+            ->andReturnUsing(function ($handle, $src = null) use (&$registered) {
+                $registered = $src;
+                return true;
+            });
+
+        (new FiftyoneService())->fiftyonedegrees_javascript();
+
+        $this->assertEquals(
+            'https://cloud.51degrees.com/api/v4/pmp/valid-resource-key.js',
+            $registered);
+    }
+
     public function testPmpSkippedOnAltUrlPage() {
         $this->stagePmpEnqueueEnv([], '/subscribe');
         $this->expectPmpNotRegistered();

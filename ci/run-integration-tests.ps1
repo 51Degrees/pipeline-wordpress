@@ -10,7 +10,7 @@ if (!$Keys.TestResourceKey) {
 }
 
 # The CI workflow now feeds TestResourceKey from the org secret
-# RESOURCE_KEY_CLOUD_V5_BESPOKE (a Cloud V5 bespoke key with IsCrawler +
+# _51DEGREES_RESOURCE_KEY_BESPOKE (a Cloud V5 bespoke key with IsCrawler +
 # CrawlerUsage). Selenium tests read $env:RESOURCE_KEY.
 $env:RESOURCEKEY = $Keys.TestResourceKey
 $env:RESOURCE_KEY = $Keys.TestResourceKey
@@ -90,7 +90,7 @@ try {
         # parent -d directives, so raise max_execution_time by appending to
         # the loaded php.ini directly. Last directive wins on PHP ini parse.
         $phpIni = (php -r "echo php_ini_loaded_file();").Trim()
-        Add-Content -Path $phpIni -Value "`nmax_execution_time=300"
+        Add-Content -Path $phpIni -Value "`nmax_execution_time=600"
         # Start-Process with -RedirectStandard* writes directly to disk —
         # unlike PowerShell jobs, which drop native-process stderr.
         $server = Start-Process -FilePath "php" `

@@ -194,7 +194,8 @@ require_once __DIR__ . '/includes/page-picker.php';
 </p>
 <pre><code>&lt;script&gt;
 window.onPMPCompletion = function (preference) {
-    // preference is 'standard' | 'personalized'
+    // preference is 'standard', 'personalized' or 'non-marketing'
+    // The alternative button stores 'non-marketing'.
     console.log('PMP choice:', preference);
 };
 &lt;/script&gt;</code></pre>
