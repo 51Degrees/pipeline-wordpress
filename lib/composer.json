@@ -16,6 +16,7 @@
     "require": {
         "php": ">=8.2",
         "51degrees/fiftyone.pipeline.cloudrequestengine": "4.*",
+        "51degrees/fiftyone.pipeline.did": "4.*",
         "google/apiclient": "^2.10",
         "ext-json": "*"
     },
