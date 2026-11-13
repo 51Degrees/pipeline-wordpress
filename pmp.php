@@ -202,29 +202,62 @@ window.onPMPCompletion = function (preference) {
 
 <h2><?php esc_html_e('Your Current Preference', 'fiftyonedegrees'); ?></h2>
 <p>
-    <?php esc_html_e('Locally stored PMP choice on this browser:', 'fiftyonedegrees'); ?>
-    <strong><span id="fod-pmp-current-pref"><em><?php esc_html_e('checking…', 'fiftyonedegrees'); ?></em></span></strong>
+    <?php esc_html_e('PMP keeps the choice made in this browser in two cookies on this site.', 'fiftyonedegrees'); ?>
 </p>
+<table class="form-table" role="presentation">
+    <tbody>
+        <tr>
+            <th scope="row"><?php esc_html_e('Choice', 'fiftyonedegrees'); ?> (<code>__mtm_pref</code>)</th>
+            <td><strong><span id="fod-pmp-current-pref"><em><?php esc_html_e('checking…', 'fiftyonedegrees'); ?></em></span></strong></td>
+        </tr>
+        <tr>
+            <th scope="row"><?php esc_html_e('Shared across sites', 'fiftyonedegrees'); ?> (<code>__51d_pmp_share</code>)</th>
+            <td><span id="fod-pmp-current-share"><em><?php esc_html_e('checking…', 'fiftyonedegrees'); ?></em></span></td>
+        </tr>
+    </tbody>
+</table>
 <p>
     <button type="button" class="button" id="fod-pmp-clear-pref">
         <?php esc_html_e('Clear Preference', 'fiftyonedegrees'); ?>
     </button>
 </p>
+<p class="description">
+    <?php esc_html_e('Clear Preference expires both cookies in this browser, so the popup appears again on the next visit to a public page. A choice shared across sites is also kept by the 51Degrees cloud service in a cookie on its own domain, which this page cannot clear, and PMP can take the choice from there instead of showing the popup.', 'fiftyonedegrees'); ?>
+</p>
 <script>
 (function () {
-    var display = document.getElementById('fod-pmp-current-pref');
+    var prefEl  = document.getElementById('fod-pmp-current-pref');
+    var shareEl = document.getElementById('fod-pmp-current-share');
     var btn     = document.getElementById('fod-pmp-clear-pref');
-    var STORAGE_KEY = '__51d_pmp_pref';
-    var NONE_LABEL  = <?php echo wp_json_encode(__('(none)', 'fiftyonedegrees')); ?>;
+    // The plugin sets no data-cookie-domain, so PMP writes both cookies
+    // for this host with Path=/. Expiring them takes the same path and
+    // no Domain.
+    var PREF_COOKIE  = '__mtm_pref';
+    var SHARE_COOKIE = '__51d_pmp_share';
+    var EXPIRED      = '=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    var NONE_LABEL   = <?php echo wp_json_encode(__('(none)', 'fiftyonedegrees')); ?>;
+
+    // Returns the named cookie's value, or null when it is absent.
+    // document.cookie joins its name=value pairs with '; '.
+    function readCookie(name) {
+        var pairs = document.cookie ? document.cookie.split('; ') : [];
+        for (var i = 0; i < pairs.length; i++) {
+            var eq = pairs[i].indexOf('=');
+            if (eq > 0 && pairs[i].substring(0, eq) === name) {
+                return pairs[i].substring(eq + 1);
+            }
+        }
+        return null;
+    }
 
     function render() {
-        var pref = null;
-        try { pref = localStorage.getItem(STORAGE_KEY); } catch (e) {}
-        display.textContent = pref || NONE_LABEL;
+        prefEl.textContent  = readCookie(PREF_COOKIE) || NONE_LABEL;
+        shareEl.textContent = readCookie(SHARE_COOKIE) || NONE_LABEL;
     }
 
     btn.addEventListener('click', function () {
-        try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+        document.cookie = PREF_COOKIE + EXPIRED;
+        document.cookie = SHARE_COOKIE + EXPIRED;
         render();
     });
 
