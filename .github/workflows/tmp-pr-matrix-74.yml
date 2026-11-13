@@ -1,0 +1,21 @@
+name: Temporary full build of pull request 74
+
+on:
+  push:
+    branches:
+      - 'tmp/pr-matrix-74'
+
+jobs:
+  Build:
+    uses: 51Degrees/common-ci/.github/workflows/nightly-pull-request.yml@main
+    with:
+      repo-name: pipeline-wordpress
+      org-name: 51Degrees
+      pull-request-id: 74
+      dryrun: 'true'
+      branch: rc
+      skip-compare-performance: true
+      common-ci-ref: tmp/no-macos
+    secrets:
+      token: ${{ secrets.ACCESS_TOKEN }}
+      TestResourceKey: ${{ secrets._51DEGREES_RESOURCE_KEY_BESPOKE }}
