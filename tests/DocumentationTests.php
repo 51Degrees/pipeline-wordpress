@@ -18,8 +18,6 @@
 
 require_once __DIR__ . '/../includes/fiftyone-strings.php';
 
-use Brain\Monkey;
-use Brain\Monkey\Functions;
 use Yoast\PHPUnitPolyfills\TestCases\TestCase;
 
 /**
@@ -30,18 +28,18 @@ use Yoast\PHPUnitPolyfills\TestCases\TestCase;
  */
 class DocumentationTests extends TestCase
 {
+    // get_locale is left undefined, so the strings load from the base
+    // English files. Stubbing it here would define it for every later
+    // test, and the string loader calls it whenever it exists.
     public function set_up()
     {
         parent::set_up();
-        Monkey\setUp();
-        Functions\when('get_locale')->justReturn('en_US');
         FiftyOneDegreesStrings::reset();
     }
 
     public function tear_down()
     {
         FiftyOneDegreesStrings::reset();
-        Monkey\tearDown();
         parent::tear_down();
     }
 
