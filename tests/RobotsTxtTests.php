@@ -832,7 +832,7 @@ class RobotsTxtTests extends TestCase {
     }
 
     public function testFetchFromCloudUsesEnvVarEndpoint() {
-        putenv('FOD_CLOUD_API_URL=https://custom-cloud.example.com/api/v4/');
+        putenv('_51DEGREES_CLOUD_ENDPOINT=https://custom-cloud.example.com/api/v4/');
         $this->mockOptions([
             Options::RESOURCE_KEY => 'test-key',
             Options::ROBOTS_ALLOWED_CATEGORIES => self::ALL_TEST_CATEGORIES,
@@ -853,7 +853,7 @@ class RobotsTxtTests extends TestCase {
         Functions\when('update_option')->justReturn(true);
 
         FiftyOneDegreesRobotsTxt::fetch_from_cloud();
-        putenv('FOD_CLOUD_API_URL');
+        putenv('_51DEGREES_CLOUD_ENDPOINT');
 
         $this->assertStringContainsString('custom-cloud.example.com', $capturedUrl);
     }
