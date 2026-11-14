@@ -19,6 +19,24 @@ ADMIN_USER = os.environ.get('WP_ADMIN_USER', 'admin')
 ADMIN_PASS = os.environ.get('WP_ADMIN_PASS', 'admin')
 SELENIUM_URL = os.environ.get('SELENIUM_URL', 'http://localhost:4444')
 
+_old_key_name_printed = False
+
+
+def resource_key():
+    """Return the Resource Key from _51DEGREES_RESOURCE_KEY, or from the
+    deprecated RESOURCE_KEY when that is not set or is empty, which is
+    printed once."""
+    global _old_key_name_printed
+    key = os.environ.get('_51DEGREES_RESOURCE_KEY', '')
+    if key:
+        return key
+    key = os.environ.get('RESOURCE_KEY', '')
+    if key and not _old_key_name_printed:
+        _old_key_name_printed = True
+        print('RESOURCE_KEY is deprecated. Set _51DEGREES_RESOURCE_KEY to '
+              'the same value instead.')
+    return key
+
 
 @pytest.fixture(scope='module')
 def wp_admin_session():

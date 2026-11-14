@@ -28,6 +28,34 @@ use \Brain\Monkey\Filters;
 
 class PipelineTests extends TestCase {
 
+    // Whether the deprecated name of the Resource Key has been printed.
+    private static $oldKeyNamePrinted = false;
+
+    /**
+     * The Resource Key for the tests, from _51DEGREES_RESOURCE_KEY, or from
+     * the deprecated RESOURCEKEY when that is not set or holds only the
+     * placeholder in phpunit.xml, which is printed once.
+     *
+     * @return string the key, or the placeholder if neither is set
+     */
+    private static function resourceKey() {
+        $placeholder = '!!YOUR_RESOURCE_KEY!!';
+        $key = getenv('_51DEGREES_RESOURCE_KEY');
+        if (is_string($key) && $key !== '' && $key !== $placeholder) {
+            return $key;
+        }
+        $key = getenv('RESOURCEKEY');
+        if (is_string($key) && $key !== '' && $key !== $placeholder) {
+            if (!self::$oldKeyNamePrinted) {
+                self::$oldKeyNamePrinted = true;
+                fwrite(STDERR, "RESOURCEKEY is deprecated. Set " .
+                    "_51DEGREES_RESOURCE_KEY to the same value instead.\n");
+            }
+            return $key;
+        }
+        return $placeholder;
+    }
+
     private $serverBackup;
     private $getBackup;
 
@@ -82,7 +110,7 @@ class PipelineTests extends TestCase {
         Functions\when('get_site_url')->justReturn('http://localhost/testsite');
         Functions\when('rest_url')->justReturn('http://localhost/testsite/wp-json/fiftyonedegrees/v4/json');
 
-        $resourceKey = $_ENV["RESOURCEKEY"];
+        $resourceKey = self::resourceKey();
         if ($resourceKey === "!!YOUR_RESOURCE_KEY!!") {
             $this->fail("You need to create a Resource Key at " .
             "https://51degrees.com/configure and paste it into the " .
@@ -514,7 +542,7 @@ class PipelineTests extends TestCase {
         Functions\when('get_site_url')->justReturn('http://localhost/testsite');
         Functions\when('rest_url')->justReturn('http://localhost/testsite/wp-json/fiftyonedegrees/v4/json');
 
-        $resourceKey = $_ENV["RESOURCEKEY"];
+        $resourceKey = self::resourceKey();
         if ($resourceKey === "!!YOUR_RESOURCE_KEY!!") {
             $this->fail("You need to create a Resource Key at " .
             "https://51degrees.com/configure and paste it into the " .
@@ -792,9 +820,9 @@ class PipelineTests extends TestCase {
         Functions\when('get_site_url')->justReturn('http://localhost/testsite');
         Functions\when('rest_url')->justReturn('http://localhost/testsite/wp-json/fiftyonedegrees/v4/json');
 
-        $resourceKey = $_ENV["RESOURCEKEY"];
+        $resourceKey = self::resourceKey();
         if ($resourceKey === "!!YOUR_RESOURCE_KEY!!") {
-            $this->fail("Resource Key required; set RESOURCEKEY env or .env");
+            $this->fail("Resource Key required; set _51DEGREES_RESOURCE_KEY");
         }
 
         $_SERVER['REMOTE_ADDR'] = '203.0.113.1';
@@ -821,9 +849,9 @@ class PipelineTests extends TestCase {
         Functions\when('get_site_url')->justReturn('http://localhost/testsite');
         Functions\when('rest_url')->justReturn('http://localhost/testsite/wp-json/fiftyonedegrees/v4/json');
 
-        $resourceKey = $_ENV["RESOURCEKEY"];
+        $resourceKey = self::resourceKey();
         if ($resourceKey === "!!YOUR_RESOURCE_KEY!!") {
-            $this->fail("Resource Key required; set RESOURCEKEY env or .env");
+            $this->fail("Resource Key required; set _51DEGREES_RESOURCE_KEY");
         }
 
         $_SERVER['REMOTE_ADDR'] = '203.0.113.1';
@@ -855,9 +883,9 @@ class PipelineTests extends TestCase {
         Functions\when('get_site_url')->justReturn('http://localhost/testsite');
         Functions\when('rest_url')->justReturn('http://localhost/testsite/wp-json/fiftyonedegrees/v4/json');
 
-        $resourceKey = $_ENV["RESOURCEKEY"];
+        $resourceKey = self::resourceKey();
         if ($resourceKey === "!!YOUR_RESOURCE_KEY!!") {
-            $this->fail("Resource Key required; set RESOURCEKEY env or .env");
+            $this->fail("Resource Key required; set _51DEGREES_RESOURCE_KEY");
         }
 
         $_SERVER = [];

@@ -143,8 +143,9 @@ PMP does not read that attribute, so the value has no effect today.
 
 The loader address is built as
 `{base}/api/v4/pmp/{resource-key}.js`, where `{base}` comes
-from the same `FOD_CLOUD_API_URL` env var the rest of the plugin
-honors (robots, suspicious, cloud metadata) and defaults to
+from the same `_51DEGREES_CLOUD_ENDPOINT` env var the rest of the plugin
+honors (robots, suspicious, cloud metadata), or from the deprecated
+`FOD_CLOUD_API_URL` when that is not set, and defaults to
 `https://cloud.51degrees.com`. Point it at a staging or local
 server when running the cloud yourself, because production
 deployments need no configuration.

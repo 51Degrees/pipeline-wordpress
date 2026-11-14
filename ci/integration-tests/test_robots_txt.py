@@ -13,9 +13,9 @@ import uuid
 import pytest
 import requests
 
-from conftest import WORDPRESS_URL
+from conftest import WORDPRESS_URL, resource_key
 
-RESOURCE_KEY = os.environ.get('RESOURCE_KEY', '')
+RESOURCE_KEY = resource_key()
 GOOGLEBOT_UA = 'Googlebot/2.1 (+http://www.google.com/bot.html)'
 ROBOTS_GROUP_KEY = 'fiftyonedegrees_options_robots'
 ALL_CATEGORIES = [
@@ -26,7 +26,7 @@ ALL_CATEGORIES = [
 pytestmark = pytest.mark.skipif(
     not RESOURCE_KEY,
     reason=(
-        'RESOURCE_KEY environment variable is required. '
+        '_51DEGREES_RESOURCE_KEY environment variable is required. '
         'Set it to a 51Degrees key that includes IsCrawler and '
         'CrawlerUsage properties (Cloud V5 bespoke).'
     ),

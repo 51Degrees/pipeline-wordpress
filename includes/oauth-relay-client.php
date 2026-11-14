@@ -48,7 +48,7 @@ class FiftyOneDegreesOauthRelayClient
     /**
      * The relay origin, e.g. https://cloud.51degrees.com. The relay is part of
      * the cloud service and in production shares a host with the device-
-     * detection API, so the default is taken from FOD_CLOUD_API_URL (same
+     * detection API, so the default is taken from _51DEGREES_CLOUD_ENDPOINT (same
      * source as cloud-metadata). FOD_OAUTH_RELAY_URL overrides only this base
      * for local development where the relay is rolled to a staging host
      * (e.g. an Azure app service) ahead of the rest of the v4 API.

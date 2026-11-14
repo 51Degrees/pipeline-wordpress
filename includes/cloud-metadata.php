@@ -9,8 +9,13 @@ require_once __DIR__ . '/wp-http-client.php';
 
 class FiftyOneDegreesCloudMetadata {
 
+    // Whether reading the deprecated endpoint name has been logged. PHP
+    // clears static state when a request ends, so the message is logged
+    // once in each request that reads the address.
+    private static $deprecated_endpoint_logged = false;
+
     public static function get_cloud_host_url(): string {
-        $apiUrl = getenv(Constants::FOD_CLOUD_API_URL);
+        $apiUrl = self::get_cloud_endpoint();
         if (!empty($apiUrl)) {
             $parsed = parse_url(rtrim($apiUrl, '/'));
             $scheme = $parsed['scheme'] ?? 'https';
@@ -19,6 +24,32 @@ class FiftyOneDegreesCloudMetadata {
             return $scheme . '://' . $host . $port;
         }
         return 'https://cloud.51degrees.com';
+    }
+
+    /**
+     * The cloud endpoint set in the environment. _51DEGREES_CLOUD_ENDPOINT is
+     * read first, and the deprecated FOD_CLOUD_API_URL only when that is not
+     * set or is empty, which is logged once per request.
+     *
+     * @return string the endpoint, or an empty string if neither is set
+     */
+    private static function get_cloud_endpoint(): string {
+        $url = getenv(Constants::CLOUD_ENDPOINT_VARIABLE);
+        if (is_string($url) && $url !== '') {
+            return $url;
+        }
+        $url = getenv(Constants::FOD_CLOUD_API_URL);
+        if (!is_string($url) || $url === '') {
+            return '';
+        }
+        if (!self::$deprecated_endpoint_logged) {
+            self::$deprecated_endpoint_logged = true;
+            error_log(sprintf(
+                Constants::MESSAGE_ENDPOINT_VARIABLE_DEPRECATED,
+                Constants::FOD_CLOUD_API_URL,
+                Constants::CLOUD_ENDPOINT_VARIABLE));
+        }
+        return $url;
     }
 
     protected static function do_cloud_request(string $url): string {
