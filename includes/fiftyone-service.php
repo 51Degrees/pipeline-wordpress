@@ -836,7 +836,7 @@ class FiftyoneService {
      * the key is now a path segment rather than a query value.
      *
      * The base URL comes from FiftyOneDegreesCloudMetadata, which honours
-     * the FOD_CLOUD_API_URL env var used across the plugin (robots,
+     * the _51DEGREES_CLOUD_ENDPOINT env var used across the plugin (robots,
      * suspicious, cloud metadata) and falls back to
      * https://cloud.51degrees.com when unset.
      *
