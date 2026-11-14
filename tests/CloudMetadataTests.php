@@ -64,10 +64,13 @@ class CloudMetadataTests extends TestCase {
      * the error log to a new file, whose path is returned.
      */
     private function newErrorLog() {
-        $logged = new ReflectionProperty(
-            'FiftyOneDegreesCloudMetadata', 'deprecated_endpoint_logged');
-        $logged->setAccessible(true);
-        $logged->setValue(null, false);
+        if (property_exists(
+            'FiftyOneDegreesCloudMetadata', 'deprecated_endpoint_logged')) {
+            $logged = new ReflectionProperty(
+                'FiftyOneDegreesCloudMetadata', 'deprecated_endpoint_logged');
+            $logged->setAccessible(true);
+            $logged->setValue(null, false);
+        }
         $log = tempnam(sys_get_temp_dir(), 'fiftyone-log');
         ini_set('error_log', $log);
         return $log;
