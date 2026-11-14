@@ -64,14 +64,14 @@ class OAuthStartHandlerTests extends TestCase
         TestableOauthStart::reset_state();
         $this->call_log = [];
 
-        // The relay base is derived from the cloud API host (FOD_CLOUD_API_URL),
+        // The relay base is derived from the cloud API host (_51DEGREES_CLOUD_ENDPOINT),
         // so point it at a test host the URL assertions can match.
-        putenv('FOD_CLOUD_API_URL=https://relay.51degrees.example/api/v4/');
+        putenv('_51DEGREES_CLOUD_ENDPOINT=https://relay.51degrees.example/api/v4/');
     }
 
     public function tear_down()
     {
-        putenv('FOD_CLOUD_API_URL');
+        putenv('_51DEGREES_CLOUD_ENDPOINT');
         TestableOauthStart::reset_state();
         Brain\Monkey\tearDown();
         parent::tear_down();
