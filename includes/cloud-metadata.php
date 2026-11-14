@@ -9,7 +9,9 @@ require_once __DIR__ . '/wp-http-client.php';
 
 class FiftyOneDegreesCloudMetadata {
 
-    // Whether reading the deprecated endpoint name has been logged.
+    // Whether reading the deprecated endpoint name has been logged. PHP
+    // clears static state when a request ends, so the message is logged
+    // once in each request that reads the address.
     private static $deprecated_endpoint_logged = false;
 
     public static function get_cloud_host_url(): string {
@@ -27,7 +29,7 @@ class FiftyOneDegreesCloudMetadata {
     /**
      * The cloud endpoint set in the environment. _51DEGREES_CLOUD_ENDPOINT is
      * read first, and the deprecated FOD_CLOUD_API_URL only when that is not
-     * set or is empty, which is logged once.
+     * set or is empty, which is logged once per request.
      *
      * @return string the endpoint, or an empty string if neither is set
      */
