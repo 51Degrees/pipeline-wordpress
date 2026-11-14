@@ -1,4 +1,4 @@
-# Selenium Tests — 51Degrees WordPress Plugin
+# Selenium Tests for the 51Degrees WordPress Plugin
 
 End-to-end tests verifying plugin behaviour from a browser / HTTP-client perspective.
 
@@ -32,7 +32,7 @@ All 5 permalink types are tested: plain, day_and_name, month_and_name, numeric, 
 ### Robots.txt enforcement tests
 
 ```bash
-RESOURCE_KEY=<your-key> python -m pytest test_robots_txt.py -v
+_51DEGREES_RESOURCE_KEY=<your-key> python -m pytest test_robots_txt.py -v
 ```
 
 These tests use `requests` directly (no browser needed) to spoof
@@ -54,4 +54,4 @@ Verifies five enforcement scenarios:
 | `WP_ADMIN_USER`      | `admin`                    | WordPress admin username                                     |
 | `WP_ADMIN_PASS`      | `admin`                    | WordPress admin password                                     |
 | `SELENIUM_URL`       | `http://localhost:4444`    | Selenium WebDriver URL (permalink tests only)                |
-| `RESOURCE_KEY`       | *(required for robots.txt)*| 51Degrees key — must include the **IsCrawler** property      |
+| `_51DEGREES_RESOURCE_KEY` | *(required for robots.txt)*| 51Degrees key, which must include the **IsCrawler** property. The deprecated `RESOURCE_KEY` is read when it is not set. |
