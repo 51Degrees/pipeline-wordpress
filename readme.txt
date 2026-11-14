@@ -68,7 +68,7 @@ For instructions on how to install the plugin manually or by uploading a zip fil
 = After activation =
 
 1. Visit the new `51Degrees` Settings menu.
-2. To start using this plugin, you will need to create a `Resource Key`. This enables access to the data you need via the 51Degrees cloud service. You can create a `Resource Key` for free, using the [configurator](https://configure.51degrees.com/?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.txt&utm_term=after-activation) to select the properties you want.
+2. To start using this plugin, you will need to create a `Resource Key`. This enables access to the data you need via the 51Degrees cloud service. You can create a `Resource Key` for free, using the [configuration page](https://51degrees.com/configure/?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.txt&utm_term=after-activation) to select the properties you want.
 
 For a demo video on how to use our configurator, [click here](https://51degrees.com/documentation/_concepts__configurator.html?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.txt&utm_term=after-activation).
 
@@ -98,7 +98,7 @@ The OAuth redirect is single-site only in this release. Multisite OAuth support 
 
 = Is the 51Degrees plugin free? =
 
-The 51Degrees plugin is free and open source. However Our [Cloud Configurator](https://configure.51degrees.com/?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.txt&utm_term=is-the-51degrees-plugin-free) contains both FREE and PAID properties. The properties you will need to pay for are shown with a dollar icon. You can buy what you need on our [Pricing page](https://51degrees.com/pricing?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.txt&utm_term=is-the-51degrees-plugin-free).
+The 51Degrees plugin is free and open source. However Our [configuration page](https://51degrees.com/configure/?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.txt&utm_term=is-the-51degrees-plugin-free) contains both FREE and PAID properties. The properties you will need to pay for are shown with a dollar icon. You can buy what you need on our [Pricing page](https://51degrees.com/pricing?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.txt&utm_term=is-the-51degrees-plugin-free).
 
 = What happens if I already use another plugin to integrate Google Analytics? =
 
