@@ -3,7 +3,7 @@
   bootstrap="tests/bootstrap.php"
   defaultTestSuite="Unit">
   <php>
-    <env name="RESOURCEKEY" value="!!YOUR_RESOURCE_KEY!!"/>
+    <env name="_51DEGREES_RESOURCE_KEY" value="!!YOUR_RESOURCE_KEY!!"/>
     <const name="FIFTYONEDEGREES_PLUGIN_DIR" value= ""/>
     <const name="FIFTYONEDEGREES_PLUGIN_URL" value="http://example.test/plugin/"/>
     <const name="FIFTYONEDEGREES_CUSTOM_DIMENSION_SCOPE" value= "HIT"/>

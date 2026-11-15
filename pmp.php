@@ -57,7 +57,7 @@ require_once __DIR__ . '/includes/page-picker.php';
                               class="large-text code"
                               rows="4"><?php echo esc_textarea(FiftyoneService::pmp_tcf_vendor_string()); ?></textarea>
                     <p class="description">
-                        <?php esc_html_e('Base IAB TCF v2 consent string. It carries the static half of the TC payload — vendor consents and legitimate-interest signals — and PMP overlays the purpose consents on top of it at runtime, derived from the visitor\'s Standard or Personalized choice. The combined string is exposed via __tcfapi to downstream ad tech (Prebid.js, ad servers, analytics). The built-in default consents every vendor on IAB Global Vendor List v158; override here to restrict the allowed vendor set or to upgrade the GVL version. Generate custom strings with TCF Tools.', 'fiftyonedegrees'); ?>
+                        <?php esc_html_e('An IAB TCF v2 consent string carrying the vendor consents your site signals, generated with a TCF tool. It must hold a Core TC String followed by a Disclosed Vendors segment, joined by a dot, as version 2.3 and later of the TCF consent string format require, and the plugin refuses to save anything else. For a Standard or Personalized choice, PMP rewrites the purpose consents, the dates, the CMP ID and the policy and vendor list versions, keeps every other field as entered, and gives the result to scripts on the page through __tcfapi. There is no default. With the box empty the plugin gives PMP no string, and PMP reports an empty TC string.', 'fiftyonedegrees'); ?>
                     </p>
                 </td>
             </tr>
@@ -190,7 +190,7 @@ require_once __DIR__ . '/includes/page-picker.php';
 <p>
     <?php esc_html_e('When a visitor makes a choice, the widget invokes', 'fiftyonedegrees'); ?>
     <code>window.onPMPCompletion(preference)</code>.
-    <?php esc_html_e("The plugin provides a no-op default. Override it on your page to bootstrap anything that depends on the visitor's preference — analytics, Prebid.js, lazy ad stacks, etc. PMP itself acts as the CMP via the TCF API, so a separate consent manager isn't needed.", 'fiftyonedegrees'); ?>
+    <?php esc_html_e("The plugin provides a default that does nothing. Override it on your page to start anything that depends on the visitor's preference, such as analytics, Prebid.js or ad stacks loaded later. PMP also gives scripts on the page the TCF API, __tcfapi, with a TC string built from the TCF Vendor String above. On a page where another consent management platform has already defined __tcfapi, PMP writes a console warning and shows nothing.", 'fiftyonedegrees'); ?>
 </p>
 <pre><code>&lt;script&gt;
 window.onPMPCompletion = function (preference) {

@@ -22,6 +22,8 @@ class CloudMetadataTests extends TestCase {
     }
 
     public function tear_down() {
+        putenv('_51DEGREES_CLOUD_ENDPOINT');
+        putenv('FOD_CLOUD_API_URL');
         $_SERVER = $this->originalServer;
         Patchwork\undoAll();
         Brain\Monkey\tearDown();
@@ -55,6 +57,63 @@ class CloudMetadataTests extends TestCase {
                 'Url' => 'Lite',
             ],
         ];
+    }
+
+    /**
+     * Clears the record that the deprecated name has been logged, and sends
+     * the error log to a new file, whose path is returned.
+     */
+    private function newErrorLog() {
+        if (property_exists(
+            'FiftyOneDegreesCloudMetadata', 'deprecated_endpoint_logged')) {
+            $logged = new ReflectionProperty(
+                'FiftyOneDegreesCloudMetadata', 'deprecated_endpoint_logged');
+            $logged->setAccessible(true);
+            $logged->setValue(null, false);
+        }
+        $log = tempnam(sys_get_temp_dir(), 'fiftyone-log');
+        ini_set('error_log', $log);
+        return $log;
+    }
+
+    public function testCloudHostUrlDefault() {
+        putenv('_51DEGREES_CLOUD_ENDPOINT');
+        putenv('FOD_CLOUD_API_URL');
+        $this->assertSame('https://cloud.51degrees.com',
+            FiftyOneDegreesCloudMetadata::get_cloud_host_url());
+    }
+
+    public function testCloudHostUrlReadsTheEndpointVariable() {
+        $log = $this->newErrorLog();
+        putenv('_51DEGREES_CLOUD_ENDPOINT=http://new.example.com:8443/api/v4/');
+        $this->assertSame('http://new.example.com:8443',
+            FiftyOneDegreesCloudMetadata::get_cloud_host_url());
+        $this->assertStringNotContainsString('FOD_CLOUD_API_URL',
+            file_get_contents($log));
+    }
+
+    public function testCloudHostUrlPrefersTheEndpointVariable() {
+        $log = $this->newErrorLog();
+        putenv('_51DEGREES_CLOUD_ENDPOINT=https://new.example.com/api/v4/');
+        putenv('FOD_CLOUD_API_URL=https://old.example.com/api/v4/');
+        $this->assertSame('https://new.example.com',
+            FiftyOneDegreesCloudMetadata::get_cloud_host_url());
+        $this->assertStringNotContainsString('FOD_CLOUD_API_URL',
+            file_get_contents($log));
+    }
+
+    public function testCloudHostUrlReadsTheDeprecatedVariableOnce() {
+        $log = $this->newErrorLog();
+        putenv('_51DEGREES_CLOUD_ENDPOINT=');
+        putenv('FOD_CLOUD_API_URL=https://old.example.com/api/v4/');
+        $this->assertSame('https://old.example.com',
+            FiftyOneDegreesCloudMetadata::get_cloud_host_url());
+        $this->assertSame('https://old.example.com',
+            FiftyOneDegreesCloudMetadata::get_cloud_host_url());
+        $text = file_get_contents($log);
+        $this->assertSame(1, substr_count($text, 'FOD_CLOUD_API_URL'),
+            'The deprecated name is logged once: ' . $text);
+        $this->assertStringContainsString('_51DEGREES_CLOUD_ENDPOINT', $text);
     }
 
     public function testFetchCrawlerUsageValuesReturnsMap() {

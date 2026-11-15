@@ -613,18 +613,42 @@ class SuspiciousActivityTests extends TestCase
     /**
      * Test that a HashedEmail identifier, which sets bit 7 of the flags
      * and carries a 32-byte value like the Probabilistic type, gives the
-     * same 64-character key.
+     * same 64-character key. Bit 0 is the non-marketing usage, which
+     * every identifier the cloud creates carries.
      */
     public function testIdentityHashedEmailTypeReadsValue()
     {
         $identity = str_repeat("\x0c", 32);
         $token = $this->buildEnvelope(
-            $this->buildPayload($identity, 0x80, $this->buildContext(19))
+            $this->buildPayload($identity, 0x81, $this->buildContext(19))
         );
 
         $result = $this->identityFromToken($token);
         self::assertEquals(bin2hex($identity), $result);
         self::assertEquals(64, strlen($result));
+    }
+
+    /**
+     * Test that a payload whose usage bits are all clear falls back to
+     * the IP and User-Agent hash. The 51Did specification says a reader
+     * must refuse such a payload, as the cloud never creates one.
+     */
+    public function testIdentityNoUsageFallsBackToIpUa()
+    {
+        foreach ([0x00, 0x40, 0x80] as $flags) {
+            $token = $this->buildEnvelope(
+                $this->buildPayload(str_repeat("\x5a", 32), $flags)
+            );
+
+            self::assertNull(
+                SuspiciousActivity::extract_owid_identifier($token),
+                sprintf('flags 0x%02X', $flags)
+            );
+            self::assertEquals(
+                $this->ipUaFallback(),
+                $this->identityFromToken($token)
+            );
+        }
     }
 
     /**
@@ -779,6 +803,102 @@ class SuspiciousActivityTests extends TestCase
         self::assertNull(SuspiciousActivity::extract_owid_identifier(null));
         self::assertNull(SuspiciousActivity::extract_owid_identifier(42));
         self::assertNull(SuspiciousActivity::extract_owid_identifier('===='));
+    }
+
+    /**
+     * The identity used by the alphabet tests, chosen so that its
+     * standard base64 encoding carries both of the characters the two
+     * alphabets differ on, and paired with a context section so the
+     * envelope length is not a multiple of three and the standard form
+     * ends in padding.
+     */
+    private function alphabetIdentity()
+    {
+        return str_repeat("\xfb\xff", 16);
+    }
+
+    /**
+     * Test that a token in the standard alphabet with padding, which is
+     * how the cloud issues a 51Did, reads to the hex of the value. The
+     * assertions on the token itself prove the form under test really
+     * is the standard one, so the test cannot pass by accident on a
+     * token that happens to contain neither distinguishing character.
+     */
+    public function testIdentityStandardAlphabetWithPaddingReadsValue()
+    {
+        $identity = $this->alphabetIdentity();
+        $token = $this->buildOwid($identity, null, 3, $this->buildContext(19));
+
+        self::assertStringContainsString('+', $token);
+        self::assertStringContainsString('/', $token);
+        self::assertStringEndsWith('=', $token);
+
+        self::assertEquals(
+            bin2hex($identity),
+            SuspiciousActivity::extract_owid_identifier($token)
+        );
+        self::assertEquals(bin2hex($identity), $this->identityFromToken($token));
+    }
+
+    /**
+     * Test that the same 51Did in the URL-safe alphabet without padding,
+     * which is how a page puts one in a link, reads to the same key as
+     * the standard form. The assertions on the token prove the two forms
+     * differ before the values are compared.
+     */
+    public function testIdentityUrlSafeAlphabetWithoutPaddingReadsValue()
+    {
+        $identity = $this->alphabetIdentity();
+        $standard = $this->buildOwid($identity, null, 3, $this->buildContext(19));
+        $urlSafe = rtrim(strtr($standard, '+/', '-_'), '=');
+
+        self::assertNotEquals($standard, $urlSafe);
+        self::assertStringContainsString('-', $urlSafe);
+        self::assertStringContainsString('_', $urlSafe);
+        self::assertStringNotContainsString('=', $urlSafe);
+
+        self::assertEquals(
+            bin2hex($identity),
+            SuspiciousActivity::extract_owid_identifier($urlSafe)
+        );
+        self::assertEquals(
+            SuspiciousActivity::extract_owid_identifier($standard),
+            SuspiciousActivity::extract_owid_identifier($urlSafe)
+        );
+        self::assertEquals(bin2hex($identity), $this->identityFromToken($urlSafe));
+    }
+
+    /**
+     * Test that malformed tokens of several shapes come back as null
+     * through the package, with no exception escaping to the caller,
+     * which runs on every front-end request and must always get a key.
+     * PHPUnit reports an escaping exception as an error, so each case
+     * reaching its assertion is the proof that none escaped.
+     */
+    public function testIdentityMalformedTokensReturnNullThroughPackage()
+    {
+        $valid = $this->buildOwid(str_repeat("\x3c", 32));
+        $cases = [
+            'characters outside both alphabets' => '%%% not base64 %%%',
+            'base64 of a lone version byte' => base64_encode("\x03"),
+            'base64 of bytes that are no envelope'
+                => base64_encode(str_repeat("\xff", 200)),
+            'a version byte the package does not read'
+                => $this->buildOwid(str_repeat("\x3c", 32), null, 4),
+            'an envelope missing its last byte'
+                => base64_encode(substr(base64_decode($valid), 0, -1)),
+            'the array PHP builds from a repeated query parameter'
+                => [$valid, $valid],
+            'a boolean' => true,
+        ];
+
+        foreach ($cases as $name => $token) {
+            self::assertNull(
+                SuspiciousActivity::extract_owid_identifier($token),
+                $name
+            );
+        }
+        self::assertNotNull(SuspiciousActivity::extract_owid_identifier($valid));
     }
 
     /**
