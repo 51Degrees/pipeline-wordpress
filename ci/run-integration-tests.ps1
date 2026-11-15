@@ -3,17 +3,21 @@ param (
     [Parameter(Mandatory)][hashtable]$Keys
 )
 $ErrorActionPreference = "Stop"
+# A non-zero exit from a native command (php, wp-cli, zip or pip) stops the
+# script, as $ErrorActionPreference covers only cmdlets. Where a non-zero exit
+# is a result rather than a failure, the setting is turned off in its own
+# scope with & { $PSNativeCommandUseErrorActionPreference = $false; ... }.
+$PSNativeCommandUseErrorActionPreference = $true
 
 if (!$Keys.TestResourceKey) {
     Write-Host "::warning file=$($MyInvocation.ScriptName),line=$($MyInvocation.ScriptLineNumber),title=No Resource Key::No resource key was provided, so integration tests will not run."
     return
 }
 
-# The CI workflow now feeds TestResourceKey from the org secret
+# The CI workflow feeds TestResourceKey from the org secret
 # _51DEGREES_RESOURCE_KEY_BESPOKE (a Cloud V5 bespoke key with IsCrawler +
-# CrawlerUsage). Selenium tests read $env:RESOURCE_KEY.
-$env:RESOURCEKEY = $Keys.TestResourceKey
-$env:RESOURCE_KEY = $Keys.TestResourceKey
+# CrawlerUsage). The PHP and Selenium tests read _51DEGREES_RESOURCE_KEY.
+$env:_51DEGREES_RESOURCE_KEY = $Keys.TestResourceKey
 ./php/run-integration-tests.ps1 -RepoName:$RepoName
 
 $passed = 0
@@ -51,12 +55,24 @@ Write-Host "=== Starting the database"
 sudo systemctl start mysql.service
 
 Write-Host "=== Installing wp-cli"
-Invoke-WebRequest -OutFile 'wp-cli.phar' -Uri 'https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar'
+Invoke-WebRequest -OutFile 'wp-cli.phar' -Uri 'https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar' `
+    -MaximumRetryCount 3 -RetryIntervalSec 10
 $wp = "$PWD/wp-cli.phar"
 php $wp --info
 
 Write-Host "=== Downloading WordPress"
-php $wp core download --path=wp
+# A failed download is tried again, as a network error on the runner is the
+# usual cause, and --force lets a retry overwrite a partly downloaded wp/.
+for ($attempt = 1; ; ++$attempt) {
+    try {
+        php $wp core download --path=wp --force
+        break
+    } catch {
+        if ($attempt -ge 3) { throw }
+        Write-Host "WordPress download attempt $attempt failed, trying again in 10 seconds: $_"
+        Start-Sleep 10
+    }
+}
 Push-Location wp
 try {
     Write-Host "=== Setting up the database"
@@ -71,7 +87,7 @@ try {
 
     Write-Host "=== Installing the plugin"
     php $wp plugin install --activate $plugin
-    php $wp option update fiftyonedegrees_resource_key $env:RESOURCE_KEY
+    php $wp option update fiftyonedegrees_resource_key $Keys.TestResourceKey
 
     [version]$phpVersion = (-split (php --version))[1]
 
@@ -91,7 +107,7 @@ try {
         # the loaded php.ini directly. Last directive wins on PHP ini parse.
         $phpIni = (php -r "echo php_ini_loaded_file();").Trim()
         Add-Content -Path $phpIni -Value "`nmax_execution_time=600"
-        # Start-Process with -RedirectStandard* writes directly to disk —
+        # Start-Process with -RedirectStandard* writes straight to disk,
         # unlike PowerShell jobs, which drop native-process stderr.
         $server = Start-Process -FilePath "php" `
             -ArgumentList @("$wp", "server") `
@@ -128,7 +144,11 @@ try {
         Write-Host "=== Running Selenium tests"
         Push-Location "$PSScriptRoot/integration-tests"
         try {
-            python -m pytest || $(++$failed)
+            # A pytest failure is a test result, not a script error. The
+            # counter is raised outside the block, as inside & { } it would
+            # change only a local copy.
+            & { $PSNativeCommandUseErrorActionPreference = $false; python -m pytest }
+            if ($LASTEXITCODE -ne 0) { ++$failed }
         } finally {
             Pop-Location
         }

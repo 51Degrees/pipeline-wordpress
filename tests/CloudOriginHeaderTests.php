@@ -146,11 +146,11 @@ class CloudOriginHeaderTests extends TestCase {
 
     /**
      * The user-facing "cloud rejected" error must name the actual cloud host
-     * being contacted (derived from FOD_CLOUD_API_URL), so a domain/host
+     * being contacted (derived from _51DEGREES_CLOUD_ENDPOINT), so a domain/host
      * mismatch is diagnosable instead of an opaque generic message.
      */
     public function testMakePipeline_ErrorNamesCloudHost() {
-        putenv('FOD_CLOUD_API_URL=https://relay.example.com/api/v4/');
+        putenv('_51DEGREES_CLOUD_ENDPOINT=https://relay.example.com/api/v4/');
         Functions\when('home_url')->justReturn('https://wp.example.com');
         Functions\when('rest_url')->justReturn('https://wp.example.com/wp-json/fiftyonedegrees/v4/json');
 
@@ -163,7 +163,7 @@ class CloudOriginHeaderTests extends TestCase {
 
         $result = Pipeline::make_pipeline('TEST_KEY');
 
-        putenv('FOD_CLOUD_API_URL');
+        putenv('_51DEGREES_CLOUD_ENDPOINT');
 
         $this->assertStringContainsString('relay.example.com', $result['error']);
     }

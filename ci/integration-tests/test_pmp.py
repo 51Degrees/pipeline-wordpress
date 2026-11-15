@@ -5,9 +5,9 @@ on public pages, and the inline ``window.onPMPCompletion`` no-op default
 that publisher code can override to react to the visitor's choice.
 Browser-flow assertions (popup visibility, __tcfapi state) need a
 running PMP cloud at ``PMP_CLOUD_URL`` and skip if it is unreachable.
-The plugin does not set cookies and does not persist the preference
-server-side; the PMP widget bundle stores it in
-``localStorage['__51d_pmp_pref']``.
+The plugin's PHP sets no cookies and keeps no preference on the server.
+PMP keeps the visitor's choice in the ``__mtm_pref`` cookie and records
+whether it is shared across sites in the ``__51d_pmp_share`` cookie.
 """
 
 import os
@@ -17,7 +17,7 @@ import pytest
 import requests
 from selenium.webdriver.support.ui import WebDriverWait
 
-from conftest import WORDPRESS_URL
+from conftest import ADMIN_PASS, ADMIN_USER, WORDPRESS_URL
 
 PMP_CLOUD_URL = os.environ.get('PMP_CLOUD_URL', 'https://localhost:5001')
 PMP_REQUIRED_FIELDS = {
@@ -25,6 +25,11 @@ PMP_REQUIRED_FIELDS = {
     'fiftyonedegrees_pmp_alt_label':       'Pay',
     'fiftyonedegrees_pmp_alt_url':         'https://example.com',
 }
+# The example TC string in the IAB TCF consent string format, being a Core
+# TC String, a Disclosed Vendors segment and a Publisher TC segment, and
+# its Core TC String alone, which the plugin refuses to save.
+PMP_TCF_CORE = 'CQSbk4AQSbk4ANwAAAENAwCgAAAAAAAAAAYgACPAAAAA'
+PMP_TCF_VENDOR_STRING = PMP_TCF_CORE + '.IDKQA4AAgAKAGQAygAAA.YAAAAAAAAAAA'
 
 
 def _get_admin_nonce(session, tab):
@@ -145,9 +150,73 @@ class TestScriptTagOnFrontend:
         assert f'data-brand-terms-url="{PMP_REQUIRED_FIELDS["fiftyonedegrees_pmp_brand_terms_url"]}"' in tag
         # TCF Vendor ID is hardcoded to 51 (randomized rotation lands later).
         assert 'data-tcf-vendor-id="51"' in tag
-        # TCF Vendor String always present: either user value or the built-in default.
-        assert 'data-tcf-vendor="' in tag
+        # The TCF Vendor String was saved empty, so the tag carries none.
+        assert 'data-tcf-vendor="' not in tag
         assert 'data-action-url=' in tag
+
+    def test_tcf_vendor_string_reaches_the_tag(self, wp_admin_session):
+        save_pmp_settings(
+            wp_admin_session,
+            fiftyonedegrees_pmp_tcf_vendor_string=PMP_TCF_VENDOR_STRING,
+        )
+
+        resp = requests.get(WORDPRESS_URL)
+        assert resp.status_code == 200
+
+        m = re.search(
+            r'<script\b[^>]*\bid="fiftyonedegrees-pmp-js"[^>]*>',
+            resp.text,
+        )
+        assert m, 'PMP script tag was not rendered'
+        assert f'data-tcf-vendor="{PMP_TCF_VENDOR_STRING}"' in m.group(0)
+
+    def test_tcf_vendor_string_box_starts_empty(self, wp_admin_session):
+        save_pmp_settings(wp_admin_session)
+
+        _, html = _get_admin_nonce(wp_admin_session, 'pmp')
+
+        m = re.search(
+            r'<textarea name="fiftyonedegrees_pmp_tcf_vendor_string"'
+            r'[^>]*>(.*?)</textarea>',
+            html,
+            re.DOTALL,
+        )
+        assert m, 'TCF Vendor String box not present'
+        assert m.group(1).strip() == '', (
+            'TCF Vendor String box is not empty when the option is empty'
+        )
+
+    def test_tcf_vendor_string_without_disclosed_vendors_is_refused(
+        self, wp_admin_session
+    ):
+        save_pmp_settings(
+            wp_admin_session,
+            fiftyonedegrees_pmp_tcf_vendor_string=PMP_TCF_VENDOR_STRING,
+        )
+        save_pmp_settings(
+            wp_admin_session,
+            fiftyonedegrees_pmp_tcf_vendor_string=PMP_TCF_CORE,
+        )
+
+        # WordPress shows the save's settings errors on the page it
+        # redirects to.
+        tab_url = WORDPRESS_URL.rstrip('/') + (
+            '/wp-admin/options-general.php?page=51Degrees&tab=pmp'
+            '&settings-updated=true'
+        )
+        html = wp_admin_session.get(tab_url).text
+        assert 'setting-error-pmp_tcf_vendor_string_refused' in html, (
+            'No settings error for a string without Disclosed Vendors'
+        )
+
+        # The refused value is not stored, so the earlier string stays.
+        resp = requests.get(WORDPRESS_URL)
+        m = re.search(
+            r'<script\b[^>]*\bid="fiftyonedegrees-pmp-js"[^>]*>',
+            resp.text,
+        )
+        assert m, 'PMP script tag was not rendered'
+        assert f'data-tcf-vendor="{PMP_TCF_VENDOR_STRING}"' in m.group(0)
 
     def test_script_absent_when_disabled(self, wp_admin_session):
         disable_pmp(wp_admin_session)
@@ -268,3 +337,56 @@ class TestBrowserFlow:
                 'return new Promise(r => __tcfapi("ping", 2, p => r(p.cmpStatus)));'
             ) == 'loaded'
         )
+
+
+def _browser_login(browser):
+    """Log the browser in to wp-admin and wait for the dashboard."""
+    base = WORDPRESS_URL.rstrip('/')
+    browser.get(base + '/wp-login.php')
+    browser.delete_all_cookies()
+    # Load the form again so WordPress sets its test cookie, which the
+    # login checks for.
+    browser.get(base + '/wp-login.php')
+    browser.find_element('id', 'user_login').send_keys(ADMIN_USER)
+    browser.find_element('id', 'user_pass').send_keys(ADMIN_PASS)
+    browser.find_element('id', 'wp-submit').click()
+    WebDriverWait(browser, 30).until(
+        lambda d: '/wp-admin' in d.current_url
+        and '/wp-login.php' not in d.current_url
+    )
+
+
+class TestCurrentPreferencePanel:
+    """The PMP tab shows the cookies PMP keeps the choice in, and Clear
+    Preference expires both of them. Needs no PMP cloud, because the
+    test writes the cookies the way PMP does, for this host with
+    ``Path=/``."""
+
+    TAB = '/wp-admin/options-general.php?page=51Degrees&tab=pmp'
+
+    @staticmethod
+    def _text(browser, element_id):
+        return browser.find_element('id', element_id).text
+
+    def test_panel_reads_and_clears_the_cookies(self, browser):
+        _browser_login(browser)
+        browser.get(WORDPRESS_URL.rstrip('/') + self.TAB)
+        browser.execute_script(
+            "document.cookie = '__mtm_pref=personalized; Path=/';"
+            "document.cookie = '__51d_pmp_share=shared; Path=/';"
+        )
+        browser.refresh()
+
+        WebDriverWait(browser, 30).until(
+            lambda d: self._text(d, 'fod-pmp-current-pref') == 'personalized'
+        )
+        assert self._text(browser, 'fod-pmp-current-share') == 'shared'
+
+        browser.find_element('id', 'fod-pmp-clear-pref').click()
+
+        WebDriverWait(browser, 30).until(
+            lambda d: self._text(d, 'fod-pmp-current-pref') == '(none)'
+        )
+        assert self._text(browser, 'fod-pmp-current-share') == '(none)'
+        assert browser.get_cookie('__mtm_pref') is None
+        assert browser.get_cookie('__51d_pmp_share') is None

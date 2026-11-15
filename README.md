@@ -18,7 +18,7 @@ To install a package built with the manual GitHub installation steps below:
 wp plugin install --activate /path/to/your/zip
 ```
 
-Try the [User-Agent tester](https://51degrees.com/developers/user-agent-tester?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.md&utm_term=install). For cloud use, [create a Resource Key](https://configure.51degrees.com/?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.md&utm_term=after-activation).
+Try the [User-Agent tester](https://51degrees.com/developers/user-agent-tester?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.md&utm_term=install). For cloud use, [create a Resource Key](https://51degrees.com/configure/?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.md&utm_term=after-activation).
 
 [Developer Documentation](https://51degrees.com/device-detection-php/md__home_vsts_work_1_s_apis_device-detection-php_readme.html?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.md&utm_term=51degrees-pipeline-api "Developer Documentation")
 
@@ -31,7 +31,7 @@ Use device type and location to personalize content and add device properties to
 2. To start using this plugin, you will need to create a `Resource Key`.
 This enables access to the data you need via the 51Degrees cloud service.
 You can create a `Resource Key` for free, using the
-[property selection page](https://configure.51degrees.com/?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.md&utm_term=after-activation) to select the properties
+[property selection page](https://51degrees.com/configure/?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.md&utm_term=after-activation) to select the properties
 you want.
 
 
@@ -73,8 +73,8 @@ When `Enforce` is enabled, requests identified as crawlers via 51Degrees
 Device Detection are redirected to a configurable URL (or shown a default
 "access denied" page) when their crawler category is not on the allow list.
 This requires a Resource Key with the `IsCrawler` and `CrawlerUsage`
-properties. Without `CrawlerUsage`, enforcement falls back to path-based
-rules from the generated robots.txt.
+properties. Without `CrawlerUsage`, category selections have no effect
+and enforcement blocks or redirects nothing.
 
 ## Suspicious activity detection
 
@@ -89,10 +89,18 @@ brute-force traffic.
 
 The `PMP` tab adds the 51Degrees consent popup to public pages. Visitors
 choose Standard, Personalized, or an alternative (e.g. Remove ads)
-experience. The choice is persisted in the browser's `localStorage` and
-exposed to publisher code via the `window.onPMPCompletion` callback.
-The plugin itself writes no cookies and stores no preference on the
-server. PMP fetches the rest of itself from the cloud once the loader
+experience. PMP keeps the choice in a first-party cookie named
+`__mtm_pref`, whose value is `standard`, `personalized` or
+`non-marketing`, and records in a second cookie, `__51d_pmp_share`,
+whether the visitor shared the choice across sites. Both cookies are set
+with `Path=/` and no `Domain`, because the plugin does not set PMP's
+`data-cookie-domain` attribute. The choice also reaches publisher code
+through the `window.onPMPCompletion` callback. The plugin's PHP sets no
+cookies and stores no preference on the server, but turning PMP on adds
+a script that sets the two cookies above. [Preferences](https://51degrees.com/documentation/_identifiers__p_m_p__preferences.html?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.md&utm_term=pmp-cookies)
+describes both cookies.
+
+PMP fetches the rest of itself from the cloud once the loader
 has run, and it adds the 51Degrees client script to the page when no
 client script object is there already.
 
@@ -105,13 +113,26 @@ elsewhere in the pipeline but are not required by the consent flow.
 
 Three fields are required when Enable PMP is on. These fields are Terms / Privacy URL,
 Alternative Button Label, Alternative Button URL. The remaining
-fields have runtime defaults so the popup works out of the box.
+fields are optional.
 
 - **Enable PMP**. Turn the popup on for public pages.
-- **TCF Vendor String**. Static TCF v2 vendor consent string. The
-  built-in default grants consent to every vendor, purpose and
-  special feature from IAB GVL v158. Admins can override per-site
-  with their own string generated via TCF Tools.
+- **TCF Vendor String**. An IAB TCF v2 consent string carrying the
+  vendor consents the site signals, generated with a TCF tool. It must
+  hold a Core TC String followed by a Disclosed Vendors segment, joined
+  by a dot, as version 2.3 and later of the
+  [TCF consent string format](https://github.com/InteractiveAdvertisingBureau/GDPR-Transparency-and-Consent-Framework/blob/778c8c4272ce664f3f7f3be140b63508f1e02e8b/TCFv2/IAB%20Tech%20Lab%20-%20Consent%20string%20and%20vendor%20list%20formats%20v2.md#tc-string-format)
+  require, and saving the tab refuses anything else with a message
+  saying what to enter. It is empty by default, and the plugin ships
+  no string of its own. While it is empty the plugin leaves
+  `data-tcf-vendor` off the tag, and PMP reports an empty TC string.
+  With a string set, PMP rewrites the
+  purpose consents, the dates, the CMP ID and the policy and vendor
+  list versions for each Standard or Personalized choice and keeps
+  every other field as entered, as
+  [Configuration attributes](https://51degrees.com/documentation/_identifiers__p_m_p__configuration.html?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.md&utm_term=tcf-vendor-string)
+  describes. Versions 4.5.15 to 4.5.30 showed a built-in string in
+  this box when it was empty, so saving the tab stored that string.
+  Upgrading deletes a stored copy of that string and keeps any other.
 - **Alternative Button Label** `*`. Label of the alternative button.
   Defaults to `Remove ads`.
 - **Alternative Button URL** `*`. Destination of the alternative
@@ -130,8 +151,9 @@ PMP does not read that attribute, so the value has no effect today.
 
 The loader address is built as
 `{base}/api/v4/pmp/{resource-key}.js`, where `{base}` comes
-from the same `FOD_CLOUD_API_URL` env var the rest of the plugin
-honors (robots, suspicious, cloud metadata) and defaults to
+from the same `_51DEGREES_CLOUD_ENDPOINT` env var the rest of the plugin
+honors (robots, suspicious, cloud metadata), or from the deprecated
+`FOD_CLOUD_API_URL` when that is not set, and defaults to
 `https://cloud.51degrees.com`. Point it at a staging or local
 server when running the cloud yourself, because production
 deployments need no configuration.
@@ -146,10 +168,13 @@ forward. The locale is chosen in the browser from
 built with and falling back to `en-us`, so no allowlist lives in the
 plugin.
 
-The settings tab also surfaces the visitor's current preference (read
-from `localStorage['__51d_pmp_pref']` on the admin's own browser) and
-a **Clear Preference** button that wipes it so the popup re-appears on
-the next public-page visit.
+The settings tab also shows the choice PMP keeps in the admin's own
+browser, read from the `__mtm_pref` and `__51d_pmp_share` cookies, and
+a **Clear Preference** button that expires both with `Path=/`, so the
+popup appears again on the next public page visit. A choice shared
+across sites is also kept by the 51Degrees cloud service in a cookie on
+its own domain, which the button cannot clear, and PMP can take the
+choice from there instead of showing the popup.
 
 ### Continuation hook for `window.onPMPCompletion`
 
@@ -163,9 +188,16 @@ window.onPMPCompletion = window.onPMPCompletion || function (preference) {};
 
 Override it on your page to bootstrap anything that depends on the
 visitor's preference, such as analytics, Prebid.js initialization, lazy ad
-stacks, or any other publisher-side logic. PMP itself acts as the CMP
-via the TCF API (sets the TC String and exposes `__tcfapi`), so a
-separate consent manager is not needed:
+stacks, or any other publisher-side logic. PMP also gives scripts on
+the page the TCF API, `__tcfapi`, with a TC string built from the TCF
+Vendor String setting, which is empty while that setting is empty.
+PMP follows the TCF's technical format without being a consent
+management platform registered with IAB Europe, as
+[Compared with a consent management platform](https://51degrees.com/documentation/_identifiers__p_m_p__cmp_comparison.html?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.md&utm_term=cmp-comparison)
+explains. On a page where another consent management platform has
+already defined `__tcfapi`, PMP writes a console warning and shows
+nothing. An override that passes the choice to a data layer looks
+like this.
 
 ```html
 <script>
@@ -187,13 +219,14 @@ visitor actually clicks a button.
 ### Flow
 
 1. The browser loads the PMP widget from the composed bundle URL.
-2. On first visit the popup is shown. The visitor's choice is persisted
-   in `localStorage` under `__51d_pmp_pref`.
+2. On first visit the popup is shown. PMP keeps the visitor's choice in
+   the `__mtm_pref` cookie.
 3. PMP invokes `window.onPMPCompletion(preference)` and dismisses the
    dialog. The plugin's default is a no-op. Publisher code overrides
    it to react to the choice.
-4. PMP signals TCF status to its `__tcfapi` listeners using the
-   configured TCF Vendor String.
+4. For a Standard or Personalized choice, PMP gives its `__tcfapi`
+   listeners a TC string built from the TCF Vendor String, which is
+   empty while that setting is empty.
 
 When PMP is disabled the plugin emits no `<script>` tag.
 
@@ -330,13 +363,13 @@ are available. For example:
 </script>
 ```
 
-## Manual installation using WordPress plugin manager
+## Manual installation from WordPress.org
 
-1. Download `fiftyonedegrees` zip package from
-[WordPress Plugin Manager](https://wordpress.org/plugins/wp-plugin-manager/).
+1. Download the zip package from the plugin's page in the
+[WordPress plugin directory](https://wordpress.org/plugins/51degrees-optimize-by-device-location/).
 
-2. Upload the entire `fiftyonedegrees` zip folder to the
-`/wp-content/plugins/` directory.
+2. Unzip it and upload the `51degrees-optimize-by-device-location` folder
+it holds to the `/wp-content/plugins/` directory.
 
 3. Visit `Plugins`.
 

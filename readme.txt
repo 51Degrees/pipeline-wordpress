@@ -33,7 +33,7 @@ Use 51Degrees device detection to intelligently manage your robots.txt file and 
 
 ## Preference Management Platform (PMP)
 
-Add a 51Degrees consent popup to your site. Visitors choose Standard, Personalized, or a publisher-defined alternative (e.g. "Remove ads"). The choice is stored in the browser under `localStorage`, and the plugin itself writes no cookies and keeps no preference on the server. Configure the brand, the alternative button, and the terms/privacy URL from the `PMP` tab.
+Add a 51Degrees consent popup to your site. Visitors choose Standard, Personalized, or a publisher-defined alternative (e.g. "Remove ads"). PMP keeps the choice in a cookie on your site named `__mtm_pref`, and records in a second cookie, `__51d_pmp_share`, whether the visitor shared the choice across sites. The plugin's own PHP sets no cookies and keeps no preference on the server, but turning PMP on adds a script that sets those two cookies. Configure the brand, the alternative button, and the terms/privacy URL from the `PMP` tab.
 
 Publishers can react to the visitor's choice by overriding a single global callback on their page:
 
@@ -68,7 +68,7 @@ For instructions on how to install the plugin manually or by uploading a zip fil
 = After activation =
 
 1. Visit the new `51Degrees` Settings menu.
-2. To start using this plugin, you will need to create a `Resource Key`. This enables access to the data you need via the 51Degrees cloud service. You can create a `Resource Key` for free, using the [configurator](https://configure.51degrees.com/?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.txt&utm_term=after-activation) to select the properties you want.
+2. To start using this plugin, you will need to create a `Resource Key`. This enables access to the data you need via the 51Degrees cloud service. You can create a `Resource Key` for free, using the [configuration page](https://51degrees.com/configure/?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.txt&utm_term=after-activation) to select the properties you want.
 
 For a demo video on how to use our configurator, [click here](https://51degrees.com/documentation/_concepts__configurator.html?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.txt&utm_term=after-activation).
 
@@ -98,7 +98,7 @@ The OAuth redirect is single-site only in this release. Multisite OAuth support 
 
 = Is the 51Degrees plugin free? =
 
-The 51Degrees plugin is free and open source. However Our [Cloud Configurator](https://configure.51degrees.com/?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.txt&utm_term=is-the-51degrees-plugin-free) contains both FREE and PAID properties. The properties you will need to pay for are shown with a dollar icon. You can buy what you need on our [Pricing page](https://51degrees.com/pricing?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.txt&utm_term=is-the-51degrees-plugin-free).
+The 51Degrees plugin is free and open source. However Our [configuration page](https://51degrees.com/configure/?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.txt&utm_term=is-the-51degrees-plugin-free) contains both FREE and PAID properties. The properties you will need to pay for are shown with a dollar icon. You can buy what you need on our [Pricing page](https://51degrees.com/pricing?utm_source=github&utm_medium=readme&utm_campaign=pipeline-wordpress&utm_content=readme.txt&utm_term=is-the-51degrees-plugin-free).
 
 = What happens if I already use another plugin to integrate Google Analytics? =
 

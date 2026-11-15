@@ -57,7 +57,7 @@ require_once __DIR__ . '/includes/page-picker.php';
                               class="large-text code"
                               rows="4"><?php echo esc_textarea(FiftyoneService::pmp_tcf_vendor_string()); ?></textarea>
                     <p class="description">
-                        <?php esc_html_e('Base IAB TCF v2 consent string. It carries the static half of the TC payload — vendor consents and legitimate-interest signals — and PMP overlays the purpose consents on top of it at runtime, derived from the visitor\'s Standard or Personalized choice. The combined string is exposed via __tcfapi to downstream ad tech (Prebid.js, ad servers, analytics). The built-in default consents every vendor on IAB Global Vendor List v158; override here to restrict the allowed vendor set or to upgrade the GVL version. Generate custom strings with TCF Tools.', 'fiftyonedegrees'); ?>
+                        <?php esc_html_e('An IAB TCF v2 consent string carrying the vendor consents your site signals, generated with a TCF tool. It must hold a Core TC String followed by a Disclosed Vendors segment, joined by a dot, as version 2.3 and later of the TCF consent string format require, and the plugin refuses to save anything else. For a Standard or Personalized choice, PMP rewrites the purpose consents, the dates, the CMP ID and the policy and vendor list versions, keeps every other field as entered, and gives the result to scripts on the page through __tcfapi. There is no default. With the box empty the plugin gives PMP no string, and PMP reports an empty TC string.', 'fiftyonedegrees'); ?>
                     </p>
                 </td>
             </tr>
@@ -190,7 +190,7 @@ require_once __DIR__ . '/includes/page-picker.php';
 <p>
     <?php esc_html_e('When a visitor makes a choice, the widget invokes', 'fiftyonedegrees'); ?>
     <code>window.onPMPCompletion(preference)</code>.
-    <?php esc_html_e("The plugin provides a no-op default. Override it on your page to bootstrap anything that depends on the visitor's preference — analytics, Prebid.js, lazy ad stacks, etc. PMP itself acts as the CMP via the TCF API, so a separate consent manager isn't needed.", 'fiftyonedegrees'); ?>
+    <?php esc_html_e("The plugin provides a default that does nothing. Override it on your page to start anything that depends on the visitor's preference, such as analytics, Prebid.js or ad stacks loaded later. PMP also gives scripts on the page the TCF API, __tcfapi, with a TC string built from the TCF Vendor String above. On a page where another consent management platform has already defined __tcfapi, PMP writes a console warning and shows nothing.", 'fiftyonedegrees'); ?>
 </p>
 <pre><code>&lt;script&gt;
 window.onPMPCompletion = function (preference) {
@@ -202,29 +202,62 @@ window.onPMPCompletion = function (preference) {
 
 <h2><?php esc_html_e('Your Current Preference', 'fiftyonedegrees'); ?></h2>
 <p>
-    <?php esc_html_e('Locally stored PMP choice on this browser:', 'fiftyonedegrees'); ?>
-    <strong><span id="fod-pmp-current-pref"><em><?php esc_html_e('checking…', 'fiftyonedegrees'); ?></em></span></strong>
+    <?php esc_html_e('PMP keeps the choice made in this browser in two cookies on this site.', 'fiftyonedegrees'); ?>
 </p>
+<table class="form-table" role="presentation">
+    <tbody>
+        <tr>
+            <th scope="row"><?php esc_html_e('Choice', 'fiftyonedegrees'); ?> (<code>__mtm_pref</code>)</th>
+            <td><strong><span id="fod-pmp-current-pref"><em><?php esc_html_e('checking…', 'fiftyonedegrees'); ?></em></span></strong></td>
+        </tr>
+        <tr>
+            <th scope="row"><?php esc_html_e('Shared across sites', 'fiftyonedegrees'); ?> (<code>__51d_pmp_share</code>)</th>
+            <td><span id="fod-pmp-current-share"><em><?php esc_html_e('checking…', 'fiftyonedegrees'); ?></em></span></td>
+        </tr>
+    </tbody>
+</table>
 <p>
     <button type="button" class="button" id="fod-pmp-clear-pref">
         <?php esc_html_e('Clear Preference', 'fiftyonedegrees'); ?>
     </button>
 </p>
+<p class="description">
+    <?php esc_html_e('Clear Preference expires both cookies in this browser, so the popup appears again on the next visit to a public page. A choice shared across sites is also kept by the 51Degrees cloud service in a cookie on its own domain, which this page cannot clear, and PMP can take the choice from there instead of showing the popup.', 'fiftyonedegrees'); ?>
+</p>
 <script>
 (function () {
-    var display = document.getElementById('fod-pmp-current-pref');
+    var prefEl  = document.getElementById('fod-pmp-current-pref');
+    var shareEl = document.getElementById('fod-pmp-current-share');
     var btn     = document.getElementById('fod-pmp-clear-pref');
-    var STORAGE_KEY = '__51d_pmp_pref';
-    var NONE_LABEL  = <?php echo wp_json_encode(__('(none)', 'fiftyonedegrees')); ?>;
+    // The plugin sets no data-cookie-domain, so PMP writes both cookies
+    // for this host with Path=/. Expiring them takes the same path and
+    // no Domain.
+    var PREF_COOKIE  = '__mtm_pref';
+    var SHARE_COOKIE = '__51d_pmp_share';
+    var EXPIRED      = '=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    var NONE_LABEL   = <?php echo wp_json_encode(__('(none)', 'fiftyonedegrees')); ?>;
+
+    // Returns the named cookie's value, or null when it is absent.
+    // document.cookie joins its name=value pairs with '; '.
+    function readCookie(name) {
+        var pairs = document.cookie ? document.cookie.split('; ') : [];
+        for (var i = 0; i < pairs.length; i++) {
+            var eq = pairs[i].indexOf('=');
+            if (eq > 0 && pairs[i].substring(0, eq) === name) {
+                return pairs[i].substring(eq + 1);
+            }
+        }
+        return null;
+    }
 
     function render() {
-        var pref = null;
-        try { pref = localStorage.getItem(STORAGE_KEY); } catch (e) {}
-        display.textContent = pref || NONE_LABEL;
+        prefEl.textContent  = readCookie(PREF_COOKIE) || NONE_LABEL;
+        shareEl.textContent = readCookie(SHARE_COOKIE) || NONE_LABEL;
     }
 
     btn.addEventListener('click', function () {
-        try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+        document.cookie = PREF_COOKIE + EXPIRED;
+        document.cookie = SHARE_COOKIE + EXPIRED;
         render();
     });
 

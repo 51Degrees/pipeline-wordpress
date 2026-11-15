@@ -15,9 +15,9 @@ import time
 import pytest
 import requests
 
-from conftest import WORDPRESS_URL
+from conftest import WORDPRESS_URL, resource_key
 
-VALID_RESOURCE_KEY = os.environ.get('RESOURCE_KEY', '')
+VALID_RESOURCE_KEY = resource_key()
 SETUP_TAB_PATH    = '/wp-admin/admin.php?page=51Degrees&tab=setup'
 OPTIONS_GROUP_KEY = 'fiftyonedegrees_options'
 RED_BOX_RE        = re.compile(r'class="fod-pipeline-status\s+error"')
@@ -25,7 +25,7 @@ GREEN_BOX_RE      = re.compile(r'class="fod-pipeline-status\s+good"')
 
 pytestmark = pytest.mark.skipif(
     not VALID_RESOURCE_KEY,
-    reason='RESOURCE_KEY env var required.',
+    reason='_51DEGREES_RESOURCE_KEY env var required.',
 )
 
 
