@@ -33,7 +33,7 @@ Use 51Degrees device detection to intelligently manage your robots.txt file and 
 
 ## Preference Management Platform (PMP)
 
-Add a 51Degrees consent popup to your site. Visitors choose Standard, Personalized, or a publisher-defined alternative (e.g. "Remove ads"). The choice is stored in the browser under `localStorage`, and the plugin itself writes no cookies and keeps no preference on the server. Configure the brand, the alternative button, and the terms/privacy URL from the `PMP` tab.
+Add a 51Degrees consent popup to your site. Visitors choose Standard, Personalized, or a publisher-defined alternative (e.g. "Remove ads"). PMP keeps the choice in a cookie on your site named `__mtm_pref`, and records in a second cookie, `__51d_pmp_share`, whether the visitor shared the choice across sites. The plugin's own PHP sets no cookies and keeps no preference on the server, but turning PMP on adds a script that sets those two cookies. Configure the brand, the alternative button, and the terms/privacy URL from the `PMP` tab.
 
 Publishers can react to the visitor's choice by overriding a single global callback on their page:
 

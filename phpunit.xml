@@ -18,6 +18,7 @@
     <testsuite name="Unit">
       <file>tests/HookTests.php</file>
       <file>tests/RenderTests.php</file>
+      <file>tests/DocumentationTests.php</file>
       <file>tests/EditorTests.php</file>
       <file>tests/GaServiceTests.php</file>
       <file>tests/GaTrackingGtagTests.php</file>
